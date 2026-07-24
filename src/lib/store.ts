@@ -7,6 +7,7 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import { supabase } from './supabase';
+import type { CompetencyCluster, AiCompetencyScore, AiRiskFlag, AiInterviewQuestion } from './cv-analyzer-ai';
 
 export type PipelineStage = "applied" | "screened" | "interviewed" | "offered" | "hired" | "rejected";
 export type ReqStatus = "draft" | "active" | "paused" | "closed";
@@ -30,6 +31,11 @@ export interface CvAnalysisSnapshot {
   summary: string;
   frameworkLabel: string;
   analyzedAt: string;
+  /** Optional: absent on snapshots saved before this field existed. */
+  cluster?: CompetencyCluster;
+  competencies?: AiCompetencyScore[];
+  risks?: AiRiskFlag[];
+  questions?: AiInterviewQuestion[];
 }
 
 export interface InterviewResultSnapshot {

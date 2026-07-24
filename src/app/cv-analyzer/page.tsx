@@ -647,6 +647,10 @@ export default function CvAnalyzerPage() {
           summary: newReport.summary,
           frameworkLabel: newReport.frameworkLabel,
           analyzedAt: new Date().toISOString(),
+          cluster: json.result.cluster,
+          competencies: json.result.competencies,
+          risks: json.result.risks,
+          questions: json.result.questions,
         };
         saveCvAnalysis(candidate.id, snapshot);
       } catch { /* store write failed, non-critical */ }

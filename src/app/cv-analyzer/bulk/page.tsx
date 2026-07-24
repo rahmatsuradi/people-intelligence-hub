@@ -205,6 +205,10 @@ export default function BulkCvAnalyzerPage() {
           confidence: result.confidence, recommendation: result.recommendation,
           summary: result.summary, frameworkLabel: result.frameworkLabel ?? "Multi-Framework",
           analyzedAt: now.toISOString(),
+          cluster: result.cluster,
+          competencies: result.competencies,
+          risks: result.risks,
+          questions: result.questions,
         };
         upsertAnalyzedCandidate({ name, position: pos, department, jobReqId: jobReqId || undefined, source: "Bulk CV", snapshot });
         updateItem(target.id, {

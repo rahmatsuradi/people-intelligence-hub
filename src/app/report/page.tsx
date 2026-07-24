@@ -3,12 +3,15 @@
 import {
   CitationNote,
   CompetencyReportTable,
+  CompetencyScoreList,
   EvidenceValidityPanel,
 } from "@/components/competency-framework-ui";
 import { AppShell, Icon, SvgPath, ICON_PATHS, Card, Button, Label, cn } from "@/components/app-shell";
 import {
   buildReportCompetencyRows,
   CITATIONS,
+  type CompetencyReportRow,
+  type CompetencyScore,
 } from "@/lib/competency-framework";
 import { getCandidates, moveCandidateStage } from "@/lib/store";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -45,7 +48,11 @@ interface HiringReport {
   interviewScore: number;
   finalScore: number;
   confidence: number;
-  competencies: ReturnType<typeof buildReportCompetencyRows>;
+  /** Sample/demo reports only: fictional CV-vs-interview comparison table (see CANDIDATE_REPORTS). */
+  competencyRows?: CompetencyReportRow[];
+  /** Real candidates: actual per-competency AI scores from CvAnalysisSnapshot. Absent = not analyzed
+   *  since the competency-persistence fix landed — show an empty state, never another candidate's data. */
+  competencyScores?: CompetencyScore[];
   strengths: EvidenceItem[];
   developmentAreas: EvidenceItem[];
   panel: PanelMember[];
@@ -66,7 +73,7 @@ const CANDIDATE_REPORTS: HiringReport[] = [
     interviewScore: 89,
     finalScore: 91,
     confidence: 96,
-    competencies: buildReportCompetencyRows("C-1042"),
+    competencyRows: buildReportCompetencyRows("C-1042"),
     strengths: [
       {
         title: "Credible Activist — stakeholder influence",
@@ -123,7 +130,7 @@ const CANDIDATE_REPORTS: HiringReport[] = [
     interviewScore: 84,
     finalScore: 86,
     confidence: 91,
-    competencies: buildReportCompetencyRows("C-1038"),
+    competencyRows: buildReportCompetencyRows("C-1038"),
     strengths: [
       {
         title: "Technology Proponent — systems depth",
@@ -179,7 +186,7 @@ const CANDIDATE_REPORTS: HiringReport[] = [
     interviewScore: 72,
     finalScore: 70,
     confidence: 78,
-    competencies: buildReportCompetencyRows("C-1024"),
+    competencyRows: buildReportCompetencyRows("C-1024"),
     strengths: [
       {
         title: "Technology Proponent — security systems",
@@ -409,6 +416,9 @@ function ScoreSummary({ report }: { report: HiringReport }) {
 }
 
 function CompetencyTable({ report }: { report: HiringReport }) {
+  const hasRows = report.competencyRows && report.competencyRows.length > 0;
+  const hasScores = report.competencyScores && report.competencyScores.length > 0;
+
   return (
     <Card padding={false} className="overflow-hidden">
       <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
@@ -416,10 +426,22 @@ function CompetencyTable({ report }: { report: HiringReport }) {
           Competency breakdown
         </h3>
         <p className="mt-0.5 text-sm text-slate-500">
-          Ulrich HR model + SKKNI No. 149/2020 &mdash; CV vs structured interview
+          {hasRows
+            ? "Ulrich HR model + SKKNI No. 149/2020 — CV vs structured interview (sample data)"
+            : "AI competency assessment — scored from CV evidence"}
         </p>
       </div>
-      <CompetencyReportTable rows={report.competencies} />
+      {hasRows ? (
+        <CompetencyReportTable rows={report.competencyRows!} />
+      ) : hasScores ? (
+        <div className="p-5">
+          <CompetencyScoreList scores={report.competencyScores!} />
+        </div>
+      ) : (
+        <div className="px-5 py-10 text-center text-sm text-slate-400">
+          Detail kompetensi tidak tersedia untuk kandidat ini. Analisis ulang CV di CV Analyzer untuk melihat rincian per kompetensi.
+        </div>
+      )}
     </Card>
   );
 }
@@ -696,7 +718,20 @@ export default function ReportPage() {
         interviewScore,
         finalScore,
         confidence: c.cvAnalysis!.confidence,
-        competencies: buildReportCompetencyRows(c.id),
+        // Real per-candidate AI scores (populated since the competency-persistence fix). Older
+        // snapshots analyzed before that fix have no `competencies` — leave undefined so the UI
+        // shows an explicit empty state instead of ever falling back to another candidate's data.
+        competencyScores: c.cvAnalysis!.competencies?.map((comp): CompetencyScore => ({
+          id: comp.id,
+          name: comp.name,
+          pillar: comp.pillar,
+          score: comp.score,
+          benchmark: comp.benchmark,
+          insight: comp.evidenceQuote && comp.evidenceQuote !== "Tidak ditemukan bukti eksplisit"
+            ? `${comp.insight} Kutipan CV: "${comp.evidenceQuote}"`
+            : comp.insight,
+          rubric: [],
+        })),
         strengths: [{ title: "CV Analysis", quote: c.cvAnalysis!.summary, source: `CV Score: ${cvScore}` }],
         developmentAreas: [],
         panel: [],
