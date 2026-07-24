@@ -3,13 +3,16 @@
 import {
   CitationNote,
   CompetencyReportTable,
-  CompetencyScoreList,
   EvidenceValidityPanel,
 } from "@/components/competency-framework-ui";
 import { AppShell, Icon, SvgPath, ICON_PATHS, Card, Button, Label, cn } from "@/components/app-shell";
 import {
   buildReportCompetencyRows,
+  blendScore,
   CITATIONS,
+  COMPETENCY_BY_ID,
+  CV_WEIGHT,
+  INTERVIEW_WEIGHT,
   type CompetencyReportRow,
   type CompetencyScore,
 } from "@/lib/competency-framework";
@@ -48,11 +51,11 @@ interface HiringReport {
   interviewScore: number;
   finalScore: number;
   confidence: number;
-  /** Sample/demo reports only: fictional CV-vs-interview comparison table (see CANDIDATE_REPORTS). */
+  /** Per-competency CV-vs-interview rows. For real candidates these are joined from
+   *  the stored AI competency scores and the interview's per-question ratings; for the
+   *  demo reports they are fictional sample data. Absent = no competency detail stored,
+   *  which renders an empty state rather than another candidate's numbers. */
   competencyRows?: CompetencyReportRow[];
-  /** Real candidates: actual per-competency AI scores from CvAnalysisSnapshot. Absent = not analyzed
-   *  since the competency-persistence fix landed — show an empty state, never another candidate's data. */
-  competencyScores?: CompetencyScore[];
   strengths: EvidenceItem[];
   developmentAreas: EvidenceItem[];
   panel: PanelMember[];
@@ -232,6 +235,11 @@ const CANDIDATE_REPORTS: HiringReport[] = [
   },
 ];
 
+/** Derived from the demo data itself, so it cannot drift the way the previous
+ *  hardcoded list did — that one named C-1039 (which does not exist) while
+ *  omitting C-1024, letting a demo report accept real hiring decisions. */
+const SAMPLE_CANDIDATE_IDS = new Set(CANDIDATE_REPORTS.map((r) => r.candidateId));
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Page-specific utilities
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -408,16 +416,16 @@ function ScoreSummary({ report }: { report: HiringReport }) {
         ))}
       </div>
       <p className="mt-2 text-xs text-slate-400">
-        Final = 40% CV + 60% structured interview &middot; Ulrich (6) + SKKNI (5) weighted framework
+        Final = {CV_WEIGHT * 100}% CV + {INTERVIEW_WEIGHT * 100}% structured interview
       </p>
       <CitationNote>{CITATIONS.schmidtHunter}</CitationNote>
     </section>
   );
 }
 
-function CompetencyTable({ report }: { report: HiringReport }) {
-  const hasRows = report.competencyRows && report.competencyRows.length > 0;
-  const hasScores = report.competencyScores && report.competencyScores.length > 0;
+function CompetencyTable({ report, isSample }: { report: HiringReport; isSample: boolean }) {
+  const rows = report.competencyRows ?? [];
+  const uncovered = rows.filter((r) => r.interviewScore === null).length;
 
   return (
     <Card padding={false} className="overflow-hidden">
@@ -426,17 +434,12 @@ function CompetencyTable({ report }: { report: HiringReport }) {
           Competency breakdown
         </h3>
         <p className="mt-0.5 text-sm text-slate-500">
-          {hasRows
-            ? "Ulrich HR model + SKKNI No. 149/2020 — CV vs structured interview (sample data)"
-            : "AI competency assessment — scored from CV evidence"}
+          CV vs structured interview{isSample && " (sample data)"}
+          {!isSample && uncovered > 0 && ` · ${uncovered} kompetensi belum dinilai di interview`}
         </p>
       </div>
-      {hasRows ? (
-        <CompetencyReportTable rows={report.competencyRows!} />
-      ) : hasScores ? (
-        <div className="p-5">
-          <CompetencyScoreList scores={report.competencyScores!} />
-        </div>
+      {rows.length > 0 ? (
+        <CompetencyReportTable rows={rows} />
       ) : (
         <div className="px-5 py-10 text-center text-sm text-slate-400">
           Detail kompetensi tidak tersedia untuk kandidat ini. Analisis ulang CV di CV Analyzer untuk melihat rincian per kompetensi.
@@ -571,7 +574,7 @@ function ActionBar({ report }: { report: HiringReport }) {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const isPositive = report.recommendation === "Strong Hire" || report.recommendation === "Hire";
   const isReject = report.recommendation === "Reject";
-  const isSample = ["C-1042", "C-1038", "C-1039"].includes(report.candidateId);
+  const isSample = SAMPLE_CANDIDATE_IDS.has(report.candidateId);
 
   const notify = useCallback((msg: string) => {
     setActionMsg(msg);
@@ -703,9 +706,38 @@ export default function ReportPage() {
     );
     const built: HiringReport[] = candidates.map((c) => {
       const cvScore = c.cvAnalysis!.overallScore;
-      const interviewScore = Math.round(c.interviewResults[0].avgRating * 20);
-      const finalScore = Math.round(cvScore * 0.6 + interviewScore * 0.4);
+      const latestInterview = c.interviewResults[0];
+      const interviewScore = Math.round(latestInterview.avgRating * 20);
+      const finalScore = blendScore(cvScore, interviewScore);
       const rec = deriveRecommendation(finalScore);
+
+      // Join CV competency scores against interview ratings on competencyId. This
+      // is the comparison the "Competency breakdown" table always claimed to show
+      // but could not: the two sides used different id namespaces, so the page
+      // fell back to a demo candidate's numbers.
+      const interviewByCompetency = new Map<string, number[]>();
+      for (const qs of latestInterview.questionScores ?? []) {
+        if (qs.rating == null) continue; // unrated ≠ scored zero
+        const list = interviewByCompetency.get(qs.competencyId) ?? [];
+        list.push(qs.rating);
+        interviewByCompetency.set(qs.competencyId, list);
+      }
+      const competencyRows: CompetencyReportRow[] | undefined = c.cvAnalysis!.competencies?.map((comp) => {
+        const ratings = interviewByCompetency.get(comp.id);
+        // 1-5 interview rating -> same 0-100 scale as the CV score.
+        const interviewPct = ratings?.length
+          ? Math.round((ratings.reduce((s, r) => s + r, 0) / ratings.length) * 20)
+          : null;
+        return {
+          id: comp.id,
+          name: comp.name,
+          pillar: comp.pillar,
+          cvScore: comp.score,
+          interviewScore: interviewPct,
+          finalScore: blendScore(comp.score, interviewPct),
+          rubric: COMPETENCY_BY_ID[comp.id]?.rubric ?? [],
+        };
+      });
       return {
         id: `RPT-${c.id}`,
         candidateId: c.id,
@@ -718,25 +750,16 @@ export default function ReportPage() {
         interviewScore,
         finalScore,
         confidence: c.cvAnalysis!.confidence,
-        // Real per-candidate AI scores (populated since the competency-persistence fix). Older
-        // snapshots analyzed before that fix have no `competencies` — leave undefined so the UI
-        // shows an explicit empty state instead of ever falling back to another candidate's data.
-        competencyScores: c.cvAnalysis!.competencies?.map((comp): CompetencyScore => ({
-          id: comp.id,
-          name: comp.name,
-          pillar: comp.pillar,
-          score: comp.score,
-          benchmark: comp.benchmark,
-          insight: comp.evidenceQuote && comp.evidenceQuote !== "Tidak ditemukan bukti eksplisit"
-            ? `${comp.insight} Kutipan CV: "${comp.evidenceQuote}"`
-            : comp.insight,
-          rubric: [],
-        })),
+        // Real per-candidate rows joining CV and interview evidence. Older snapshots
+        // analyzed before competency persistence have no `competencies` — left
+        // undefined so the UI shows an explicit empty state rather than ever
+        // falling back to another candidate's data.
+        competencyRows,
         strengths: [{ title: "CV Analysis", quote: c.cvAnalysis!.summary, source: `CV Score: ${cvScore}` }],
         developmentAreas: [],
         panel: [],
         consensus: rec,
-        consensusNote: `Combined score: ${finalScore}. CV (${cvScore}) weighted 60%, Interview (${interviewScore}) weighted 40%. Confidence: ${c.cvAnalysis!.confidence}%.`,
+        consensusNote: `Combined score: ${finalScore}. CV (${cvScore}) weighted ${CV_WEIGHT * 100}%, Interview (${interviewScore}) weighted ${INTERVIEW_WEIGHT * 100}%. Confidence: ${c.cvAnalysis!.confidence}%.`,
       };
     });
     setStoreReports(built);
@@ -791,7 +814,7 @@ export default function ReportPage() {
       <ReportHeader report={report} />
       <EvidenceValidityPanel />
       <ScoreSummary report={report} />
-      <CompetencyTable report={report} />
+      <CompetencyTable report={report} isSample={SAMPLE_CANDIDATE_IDS.has(report.candidateId)} />
       <KeyEvidence report={report} />
       <PanelDecision report={report} />
       <ActionBar report={report} />

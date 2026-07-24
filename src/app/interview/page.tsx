@@ -1060,6 +1060,17 @@ export default function InterviewPage() {
             completedAt: new Date().toISOString(),
             questionCount: pack.questions.length,
             ratedCount: rated.length,
+            // Per-question detail: ratings and verbatim notes used to live only in
+            // sessionStorage and vanished with the tab. competencyId is what lets
+            // the Hiring Report join these against the CV scores.
+            questionScores: pack.questions.map((q) => ({
+              questionId: q.id,
+              competencyId: q.competencyId,
+              competencyName: q.competencyName,
+              type: q.type,
+              rating: scores[q.id]?.rating ?? null,
+              notes: scores[q.id]?.notes ?? "",
+            })),
           };
           saveInterviewResult(candidate.id, result);
         }

@@ -9,7 +9,11 @@ import {
   ALL_COMPETENCY_DEFINITIONS,
   CLUSTER_FRAMEWORKS,
   COMPETENCY_BY_ID,
+  CV_WEIGHT,
+  INTERVIEW_WEIGHT,
+  blendScore,
   buildFrameworkPrompt,
+  buildReportCompetencyRows,
   type CompetencyCluster,
 } from "./competency-framework";
 
@@ -64,6 +68,33 @@ describe("buildFrameworkPrompt", () => {
       expect(prompt).toContain(`bench:${c.benchmark}`);
     }
     expect(prompt).toContain(`Total: ${fw.competencies.length} kompetensi`);
+  });
+});
+
+describe("buildReportCompetencyRows (demo reports)", () => {
+  // Regression: it used to iterate ALL_COMPETENCY_DEFINITIONS with a
+  // `?? {cv:75, interview:74}` fallback, so adding the 25 non-HR definitions
+  // grew every demo report by 25 invented rows across 3 extra frameworks.
+  it("emits only competencies the demo data actually scores", () => {
+    const rows = buildReportCompetencyRows("C-1042");
+    expect(rows).toHaveLength(11);
+    expect(new Set(rows.map((r) => r.pillar))).toEqual(new Set(["ulrich", "skkni"]));
+  });
+
+  it("returns nothing for an id that has no demo data, rather than another candidate's scores", () => {
+    expect(buildReportCompetencyRows("C-20260724-K3XZ")).toEqual([]);
+  });
+});
+
+describe("blendScore", () => {
+  it("weights CV and interview by the shared constants", () => {
+    expect(CV_WEIGHT + INTERVIEW_WEIGHT).toBe(1);
+    expect(blendScore(90, 70)).toBe(Math.round(90 * CV_WEIGHT + 70 * INTERVIEW_WEIGHT));
+  });
+
+  it("uses the CV score alone when the competency was never interviewed", () => {
+    // Treating "not asked" as 0 would silently penalise the candidate.
+    expect(blendScore(88, null)).toBe(88);
   });
 });
 

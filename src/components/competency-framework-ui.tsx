@@ -187,11 +187,17 @@ export function CompetencyScoreList({ scores }: { scores: CompetencyScore[] }) {
 }
 
 export function CompetencyReportTable({ rows }: { rows: CompetencyReportRow[] }) {
-  const ulrich = rows.filter((r) => r.pillar === "ulrich");
-  const skkni = rows.filter((r) => r.pillar === "skkni");
+  // Group by the pillars actually present. Hardcoding ulrich+skkni meant a real
+  // SFIA/Lominger/CGMA candidate got two empty Ulrich/SKKNI tables instead.
+  const pillarOrder = ["ulrich", "skkni", "sfia", "lominger", "cgma"];
+  const present = [
+    ...pillarOrder.filter((p) => rows.some((r) => r.pillar === p)),
+    ...[...new Set(rows.map((r) => r.pillar))].filter((p) => !pillarOrder.includes(p)),
+  ];
+  const showWeight = rows.some((r) => r.weight !== undefined);
 
   const renderTable = (items: CompetencyReportRow[], pillar: CompetencyPillar) => (
-    <div>
+    <div key={pillar}>
       <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50/90 px-5 py-3 dark:border-slate-800 dark:bg-slate-800/60">
         <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{getPillarLabel(pillar)}</h4>
         <FrameworkPillarBadge pillar={pillar} />
@@ -204,7 +210,7 @@ export function CompetencyReportTable({ rows }: { rows: CompetencyReportRow[] })
               <th className="px-5 py-3 text-right font-medium text-slate-500">CV</th>
               <th className="px-5 py-3 text-right font-medium text-slate-500">Interview</th>
               <th className="px-5 py-3 text-right font-medium text-slate-500">Final</th>
-              <th className="px-5 py-3 text-right font-medium text-slate-500">Weight</th>
+              {showWeight && <th className="px-5 py-3 text-right font-medium text-slate-500">Weight</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -212,7 +218,15 @@ export function CompetencyReportTable({ rows }: { rows: CompetencyReportRow[] })
               <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
                 <td className="px-5 py-3 font-medium text-slate-900 dark:text-white">{row.name}</td>
                 <td className={cn("px-5 py-3 text-right font-semibold tabular-nums", scoreTextColor(row.cvScore))}>{row.cvScore}</td>
-                <td className={cn("px-5 py-3 text-right font-semibold tabular-nums", scoreTextColor(row.interviewScore))}>{row.interviewScore}</td>
+                <td
+                  className={cn(
+                    "px-5 py-3 text-right font-semibold tabular-nums",
+                    row.interviewScore === null ? "text-slate-400" : scoreTextColor(row.interviewScore),
+                  )}
+                  title={row.interviewScore === null ? "Tidak tercakup dalam kit interview" : undefined}
+                >
+                  {row.interviewScore ?? "—"}
+                </td>
                 <td className="px-5 py-3 text-right">
                   <span className={cn("inline-flex min-w-[2rem] justify-center rounded-md px-2 py-0.5 font-bold tabular-nums",
                     row.finalScore >= 85 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
@@ -221,7 +235,11 @@ export function CompetencyReportTable({ rows }: { rows: CompetencyReportRow[] })
                     {row.finalScore}
                   </span>
                 </td>
-                <td className="px-5 py-3 text-right tabular-nums text-slate-500">{row.weight}%</td>
+                {showWeight && (
+                  <td className="px-5 py-3 text-right tabular-nums text-slate-500">
+                    {row.weight === undefined ? "—" : `${row.weight}%`}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -229,7 +247,7 @@ export function CompetencyReportTable({ rows }: { rows: CompetencyReportRow[] })
       </div>
       <div className="px-5 py-2">
         <CitationNote className="mt-0">
-          {pillar === "ulrich" ? CITATIONS.ulrich : CITATIONS.skkni}
+          {PILLAR_CITATIONS[pillar] ?? getPillarLabel(pillar)}
         </CitationNote>
       </div>
     </div>
@@ -237,8 +255,7 @@ export function CompetencyReportTable({ rows }: { rows: CompetencyReportRow[] })
 
   return (
     <div className="divide-y divide-slate-200 dark:divide-slate-800">
-      {renderTable(ulrich, "ulrich")}
-      {renderTable(skkni, "skkni")}
+      {present.map((pillar) => renderTable(rows.filter((r) => r.pillar === pillar), pillar))}
     </div>
   );
 }

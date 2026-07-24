@@ -38,6 +38,18 @@ export interface CvAnalysisSnapshot {
   questions?: AiInterviewQuestion[];
 }
 
+/** One scored interview question. Carries competencyId so interview scores can be
+ *  joined to CV scores per competency — without it the Hiring Report's
+ *  "CV vs Interview" table has nothing real to render. */
+export interface InterviewQuestionScore {
+  questionId: string;
+  competencyId: string;
+  competencyName: string;
+  type: string;
+  rating: number | null;
+  notes: string;
+}
+
 export interface InterviewResultSnapshot {
   kitId: string;
   avgRating: number;
@@ -46,6 +58,10 @@ export interface InterviewResultSnapshot {
   completedAt: string;
   questionCount: number;
   ratedCount: number;
+  /** Optional: absent on results saved before per-question detail was persisted.
+   *  Previously ratings and verbatim notes lived only in sessionStorage and were
+   *  lost when the tab closed — even after the interview was completed. */
+  questionScores?: InterviewQuestionScore[];
 }
 
 export interface CandidateRecord {

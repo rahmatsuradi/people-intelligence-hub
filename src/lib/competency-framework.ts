@@ -48,10 +48,27 @@ export interface CompetencyReportRow {
   name: string;
   pillar: CompetencyPillar;
   cvScore: number;
-  interviewScore: number;
+  /** null = this competency was not covered by the interview kit. Rendering 0
+   *  would read as "scored zero" rather than "not asked". */
+  interviewScore: number | null;
   finalScore: number;
-  weight: number;
+  /** Sample reports only. Real rows carry no weight because no weighting model
+   *  exists yet — the column is hidden rather than filled with invented numbers. */
+  weight?: number;
   rubric: RubricLevel[];
+}
+
+/* Final-score weighting. Previously the caption said 40/60, the headline
+   computed 60/40, and the per-competency rows computed 40/60 — three numbers
+   for one score. One constant now feeds all three. */
+export const CV_WEIGHT = 0.4;
+export const INTERVIEW_WEIGHT = 0.6;
+
+/** Blends CV and interview evidence. With no interview score yet, the CV score
+ *  stands alone rather than being diluted against a zero. */
+export function blendScore(cvScore: number, interviewScore: number | null): number {
+  if (interviewScore === null) return Math.round(cvScore);
+  return Math.round(cvScore * CV_WEIGHT + interviewScore * INTERVIEW_WEIGHT);
 }
 
 export const CITATIONS = {
@@ -872,21 +889,27 @@ const REPORT_CANDIDATE_SCORES: Record<
   },
 };
 
+/** Rows for the three built-in DEMO reports only. Emits a row only where the
+ *  demo data actually has a score: it must not iterate every definition and
+ *  invent numbers for the rest. (It used to fall back to `{cv:75, interview:74}`
+ *  for anything missing, which meant adding the 25 SFIA/Lominger/CGMA
+ *  definitions silently grew every demo report by 25 fabricated rows.) */
 export function buildReportCompetencyRows(candidateId: string): CompetencyReportRow[] {
-  const overrides = REPORT_CANDIDATE_SCORES[candidateId] ?? REPORT_CANDIDATE_SCORES["C-1042"];
-  return ALL_COMPETENCY_DEFINITIONS.map((def) => {
-    const o = overrides[def.id] ?? { cv: 75, interview: 74, weight: 9 };
-    const finalScore = Math.round(o.cv * 0.4 + o.interview * 0.6);
-    return {
+  const overrides = REPORT_CANDIDATE_SCORES[candidateId];
+  if (!overrides) return [];
+  return ALL_COMPETENCY_DEFINITIONS.flatMap((def) => {
+    const o = overrides[def.id];
+    if (!o) return [];
+    return [{
       id: def.id,
       name: def.pillar === "skkni" && def.nameId ? def.nameId : def.name,
       pillar: def.pillar,
       cvScore: o.cv,
       interviewScore: o.interview,
-      finalScore,
+      finalScore: blendScore(o.cv, o.interview),
       weight: o.weight,
       rubric: def.rubric,
-    };
+    }];
   });
 }
 
