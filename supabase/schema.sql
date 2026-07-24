@@ -55,18 +55,37 @@ create table if not exists public.activities (
 create index if not exists activities_time_idx on public.activities ("time" desc);
 
 -- ═══════════════════════════════════════════════════════════════════════════
---  Row Level Security (RLS)
---  TEMPORARY: permissive policies so the public anon key can read/write.
---  This is fine for a single-user demo. We will tighten these when we add login.
+--  Row Level Security (RLS) — authenticated users only
+--
+--  The anon/publishable key is PUBLIC: it ships inside client JS and anyone can
+--  read it from the browser. It must never be able to read or write candidate
+--  PII (name, email, phone, CV analysis). Policies below are therefore scoped
+--  `to authenticated` — a policy with no `to` clause defaults to PUBLIC, which
+--  includes anon, and that is what leaked in earlier versions of this file.
+--
+--  SAFE TO RE-RUN: drops the legacy permissive "anon all *" policies first, so
+--  re-running this file TIGHTENS access. It can never reopen public access.
+--  (Earlier versions recreated the anon policies here, meaning a re-run
+--  silently reopened the whole candidates table to the internet.)
+--
+--  The public apply flow (/apply) is unaffected: it runs server-side with the
+--  service-role key (src/lib/supabase-admin.ts), which bypasses RLS entirely.
 -- ═══════════════════════════════════════════════════════════════════════════
 alter table public.candidates enable row level security;
 alter table public.job_reqs   enable row level security;
 alter table public.activities enable row level security;
 
+-- Legacy public-access policies — present if an older schema.sql was ever run.
 drop policy if exists "anon all candidates" on public.candidates;
 drop policy if exists "anon all job_reqs"   on public.job_reqs;
 drop policy if exists "anon all activities" on public.activities;
 
-create policy "anon all candidates" on public.candidates for all using (true) with check (true);
-create policy "anon all job_reqs"   on public.job_reqs   for all using (true) with check (true);
-create policy "anon all activities" on public.activities for all using (true) with check (true);
+-- Dropped then recreated so this block is idempotent; a momentary gap fails
+-- CLOSED (no policy = no access), never open.
+drop policy if exists "auth all candidates" on public.candidates;
+drop policy if exists "auth all job_reqs"   on public.job_reqs;
+drop policy if exists "auth all activities" on public.activities;
+
+create policy "auth all candidates" on public.candidates for all to authenticated using (true) with check (true);
+create policy "auth all job_reqs"   on public.job_reqs   for all to authenticated using (true) with check (true);
+create policy "auth all activities" on public.activities for all to authenticated using (true) with check (true);

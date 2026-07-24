@@ -1,8 +1,16 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Hire Intelligence — Tighten RLS to authenticated users only
---  Run this AFTER login is confirmed working in production.
+--
+--  SUPERSEDED: schema.sql now applies these exact policies itself, so a fresh
+--  setup is secure without this file. Kept because it is the remediation script
+--  for any database created by an older schema.sql (which left the candidates
+--  table readable and writable by the public anon key).
+--
+--  Still safe to run at any time — it is idempotent and only tightens access.
+--
 --  Replaces the permissive anon policies: now only logged-in (authenticated)
 --  users can read/write. Anonymous access via the publishable key is blocked.
+--  The public apply flow keeps working: it uses the service-role key server-side.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- Remove the old permissive anon policies

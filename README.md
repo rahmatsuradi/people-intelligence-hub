@@ -166,10 +166,15 @@ cp .env.example .env.local
 # Isi kredensial Supabase (lihat Environment Variables di bawah)
 
 # Terapkan skema database (Supabase SQL Editor, berurutan):
-#   1. supabase/schema.sql
+#   1. supabase/schema.sql            (modul Hire — RLS authenticated-only, aman dijalankan ulang)
 #   2. supabase/pay-module-schema.sql
 #   3. supabase/pay-module-seed.sql   (12 karyawan sintetis)
 #   4. supabase/pay-module-rls.sql
+#
+# Semua file di atas idempoten (aman dijalankan ulang) dan RLS-nya dibatasi ke
+# role `authenticated` — anon key yang publik tidak bisa membaca/menulis data.
+# Jika database Anda dibuat oleh schema.sql versi lama, jalankan sekali:
+#   supabase/rls-authenticated.sql
 
 # Jalankan development server
 npm run dev
