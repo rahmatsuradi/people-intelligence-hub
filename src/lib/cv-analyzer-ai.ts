@@ -9,7 +9,13 @@
    4. Finance    → CGMA Competency Framework (CIMA/AICPA)
 ═══════════════════════════════════════════════════════════════════════════ */
 
-export type CompetencyCluster = "hr" | "tech" | "business" | "finance";
+import {
+  CLUSTER_FRAMEWORKS,
+  buildFrameworkPrompt,
+  type CompetencyCluster,
+} from "./competency-framework";
+
+export type { CompetencyCluster };
 
 export interface AiCompetencyScore {
   id: string;
@@ -108,149 +114,15 @@ export function detectCluster(position: string, department: string): CompetencyC
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   FRAMEWORK DEFINITIONS
+   FRAMEWORK METADATA
+
+   Competency definitions, benchmarks and rubric levels live in
+   competency-framework.ts — the single source of truth shared with the UI and
+   the Interview Workspace. The prompt text below is GENERATED from them, so a
+   benchmark shown on screen and a benchmark sent to the model can never drift.
+   (They previously lived in hand-written prompt strings here, which is why 25
+   of 36 competencies had no rubric anywhere the UI could reach.)
 ═══════════════════════════════════════════════════════════════════════════ */
-
-const FRAMEWORK_HR = `
-FRAMEWORK: Ulrich HR Competency Model (2012) + SKKNI No.149/2020
-Reference: Ulrich et al. (2012); Kemnaker RI SKKNI 149/2020
-Score conversion: level 1→20, 2→40, 3→60, 4→80, 5→100
-
-ULRICH (6 kompetensi) — pillar: "ulrich":
-1. id:ulrich-credible-activist | Credible Activist | bench:80
-   Level 1=lacks trust/ethics | 3=speaks up with evidence | 5=enterprise conscience shapes culture
-
-2. id:ulrich-strategic-positioner | Strategic Positioner | bench:78
-   Level 1=no business link | 3=articulates KPI link | 5=co-creates business strategy
-
-3. id:ulrich-capability-builder | Capability Builder | bench:80
-   Level 1=no systems built | 3=uses competency frameworks | 5=transforms workforce capability
-
-4. id:ulrich-change-champion | Change Champion | bench:78
-   Level 1=resists change | 3=executes with stakeholder map | 5=institutionalizes change capability
-
-5. id:ulrich-hr-innovator | HR Innovator & Integrator | bench:81
-   Level 1=siloed HR | 3=connects 2+ HR levers with metrics | 5=industry-recognized innovator
-
-6. id:ulrich-technology-proponent | Technology Proponent | bench:83
-   Level 1=avoids data/systems | 3=analytics for decisions | 5=people analytics strategy
-
-SKKNI No.149/2020 (5 unit kompetensi) — pillar: "skkni":
-7. id:skkni-perencanaan | Perencanaan SDM | bench:80
-   Level 1=tidak memahami | 3=supply-demand + anggaran | 5=enterprise workforce planning
-
-8. id:skkni-rekrutmen | Rekrutmen & Seleksi | bench:85
-   Level 1=tidak terstruktur | 3=wawancara terstruktur + rubrik | 5=quality-of-hire metrics
-
-9. id:skkni-pengembangan | Pengembangan Kompetensi | bench:82
-   Level 1=tidak ada program | 3=TNA + evaluasi | 5=budaya pembelajaran terukur
-
-10. id:skkni-kinerja | Manajemen Kinerja | bench:79
-    Level 1=tidak memahami siklus | 3=KPI + feedback rutin | 5=budaya kinerja berbasis data
-
-11. id:skkni-hubungan-industrial | Hubungan Industrial | bench:80
-    Level 1=pelanggaran/ketidaktahuan | 3=PK/Bipartit + mediasi | 5=zero major disputes
-
-Total: 11 kompetensi (6 Ulrich + 5 SKKNI)`.trim();
-
-const FRAMEWORK_TECH = `
-FRAMEWORK: SFIA v8 — Skills Framework for Information Age (2023)
-Reference: SFIA Foundation (sfia.org); globally recognized by Google, Microsoft, IBM, AWS
-Score conversion: level 1→20, 2→40, 3→60, 4→80, 5→100
-
-SFIA CORE SKILLS (8 kompetensi) — pillar: "sfia":
-1. id:sfia-technical-proficiency | Technical Proficiency | bench:82
-   Level 1=basic awareness | 3=applies independently | 5=recognized expert, sets technical direction
-
-2. id:sfia-solution-architecture | Solution Architecture & Design | bench:78
-   Level 1=follows existing patterns | 3=designs components with rationale | 5=enterprise-grade systems
-
-3. id:sfia-data-analytics | Data & Analytics Literacy | bench:80
-   Level 1=reads basic reports | 3=builds dashboards independently | 5=designs data strategy
-
-4. id:sfia-security-quality | Security & Quality Mindset | bench:79
-   Level 1=unaware of security basics | 3=applies secure coding, writes tests | 5=drives security culture
-
-5. id:sfia-delivery-agility | Delivery & Agile Execution | bench:81
-   Level 1=struggles to deliver | 3=delivers consistently in agile | 5=shapes delivery methodology
-
-6. id:sfia-collaboration | Technical Collaboration & Communication | bench:77
-   Level 1=works in isolation | 3=effective in cross-functional teams | 5=multiplies team capability
-
-7. id:sfia-innovation | Innovation & Problem Solving | bench:80
-   Level 1=follows prescribed solutions | 3=identifies root cause | 5=drives technical innovation
-
-8. id:sfia-learning-agility | Learning Agility & Tech Adaptability | bench:83
-   Level 1=resists new tools | 3=learns new stack in reasonable time | 5=continuously at bleeding edge
-
-Total: 8 kompetensi SFIA`.trim();
-
-const FRAMEWORK_BUSINESS = `
-FRAMEWORK: Lominger Leadership Architect (Korn Ferry, 2014) — MT/Business/General Management roles
-Reference: Korn Ferry Lominger (kornferry.com); Fortune 500 leadership selection standard
-Score conversion: level 1→20, 2→40, 3→60, 4→80, 5→100
-
-LOMINGER CORE COMPETENCIES (9 kompetensi) — pillar: "lominger":
-1. id:lom-strategic-agility | Strategic Agility | bench:80
-   Level 1=purely tactical | 3=connects daily work to strategy | 5=shapes organizational direction
-
-2. id:lom-drive-results | Drive for Results | bench:85
-   Level 1=misses targets consistently | 3=meets targets, overcomes obstacles | 5=extraordinary results
-
-3. id:lom-learning-agility | Learning Agility | bench:82
-   Level 1=repeats mistakes, fixed mindset | 3=learns quickly from varied experience | 5=thrives in first-time situations
-
-4. id:lom-interpersonal-savvy | Interpersonal Savvy & Influence | bench:78
-   Level 1=creates friction, tone-deaf | 3=builds rapport, navigates politics | 5=trusted by all levels
-
-5. id:lom-problem-solving | Problem Solving & Decision Quality | bench:81
-   Level 1=reactive, poor analysis | 3=systematic analysis, good decisions | 5=solves complex ambiguous problems
-
-6. id:lom-manages-ambiguity | Manages Ambiguity & Complexity | bench:79
-   Level 1=paralyzed by uncertainty | 3=functions well in ambiguous situations | 5=thrives in chaos
-
-7. id:lom-collaborates | Collaboration & Teamwork | bench:80
-   Level 1=siloed, competitive | 3=effective team player, shares credit | 5=creates collaboration culture
-
-8. id:lom-communicates | Communicates Effectively | bench:78
-   Level 1=unclear, poor listener | 3=clear, adapts to audience | 5=compelling across all media
-
-9. id:lom-customer-focus | Customer/Stakeholder Focus | bench:80
-   Level 1=internally focused only | 3=consistently meets stakeholder needs | 5=anticipates needs, builds loyalty
-
-Total: 9 kompetensi Lominger`.trim();
-
-const FRAMEWORK_FINANCE = `
-FRAMEWORK: CGMA Competency Framework (CIMA/AICPA, 2019)
-Reference: CGMA (cgma.org); Finance, Accounting, Legal, Compliance roles
-Score conversion: level 1→20, 2→40, 3→60, 4→80, 5→100
-
-CGMA CORE COMPETENCIES (8 kompetensi) — pillar: "cgma":
-1. id:cgma-technical-accounting | Technical Accounting & Reporting | bench:83
-   Level 1=basic bookkeeping | 3=prepares financial statements per PSAK/IFRS | 5=technical authority
-
-2. id:cgma-financial-analysis | Financial Analysis & Planning | bench:82
-   Level 1=reads basic P&L only | 3=builds financial models | 5=drives financial strategy
-
-3. id:cgma-risk-control | Risk Management & Internal Control | bench:80
-   Level 1=unaware of risk framework | 3=identifies and mitigates key risks | 5=enterprise risk framework
-
-4. id:cgma-business-acumen | Business Acumen & Commercial Awareness | bench:79
-   Level 1=sees numbers in isolation | 3=connects financials to outcomes | 5=strategic partner to CEO/CFO
-
-5. id:cgma-digital-finance | Digital Finance & Data Analytics | bench:81
-   Level 1=manual spreadsheets only | 3=builds dashboards, automates reports | 5=finance digital transformation
-
-6. id:cgma-ethics-compliance | Ethics, Governance & Compliance | bench:84
-   Level 1=unaware of compliance | 3=ensures full regulatory compliance | 5=shapes ethics culture
-
-7. id:cgma-stakeholder-influence | Stakeholder Influence & Presentation | bench:77
-   Level 1=cannot explain financials simply | 3=clear financial storytelling | 5=boardroom-ready presenter
-
-8. id:cgma-leadership | Leadership & People Development | bench:78
-   Level 1=individual contributor only | 3=effectively leads small team | 5=builds high-performing finance function
-
-Total: 8 kompetensi CGMA`.trim();
 
 interface FrameworkMeta {
   label: string;
@@ -259,32 +131,17 @@ interface FrameworkMeta {
   definition: string;
 }
 
-const FRAMEWORK_META: Record<CompetencyCluster, FrameworkMeta> = {
-  hr: {
-    label: "Ulrich HR Competency Model + SKKNI No.149/2020",
-    reference: "Ulrich et al. (2012); Kemnaker RI (2020)",
-    competencyCount: 11,
-    definition: FRAMEWORK_HR,
-  },
-  tech: {
-    label: "SFIA v8 — Skills Framework for Information Age",
-    reference: "SFIA Foundation (2023); adopted by Google, Microsoft, IBM",
-    competencyCount: 8,
-    definition: FRAMEWORK_TECH,
-  },
-  business: {
-    label: "Lominger Leadership Architect (Korn Ferry)",
-    reference: "Korn Ferry Lominger (2014); Fortune 500 leadership selection standard",
-    competencyCount: 9,
-    definition: FRAMEWORK_BUSINESS,
-  },
-  finance: {
-    label: "CGMA Competency Framework (CIMA/AICPA)",
-    reference: "CGMA (2019); CFA Institute Standards",
-    competencyCount: 8,
-    definition: FRAMEWORK_FINANCE,
-  },
-};
+const FRAMEWORK_META: Record<CompetencyCluster, FrameworkMeta> = Object.fromEntries(
+  (Object.keys(CLUSTER_FRAMEWORKS) as CompetencyCluster[]).map((cluster) => [
+    cluster,
+    {
+      label: CLUSTER_FRAMEWORKS[cluster].label,
+      reference: CLUSTER_FRAMEWORKS[cluster].reference,
+      competencyCount: CLUSTER_FRAMEWORKS[cluster].competencies.length,
+      definition: buildFrameworkPrompt(cluster),
+    },
+  ]),
+) as Record<CompetencyCluster, FrameworkMeta>;
 
 export function buildAnalysisPrompt(
   cvText: string,

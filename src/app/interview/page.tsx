@@ -7,11 +7,16 @@ import {
   RubricTable,
 } from "@/components/competency-framework-ui";
 import {
-  CITATIONS,
+  CLUSTER_FRAMEWORKS,
   COMPETENCY_BY_ID,
-  INTERVIEW_TYPE_MAP,
+  PILLAR_CITATIONS,
+  getPillarLabel,
   type RubricLevel,
 } from "@/lib/competency-framework";
+// Single shared cluster router — the CV Analyzer scores against the framework this
+// picks, so the interview kit must use the exact same call or a candidate gets
+// screened on one framework and interviewed on another.
+import { detectCluster } from "@/lib/cv-analyzer-ai";
 import {
   findCandidateByName, createCandidate, saveInterviewResult, getCandidate,
   type InterviewResultSnapshot,
@@ -33,7 +38,6 @@ type Seniority =
   | "Principal"
   | "Director";
 type ScoringState = "idle" | "scoring" | "complete";
-type PositionCluster = "hr" | "tech" | "business" | "finance";
 
 interface QuestionScore {
   rating: 1 | 2 | 3 | 4 | 5 | null;
@@ -119,191 +123,187 @@ function rubricFor(id: string): RubricLevel[] {
   return COMPETENCY_BY_ID[id]?.rubric ?? [];
 }
 
-function detectCluster(position: string): PositionCluster {
-  const p = position.toLowerCase();
-  const HR = ["hr ", " hr", "human resource", "hrd", "hrga", "hrbp", "rekrutmen", "talent acquisition", "talent management", "payroll", "people ops", "industrial relation"];
-  const FINANCE = ["finance", "financial", "accounting", "accountant", "keuangan", "treasury", "tax", "audit", "controller", "cfo", "investment", "banking", "compliance", "budget analyst"];
-  const TECH = ["engineer", "developer", "software", "backend", "frontend", "fullstack", "mobile dev", "data scientist", "data engineer", "ml engineer", "devops", "cloud", "cybersecurity", "solution architect", "tech lead", "programmer", "qa ", "sre", "platform"];
-  if (HR.some(k => p.includes(k))) return "hr";
-  if (FINANCE.some(k => p.includes(k))) return "finance";
-  if (TECH.some(k => p.includes(k))) return "tech";
-  return "business";
+/** Pillar for a question's competency, read from the framework rather than guessed
+ *  from the id prefix (the old `startsWith("skkni") ? "skkni" : "ulrich"` test
+ *  labelled every SFIA/Lominger/CGMA question as "Ulrich"). */
+function pillarFor(id: string): string {
+  return COMPETENCY_BY_ID[id]?.pillar ?? "ulrich";
 }
 
 const TECH_QUESTION_POOL: InterviewQuestion[] = [
   {
-    id: "TB1", type: "Behavioral", competencyId: "tech-collab", competencyName: "Engineering Collaboration",
+    id: "TB1", type: "Behavioral", competencyId: "sfia-collaboration", competencyName: "Technical Collaboration & Communication",
     question: "Ceritakan situasi di mana Anda harus men-debug masalah kritis di production bersama tim. Bagaimana Anda membagi tugas dan mengkomunikasikan progress?",
     strongAnswer: "Structured incident response (on-call runbook); clear ownership; post-mortem culture; measurable MTTR improvement.",
     redFlags: ["No structured process", "Blame shifting", "No post-mortem"],
-    rubric: [],
+    rubric: rubricFor("sfia-collaboration"),
   },
   {
-    id: "TB2", type: "Behavioral", competencyId: "tech-delivery", competencyName: "Delivery & Ownership",
+    id: "TB2", type: "Behavioral", competencyId: "sfia-delivery-agility", competencyName: "Delivery & Agile Execution",
     question: "Berikan contoh fitur atau sistem yang Anda deliver dari awal hingga production. Apa trade-off teknikal terbesar yang Anda buat dan mengapa?",
     strongAnswer: "Clear scope, explicit trade-off reasoning (speed vs. correctness vs. cost), measurable outcome, learned lessons applied.",
     redFlags: ["No ownership taken", "Cannot articulate trade-offs", "No production metrics"],
-    rubric: [],
+    rubric: rubricFor("sfia-delivery-agility"),
   },
   {
-    id: "TT1", type: "Technical", competencyId: "tech-design", competencyName: "System Design",
+    id: "TT1", type: "Technical", competencyId: "sfia-solution-architecture", competencyName: "Solution Architecture & Design",
     question: "Rancang sistem yang skalabel untuk menangani 1 juta request/hari. Jelaskan komponen utama, bottleneck potensial, dan strategi mitigasi.",
     strongAnswer: "Load balancer, caching layer, async queues, DB sharding/replication; identifies CAP trade-offs; concrete latency/throughput targets.",
     redFlags: ["Single-server solution only", "No caching consideration", "Cannot discuss failure modes"],
-    rubric: [],
+    rubric: rubricFor("sfia-solution-architecture"),
   },
   {
-    id: "TT2", type: "Technical", competencyId: "tech-quality", competencyName: "Code Quality & Testing",
+    id: "TT2", type: "Technical", competencyId: "sfia-security-quality", competencyName: "Security & Quality Mindset",
     question: "Bagaimana Anda memastikan kualitas kode di tim — strategi testing, code review, dan technical debt management?",
     strongAnswer: "Layered tests (unit/integration/e2e); meaningful PR review culture; measurable test coverage; tech-debt sprint allocation.",
     redFlags: ["No tests", "Superficial code review", "Tech debt ignored"],
-    rubric: [],
+    rubric: rubricFor("sfia-security-quality"),
   },
   {
-    id: "TL1", type: "Leadership", competencyId: "tech-leadership", competencyName: "Technical Leadership",
+    id: "TL1", type: "Leadership", competencyId: "sfia-technical-proficiency", competencyName: "Technical Proficiency",
     question: "Bagaimana Anda membimbing junior engineer untuk grow secara teknikal? Berikan contoh konkret mentorship yang memberikan dampak nyata.",
     strongAnswer: "Structured 1-1s; tailored growth plan; code review as teaching; measurable skill improvement in mentee.",
     redFlags: ["Delegates only without guidance", "No growth plan", "Cannot recall specific impact"],
-    rubric: [],
+    rubric: rubricFor("sfia-technical-proficiency"),
   },
   {
-    id: "TL2", type: "Leadership", competencyId: "tech-influence", competencyName: "Technical Influence",
+    id: "TL2", type: "Leadership", competencyId: "sfia-innovation", competencyName: "Innovation & Problem Solving",
     question: "Ceritakan saat Anda mengadvokasi perubahan arsitektur atau teknologi baru di organisasi. Bagaimana Anda membangun konsensus?",
     strongAnswer: "Data-backed proposal; addresses concerns; phased rollout plan; wins key stakeholders; documents decision.",
     redFlags: ["Top-down authority only", "No data", "Cannot handle pushback"],
-    rubric: [],
+    rubric: rubricFor("sfia-innovation"),
   },
   {
-    id: "TC1", type: "Cultural Fit", competencyId: "tech-learning", competencyName: "Continuous Learning",
+    id: "TC1", type: "Cultural Fit", competencyId: "sfia-learning-agility", competencyName: "Learning Agility & Tech Adaptability",
     question: "Teknologi berubah cepat — bagaimana Anda tetap up-to-date? Berikan contoh teknologi yang Anda pelajari sendiri dan berhasil diterapkan.",
     strongAnswer: "Structured learning habits; specific example with applied outcome; contributes knowledge back (blog/talk/PR).",
     redFlags: ["No self-learning", "Cannot cite recent examples", "Waits to be told what to learn"],
-    rubric: [],
+    rubric: rubricFor("sfia-learning-agility"),
   },
   {
-    id: "TC2", type: "Cultural Fit", competencyId: "tech-collab2", competencyName: "Cross-functional Collaboration",
+    id: "TC2", type: "Cultural Fit", competencyId: "sfia-collaboration", competencyName: "Technical Collaboration & Communication",
     question: "Ceritakan pengalaman bekerja dengan Product atau Design untuk deliver fitur — friction apa yang muncul dan bagaimana Anda mengatasinya?",
     strongAnswer: "Proactive collaboration; early design review; translates tech constraints clearly; resolves friction via process improvement.",
     redFlags: ["Silo mentality", "Blames Product/Design", "No process improvement"],
-    rubric: [],
+    rubric: rubricFor("sfia-collaboration"),
   },
 ];
 
 const BUSINESS_QUESTION_POOL: InterviewQuestion[] = [
   {
-    id: "BB1", type: "Behavioral", competencyId: "biz-execution", competencyName: "Results Orientation",
+    id: "BB1", type: "Behavioral", competencyId: "lom-drive-results", competencyName: "Drive for Results",
     question: "Ceritakan pencapaian bisnis terbesar Anda dalam 2 tahun terakhir — metric apa yang digerakkan dan bagaimana kontribusi Anda?",
     strongAnswer: "Specific KPIs cited; clear personal contribution; overcame obstacles; outcome sustained.",
     redFlags: ["Vague outcome", "Team credit only", "No metrics"],
-    rubric: [],
+    rubric: rubricFor("lom-drive-results"),
   },
   {
-    id: "BB2", type: "Behavioral", competencyId: "biz-adaptability", competencyName: "Adaptability",
+    id: "BB2", type: "Behavioral", competencyId: "lom-manages-ambiguity", competencyName: "Manages Ambiguity & Complexity",
     question: "Berikan contoh saat strategi bisnis Anda harus berubah drastis karena perubahan pasar. Bagaimana Anda memimpin pivot tersebut?",
     strongAnswer: "Reads market signals early; clear pivot rationale; team alignment; measurable recovery/growth after pivot.",
     redFlags: ["Rigid to original plan", "Blames external factors", "No team management"],
-    rubric: [],
+    rubric: rubricFor("lom-manages-ambiguity"),
   },
   {
-    id: "BT1", type: "Technical", competencyId: "biz-analysis", competencyName: "Business Analysis",
+    id: "BT1", type: "Technical", competencyId: "lom-strategic-agility", competencyName: "Strategic Agility",
     question: "Bagaimana Anda menganalisis peluang bisnis baru? Walk-through framework yang biasanya Anda gunakan dengan contoh nyata.",
     strongAnswer: "Structured framework (market sizing, competitive, unit economics); hypothesis-driven; data sources cited; decision criteria clear.",
     redFlags: ["Gut-feel only", "No framework", "Cannot size market"],
-    rubric: [],
+    rubric: rubricFor("lom-strategic-agility"),
   },
   {
-    id: "BT2", type: "Technical", competencyId: "biz-data", competencyName: "Data-Driven Decision Making",
+    id: "BT2", type: "Technical", competencyId: "lom-problem-solving", competencyName: "Problem Solving & Decision Quality",
     question: "Ceritakan keputusan bisnis penting yang Anda ambil berdasarkan data. Data apa yang Anda kumpulkan dan bagaimana Anda menginterpretasinya?",
     strongAnswer: "Specific data sources; statistical awareness; action taken from insight; result measured.",
     redFlags: ["Data not used", "Correlation vs causation confused", "No follow-up measurement"],
-    rubric: [],
+    rubric: rubricFor("lom-problem-solving"),
   },
   {
-    id: "BL1", type: "Leadership", competencyId: "biz-leadership", competencyName: "Strategic Leadership",
+    id: "BL1", type: "Leadership", competencyId: "lom-communicates", competencyName: "Communicates Effectively",
     question: "Bagaimana Anda menyelaraskan tim Anda dengan tujuan strategis perusahaan? Berikan contoh cascading goals yang berhasil.",
     strongAnswer: "OKR/KPI cascade; regular alignment check-ins; autonomy within boundaries; team understands 'why'.",
     redFlags: ["Top-down diktat", "Team not aware of strategy", "No accountability mechanism"],
-    rubric: [],
+    rubric: rubricFor("lom-communicates"),
   },
   {
-    id: "BL2", type: "Leadership", competencyId: "biz-influence", competencyName: "Stakeholder Influence",
+    id: "BL2", type: "Leadership", competencyId: "lom-interpersonal-savvy", competencyName: "Interpersonal Savvy & Influence",
     question: "Ceritakan situasi di mana Anda harus meyakinkan eksekutif senior untuk mendukung inisiatif Anda tanpa otoritas langsung.",
     strongAnswer: "Builds coalition; tailors message to audience; addresses objections; secures commitment; delivers on promise.",
     redFlags: ["Cannot influence up", "Gives up without pushback", "No follow-through"],
-    rubric: [],
+    rubric: rubricFor("lom-interpersonal-savvy"),
   },
   {
-    id: "BC1", type: "Cultural Fit", competencyId: "biz-values", competencyName: "Values Alignment",
+    id: "BC1", type: "Cultural Fit", competencyId: "lom-collaborates", competencyName: "Collaboration & Teamwork",
     question: "Nilai bisnis apa yang paling penting bagi Anda? Ceritakan situasi di mana nilai itu diuji dan bagaimana Anda meresponnya.",
     strongAnswer: "Authentic specific values; example under pressure; integrity maintained; learns from experience.",
     redFlags: ["Generic answer", "Values not tested", "Inconsistency detected"],
-    rubric: [],
+    rubric: rubricFor("lom-collaborates"),
   },
   {
-    id: "BC2", type: "Cultural Fit", competencyId: "biz-growth", competencyName: "Growth Mindset",
+    id: "BC2", type: "Cultural Fit", competencyId: "lom-learning-agility", competencyName: "Learning Agility",
     question: "Apa kegagalan terbesar Anda dalam karier bisnis dan apa yang Anda pelajari? Bagaimana Anda menerapkan pelajaran tersebut setelahnya?",
     strongAnswer: "Genuine self-reflection; specific failure; clear learnings; applied change measurable.",
     redFlags: ["Reframes failure as success", "Blames others", "No specific lesson applied"],
-    rubric: [],
+    rubric: rubricFor("lom-learning-agility"),
   },
 ];
 
 const FINANCE_QUESTION_POOL: InterviewQuestion[] = [
   {
-    id: "FB1", type: "Behavioral", competencyId: "fin-integrity", competencyName: "Financial Integrity",
+    id: "FB1", type: "Behavioral", competencyId: "cgma-ethics-compliance", competencyName: "Ethics, Governance & Compliance",
     question: "Ceritakan situasi di mana Anda menemukan ketidaksesuaian material dalam laporan keuangan. Langkah apa yang Anda ambil?",
     strongAnswer: "Follows escalation protocol; documents evidence; involves compliance/legal; resolves with proper trail.",
     redFlags: ["Suppresses findings", "No escalation", "Vague response"],
-    rubric: [],
+    rubric: rubricFor("cgma-ethics-compliance"),
   },
   {
-    id: "FB2", type: "Behavioral", competencyId: "fin-deadline", competencyName: "Reporting Under Pressure",
+    id: "FB2", type: "Behavioral", competencyId: "cgma-technical-accounting", competencyName: "Technical Accounting & Reporting",
     question: "Bagaimana Anda mengelola proses penutupan buku akhir kuartal saat ada tekanan waktu tinggi?",
     strongAnswer: "Clear close calendar; prioritized tasks; team coordination; reconciliation checklist; continuous improvement of close timeline.",
     redFlags: ["No structure", "Errors found post-close", "Cannot describe process"],
-    rubric: [],
+    rubric: rubricFor("cgma-technical-accounting"),
   },
   {
-    id: "FT1", type: "Technical", competencyId: "fin-analysis", competencyName: "Financial Analysis",
+    id: "FT1", type: "Technical", competencyId: "cgma-financial-analysis", competencyName: "Financial Analysis & Planning",
     question: "Jelaskan bagaimana Anda membangun model keuangan untuk evaluasi investasi baru. Asumsi apa yang paling kritis?",
     strongAnswer: "DCF/IRR/NPV explained correctly; sensitivity analysis; key assumptions tested; decision criteria clear.",
     redFlags: ["Cannot build model", "No sensitivity analysis", "Single scenario only"],
-    rubric: [],
+    rubric: rubricFor("cgma-financial-analysis"),
   },
   {
-    id: "FT2", type: "Technical", competencyId: "fin-risk", competencyName: "Risk Management",
+    id: "FT2", type: "Technical", competencyId: "cgma-risk-control", competencyName: "Risk Management & Internal Control",
     question: "Bagaimana Anda mengidentifikasi dan memitigasi risiko keuangan dalam portofolio atau operasi bisnis?",
     strongAnswer: "Risk matrix; hedging strategies; monitoring KRIs; escalation triggers defined; documented process.",
     redFlags: ["Risk ignored", "Reactive only", "No documentation"],
-    rubric: [],
+    rubric: rubricFor("cgma-risk-control"),
   },
   {
-    id: "FL1", type: "Leadership", competencyId: "fin-business-partner", competencyName: "Finance Business Partnering",
+    id: "FL1", type: "Leadership", competencyId: "cgma-stakeholder-influence", competencyName: "Stakeholder Influence & Presentation",
     question: "Bagaimana Anda membangun hubungan yang efektif dengan non-finance leaders untuk mendorong keputusan berbasis data keuangan?",
     strongAnswer: "Translates financial concepts; proactive insights not just reports; trusted advisor role; measurable impact.",
     redFlags: ["Finance-only perspective", "Cannot simplify for business", "Reactive reporting only"],
-    rubric: [],
+    rubric: rubricFor("cgma-stakeholder-influence"),
   },
   {
-    id: "FL2", type: "Leadership", competencyId: "fin-team", competencyName: "Finance Team Leadership",
+    id: "FL2", type: "Leadership", competencyId: "cgma-leadership", competencyName: "Leadership & People Development",
     question: "Ceritakan bagaimana Anda membangun kapabilitas tim finance — dari hiring hingga pengembangan kompetensi teknikal.",
     strongAnswer: "Competency framework; structured development plan; stretch assignments; retention strategy.",
     redFlags: ["No development plan", "High turnover team", "Technical skill not measured"],
-    rubric: [],
+    rubric: rubricFor("cgma-leadership"),
   },
   {
-    id: "FC1", type: "Cultural Fit", competencyId: "fin-compliance", competencyName: "Compliance Mindset",
+    id: "FC1", type: "Cultural Fit", competencyId: "cgma-business-acumen", competencyName: "Business Acumen & Commercial Awareness",
     question: "Bagaimana Anda memastikan tim tetap patuh terhadap regulasi keuangan yang berubah (PSAK, IFRS, pajak)?",
     strongAnswer: "Continuous monitoring; training program; external advisor network; embedded compliance culture.",
     redFlags: ["Reactive compliance only", "No training program", "External changes missed"],
-    rubric: [],
+    rubric: rubricFor("cgma-business-acumen"),
   },
   {
-    id: "FC2", type: "Cultural Fit", competencyId: "fin-innovation", competencyName: "Finance Innovation",
+    id: "FC2", type: "Cultural Fit", competencyId: "cgma-digital-finance", competencyName: "Digital Finance & Data Analytics",
     question: "Berikan contoh bagaimana Anda menggunakan teknologi (ERP, BI tools, automation) untuk meningkatkan efisiensi fungsi finance.",
     strongAnswer: "Specific tools; quantified time/cost savings; adoption strategy; scalable implementation.",
     redFlags: ["Manual-only approach", "No technology adoption", "Cannot quantify improvement"],
-    rubric: [],
+    rubric: rubricFor("cgma-digital-finance"),
   },
 ];
 
@@ -311,8 +311,9 @@ function buildMockQuestions(
   position: string,
   seniority: Seniority,
   types: InterviewType[],
+  department: string,
 ): InterviewQuestion[] {
-  const cluster = detectCluster(position);
+  const cluster = detectCluster(position, department);
 
   let pool: InterviewQuestion[];
   if (cluster === "tech") pool = TECH_QUESTION_POOL;
@@ -394,19 +395,22 @@ function buildInterviewerNotes(
   position: string,
   seniority: Seniority,
   types: InterviewType[],
+  department: string,
+  questions: InterviewQuestion[],
 ): string[] {
-  const cluster = detectCluster(position);
-  const frameworkLabel =
-    cluster === "tech" ? "SFIA v8" :
-    cluster === "finance" ? "CGMA / CIMA" :
-    cluster === "hr" ? "Ulrich + SKKNI" :
-    "Lominger / Korn Ferry";
+  const cluster = detectCluster(position, department);
+  const frameworkLabel = CLUSTER_FRAMEWORKS[cluster].label;
+
+  // Competencies actually covered by the generated questions. INTERVIEW_TYPE_MAP
+  // is HR-only, so using it here told a finance interviewer to score against
+  // "skkni-hubungan-industrial" — a competency that appears nowhere on their kit.
+  const covered = [...new Set(questions.map((q) => q.competencyName))];
 
   return [
     `Use structured interviews only (Schmidt & Hunter, 1998: r ≈ 0.51) — avoid unstructured ad-hoc questions (r ≈ 0.38).`,
     `Calibrate to ${seniority} bar using ${frameworkLabel} competency rubrics.`,
     `Allocate ~${Math.max(45, types.length * 15)} minutes across: ${types.join(", ")}.`,
-    `Map scores to competencies: ${types.flatMap((t) => INTERVIEW_TYPE_MAP[t]).join(", ")}.`,
+    `Map scores to competencies: ${covered.join(", ")}.`,
     `For ${position} (${cluster} cluster), supplement with work samples where possible (r ≈ 0.54).`,
     "Document verbatim quotes for scores ≥4 or any red-flag; reference checks supplementary only (r ≈ 0.26).",
   ];
@@ -515,11 +519,7 @@ function QuestionCard({ q, index }: { q: InterviewQuestion; index: number }) {
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Research-based rubric (1-5)
             </span>
-            <FrameworkPillarBadge
-              pillar={
-                q.competencyId.startsWith("skkni") ? "skkni" : "ulrich"
-              }
-            />
+            <FrameworkPillarBadge pillar={pillarFor(q.competencyId)} />
           </div>
           <RubricTable rubric={q.rubric} compact />
         </div>
@@ -794,6 +794,17 @@ function ResultsPanel({ pack, onStartInterview }: { pack: QuestionPack; onStartI
     return map;
   }, [pack.questions]);
 
+  // Framework label and citations are derived from the questions actually in the
+  // kit, so a tech kit can never be captioned "Ulrich + SKKNI" (it was hardcoded).
+  const kitPillars = useMemo(
+    () => [...new Set(pack.questions.map((q) => pillarFor(q.competencyId)))],
+    [pack.questions],
+  );
+  const kitFrameworkLabel = useMemo(
+    () => kitPillars.map((p) => getPillarLabel(p)).join(" + ") || "competency",
+    [kitPillars],
+  );
+
   return (
     <div className="space-y-6">
       <EvidenceValidityPanel />
@@ -893,9 +904,11 @@ function ResultsPanel({ pack, onStartInterview }: { pack: QuestionPack; onStartI
           </h3>
         </div>
         <p className="mt-0.5 text-sm text-slate-500">
-          Panel guidance — Ulrich + SKKNI aligned evaluation
+          Panel guidance — {kitFrameworkLabel} aligned evaluation
         </p>
-        <CitationNote>{CITATIONS.ulrich}</CitationNote>
+        {kitPillars.map((p) => (
+          <CitationNote key={p}>{PILLAR_CITATIONS[p] ?? getPillarLabel(p)}</CitationNote>
+        ))}
         <ul className="mt-4 space-y-2">
           {pack.interviewerNotes.map((note, i) => (
             <li
@@ -1080,7 +1093,8 @@ export default function InterviewPage() {
 
     setTimeout(() => {
       const now = new Date();
-      const questions = buildMockQuestions(position, seniority, selectedTypes);
+      const department = cvAnalysisData?.department ?? "";
+      const questions = buildMockQuestions(position, seniority, selectedTypes, department);
       setPack({
         packId: `KIT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
         generatedAt: now.toLocaleString("en-US", {
@@ -1092,7 +1106,7 @@ export default function InterviewPage() {
         types: selectedTypes,
         durationMin: Math.max(45, selectedTypes.length * 15 + questions.length * 5),
         questions,
-        interviewerNotes: buildInterviewerNotes(position, seniority, selectedTypes),
+        interviewerNotes: buildInterviewerNotes(position, seniority, selectedTypes, department, questions),
       });
       setGenerating(false);
     }, 1800);
@@ -1188,7 +1202,7 @@ export default function InterviewPage() {
               <div>
                 <Label>Interview type</Label>
                 <p className="mb-2 text-xs text-slate-500">
-                  Select types — 2 questions each, mapped to Ulrich / SKKNI
+                  Select types — 2 questions each, mapped to {CLUSTER_FRAMEWORKS[detectCluster(position, cvAnalysisData?.department ?? "")].label}
                 </p>
                 <div
                   className="grid grid-cols-1 gap-2 sm:grid-cols-2"

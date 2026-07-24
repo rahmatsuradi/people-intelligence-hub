@@ -2,6 +2,7 @@
 
 import {
   CITATIONS,
+  PILLAR_CITATIONS,
   type CompetencyPillar,
   type CompetencyReportRow,
   type CompetencyScore,
@@ -123,14 +124,6 @@ export function CompetencyScoreList({ scores }: { scores: CompetencyScore[] }) {
   // Tambahkan pillar lain yang tidak ada di pillarOrder
   const otherPillars = [...new Set(scores.map(s => s.pillar))].filter(p => !pillarOrder.includes(p));
   const allPillars = [...pillarsPresent, ...otherPillars];
-
-  const PILLAR_CITATIONS: Record<string, string> = {
-    ulrich: CITATIONS.ulrich,
-    skkni: CITATIONS.skkni,
-    sfia: "SFIA Foundation (2023). Skills Framework for Information Age v8. sfia.org — adopted by Google, Microsoft, IBM, AWS.",
-    lominger: "Korn Ferry Lominger (2014). Leadership Architect: The Complete Collection. Used by Fortune 500 for leadership selection.",
-    cgma: "CGMA (2019). CGMA Competency Framework. Chartered Institute of Management Accountants / AICPA.",
-  };
 
   const renderGroup = (pillar: string) => {
     const items = scores.filter(s => s.pillar === pillar);
