@@ -196,14 +196,14 @@ export default function AnalyticsPage() {
     );
   }
 
-  // Calculate dynamic simulator values
-  const baseMonthlySalaryBill = 21929210; // Rp 21.92 Miliar per month (~263.15 Miliar / 12)
-  const overtimeMultiplier = 1 + ((breakingNewsHours - 8) * 0.045); // 4.5% surge per extra hour
+  // Nilai simulator what-if (koefisien ILUSTRATIF untuk demo — bukan model AI/aktuaria)
+  const baseMonthlySalaryBill = 21_929_210_000; // Rp 21,93 miliar/bln (kalibrasi: beban SDM tahunan ~Rp 263,15 M / 12)
+  const overtimeMultiplier = 1 + ((breakingNewsHours - 8) * 0.045); // asumsi demo: +4,5% per jam ekstra
   const simulatedMonthlyBill = Math.round(baseMonthlySalaryBill * Math.max(1, overtimeMultiplier));
-  const burnoutRiskPct = Math.min(98, Math.round(22 + (breakingNewsHours - 8) * 4.8));
+  const burnoutRiskPct = Math.min(98, Math.round(22 + (breakingNewsHours - 8) * 4.8)); // kurva ilustratif
 
   return (
-    <AppShell activeNavId="analytics" title="Pusat Analitik & Strategi HRBP" subtitle="Data Terkalibrasi Laporan Tahunan 2025 PT Visi Media Asia Tbk (VIVA Group / tvOne & ANTV)">
+    <AppShell activeNavId="analytics" title="Pusat Analitik & Strategi HRBP" subtitle="Demo sintetis — dikalibrasi dari laporan tahunan publik industri penyiaran nasional (2025)">
       
       {/* Top Tab Navigation */}
       <div className="mb-6 flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
@@ -217,7 +217,7 @@ export default function AnalyticsPage() {
           )}
         >
           <span>🏛️</span>
-          <span>Workforce & Headcount (VIVA 2025)</span>
+          <span>Workforce & Headcount (Valora 2025)</span>
         </button>
 
         <button
@@ -230,7 +230,7 @@ export default function AnalyticsPage() {
           )}
         >
           <span>🚀</span>
-          <span>AI HRBP & Breaking News Simulator</span>
+          <span>Simulator Beban Siaran (What-If)</span>
         </button>
 
         <button
@@ -247,7 +247,7 @@ export default function AnalyticsPage() {
         </button>
       </div>
 
-      {/* TAB 1: WORKFORCE & HEADCOUNT (VIVA 2025 BENCHMARK) */}
+      {/* TAB 1: WORKFORCE & HEADCOUNT (kalibrasi sintetis 2025) */}
       {activeTab === "workforce" && (
         <div className="space-y-6 animate-in fade-in duration-300">
           
@@ -256,12 +256,11 @@ export default function AnalyticsPage() {
             <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider backdrop-blur-md mb-3">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Official Audited Benchmark — IDX: VIVA (2025)
+                  Data Sintetis — Kalibrasi Industri Penyiaran (2025)
                 </div>
-                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">PT Visi Media Asia Tbk (tvOne & ANTV)</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">PT Valora Media Television (VALORA TV)</h1>
                 <p className="mt-1 text-sm md:text-base text-red-100 max-w-2xl">
-                  Dasbor analitik SDM berstandar nyata industri penyiaran nasional, diekstrak dari Laporan Keuangan Konsolidasian & Laporan Keberlanjutan 2025.
+                  Dasbor analitik SDM perusahaan demo fiktif, dengan orde besaran dikalibrasi dari laporan tahunan publik emiten penyiaran nasional agar realistis.
                 </p>
               </div>
               <div className="shrink-0 flex flex-col items-start md:items-end bg-black/20 p-4 rounded-xl backdrop-blur-sm border border-white/10">
@@ -303,11 +302,11 @@ export default function AnalyticsPage() {
           {/* Division Composition & Demographics */}
           <div className="grid gap-6 lg:grid-cols-2">
             
-            {/* Division Mapping TV One & ANTV */}
+            {/* Division Mapping Valora TV */}
             <Card>
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Komposisi 5 Pilar Divisi Utama (tvOne & ANTV)</h2>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Komposisi 5 Pilar Divisi Utama (Valora TV)</h2>
                   <p className="text-xs text-slate-500">Distribusi penyiaran berita 24/7 & produksi program hiburan</p>
                 </div>
                 <span className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-500/10 dark:text-red-400">
@@ -327,7 +326,7 @@ export default function AnalyticsPage() {
                   <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                     <div className="h-full rounded-full bg-red-600 transition-all duration-700" style={{ width: "41.9%" }} />
                   </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">Core tvOne: Pemred, Redpel, Produser Eksekutif, Anchor, Reporter Lapangan</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">Inti pemberitaan: Pemred, Redpel, Produser Eksekutif, Anchor, Reporter Lapangan</p>
                 </div>
 
                 <div>
@@ -355,7 +354,7 @@ export default function AnalyticsPage() {
                   <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                     <div className="h-full rounded-full bg-amber-500 transition-all duration-700" style={{ width: "16.0%" }} />
                   </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">Core ANTV: PD, FD, Scriptwriter, Talent Coordinator, Sports Programming</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">Inti hiburan: PD, FD, Scriptwriter, Talent Coordinator, Sports Programming</p>
                 </div>
 
                 <div>
@@ -451,9 +450,18 @@ export default function AnalyticsPage() {
               </div>
 
               <div className="mt-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 p-3.5 border border-amber-200 dark:border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
-                <span className="font-bold">💡 Catatan Kinerja SDM VIVA 2025:</span> Tingkat retensi karyawan tetap berada di angka sangat tinggi (86,7% PKWTT), menunjukkan loyalitas kuat di tengah disrupsi media digital dan masa transisi *post-pandemic recovery*.
+                <span className="font-bold">💡 Catatan Kinerja SDM (Demo 2025):</span> Tingkat retensi karyawan tetap berada di angka sangat tinggi (86,7% PKWTT), menunjukkan loyalitas kuat di tengah disrupsi media digital dan masa transisi *post-pandemic recovery*.
               </div>
             </Card>
+          </div>
+
+          {/* Methodology / provenance note */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            <span className="font-bold text-slate-800 dark:text-slate-200">📖 Metodologi kalibrasi:</span>{" "}
+            Seluruh entitas, nama, dan angka pada dasbor ini adalah <strong>data demo sintetis</strong>. Orde besarannya
+            dikalibrasi dari laporan tahunan publik emiten penyiaran nasional (IDX, tahun buku 2025) agar proporsi
+            headcount, beban SDM, dan demografi terasa realistis untuk industri TV — namun bukan data resmi
+            perusahaan mana pun dan tidak boleh dikutip sebagai fakta.
           </div>
         </div>
       )}
@@ -465,10 +473,10 @@ export default function AnalyticsPage() {
           <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-red-950 p-6 text-white shadow-xl border border-slate-800">
             <h1 className="text-2xl font-extrabold flex items-center gap-3">
               <span>⚡</span>
-              <span>24/7 Breaking News & AI HRBP Predictive Simulator</span>
+              <span>Simulator What-If: Breaking News 24/7 & Beban SDM</span>
             </h1>
             <p className="mt-1 text-sm text-slate-300 max-w-3xl">
-              Stasiun TV berita sekelas tvOne menghadapi dinamika liputan langsung 24 jam non-stop saat terjadi peristiwa luar biasa (Pilkada, Bencana Alam, Isbat). Simulasi ini memproyeksikan lonjakan anggaran lembur (*overtime burn rate*), risiko *burnout*, dan kesiapan talenta magang *Campus One*.
+              Stasiun TV berita nasional menghadapi dinamika liputan langsung 24 jam non-stop saat terjadi peristiwa luar biasa (Pilkada, Bencana Alam, Isbat). Simulasi ini memproyeksikan lonjakan anggaran lembur (*overtime burn rate*), risiko *burnout*, dan kesiapan talenta magang — memakai koefisien ilustratif untuk keperluan demo.
             </p>
           </div>
 
@@ -548,7 +556,7 @@ export default function AnalyticsPage() {
                 <Card className="border-l-4 border-l-red-600 bg-gradient-to-br from-white to-red-50/30 dark:from-slate-900 dark:to-red-950/20">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Proyeksi Beban Gaji & Lembur (Per Bulan)</p>
                   <p className="mt-2 text-3xl font-black tabular-nums text-red-600 dark:text-red-400">
-                    Rp {(simulatedMonthlyBill / 1000000).toFixed(2)} Miliar
+                    Rp {(simulatedMonthlyBill / 1000000000).toFixed(2)} Miliar
                   </p>
                   <div className="mt-2 flex items-center justify-between text-xs font-medium text-slate-500">
                     <span>Baseline Normal: Rp 21,93 M/bln</span>
@@ -559,7 +567,7 @@ export default function AnalyticsPage() {
                 </Card>
 
                 <Card className="border-l-4 border-l-amber-500 bg-gradient-to-br from-white to-amber-50/30 dark:from-slate-900 dark:to-amber-950/20">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">AI Turnover & Burnout Risk Score</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Estimasi Risiko Burnout (Model Ilustratif)</p>
                   <div className="mt-2 flex items-baseline gap-2">
                     <p className={cn("text-3xl font-black tabular-nums", 
                       burnoutRiskPct > 65 ? "text-red-600 dark:text-red-400" : burnoutRiskPct > 40 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
@@ -583,8 +591,8 @@ export default function AnalyticsPage() {
               <Card>
                 <div className="border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
                   <div>
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Rekomendasi Strategis AI HRBP & Kaderisasi "Campus One"</h2>
-                    <p className="text-xs text-slate-500">Respons otomatis sistem terhadap intensitas liputan {breakingNewsHours} jam/hari</p>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Rekomendasi Strategis HRBP & Kaderisasi Magang</h2>
+                    <p className="text-xs text-slate-500">Rekomendasi berbasis aturan terhadap intensitas liputan {breakingNewsHours} jam/hari</p>
                   </div>
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
                     100 Peserta Magang Aktif
@@ -596,9 +604,9 @@ export default function AnalyticsPage() {
                     <div className="flex items-start gap-3">
                       <span className="text-lg">🎓</span>
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Aktivasi Talent Pool Magang Nasional (Program "Campus One" 2025)</h3>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Aktivasi Talent Pool Magang Nasional (Program Magang Valora 2025)</h3>
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                          Sesuai Laporan Tahunan VIVA halaman 241, terdapat <strong className="text-red-600 dark:text-red-400">100 mahasiswa magang terpilih</strong> dari PTN/PTS (52% ditempatkan di Divisi News/Redaksi). Saat siaran intensitas tinggi, tim HRBP merekomendasikan pengerahan talent Campus One untuk mendukung riset naskah berita, pengindeksan materi DALET system, dan asisten liputan lapangan guna meringankan beban reporter senior.
+                          Dalam skenario demo ini terdapat <strong className="text-red-600 dark:text-red-400">100 mahasiswa magang terpilih</strong> dari PTN/PTS (52% ditempatkan di Divisi News/Redaksi). Saat siaran intensitas tinggi, tim HRBP merekomendasikan pengerahan talenta magang untuk mendukung riset naskah berita, pengindeksan materi newsroom, dan asisten liputan lapangan guna meringankan beban reporter senior.
                         </p>
                       </div>
                     </div>
@@ -608,10 +616,10 @@ export default function AnalyticsPage() {
                     <div className="flex items-start gap-3">
                       <span className="text-lg">🩺</span>
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Intervensi Kesehatan & K3 (Rasuna Medical Center & Klinik On-Site)</h3>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Intervensi Kesehatan & K3 (Klinik On-Site Valora Tower)</h3>
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                          {breakingNewsHours > 16 
-                            ? "🚨 INSTRUKSI KRUSIAL HRBP: Dengan risiko burnout mencapai " + burnoutRiskPct + "%, aktifkan dokter jaga 24 jam di Klinik On-Site tvOne Pulogadung dan fasilitas Rasuna Medical Center (Gedung Bakrie Tower Lt. 25). Wajibkan pemeriksaan tekanan darah bagi kamerawan ENG dan anchor sebelum bertugas."
+                          {breakingNewsHours > 16
+                            ? "🚨 INSTRUKSI KRUSIAL HRBP: Dengan risiko burnout mencapai " + burnoutRiskPct + "%, aktifkan dokter jaga 24 jam di Klinik On-Site studio Valora dan fasilitas medis kantor pusat Valora Tower. Wajibkan pemeriksaan tekanan darah bagi kamerawan ENG dan anchor sebelum bertugas."
                             : "Tim HRBP secara berkala menjalankan sesi 'Health Talk' (pencegahan kelelahan mata buram & ergonomi studio) serta pelatihan kesiapsiagaan darurat APAR sesuai standar Kemnaker RI."}
                         </p>
                       </div>
@@ -622,9 +630,9 @@ export default function AnalyticsPage() {
                     <div className="flex items-start gap-3">
                       <span className="text-lg">🤖</span>
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Implementasi "Agentic AI" dalam Alur Kerja Redaksi (Halaman 240)</h3>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Implementasi "Agentic AI" dalam Alur Kerja Redaksi</h3>
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                          Untuk menjaga efisiensi biaya operasional (yang berhasil ditekan 22,35% di 2025 menjadi Rp 928,79 Miliar), HRBP mendorong adopsi *AI Practical Tools* untuk transkripsi wawancara otomatis, *prompter indexing*, dan *vocal training analysis*, sehingga reporter dapat fokus pada investigasi dan verifikasi kebenaran berita di lapangan.
+                          Untuk menjaga efisiensi biaya operasional, HRBP mendorong adopsi *AI Practical Tools* untuk transkripsi wawancara otomatis, *prompter indexing*, dan *vocal training analysis*, sehingga reporter dapat fokus pada investigasi dan verifikasi kebenaran berita di lapangan.
                         </p>
                       </div>
                     </div>
