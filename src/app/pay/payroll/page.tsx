@@ -9,7 +9,7 @@ import type { Compensation, OvertimeInput, PayrollLineResult, PieceRateInput } f
 import { buildPayslip } from "@/lib/payroll/payslip";
 import type { PayslipLine } from "@/lib/payroll/payslip";
 import { renderPayslipHTML } from "@/lib/payroll/payslip-html";
-import { ALL_COMPANIES, resolveCompanyProfile, getActiveCompanyId } from "@/lib/payroll/company-profile";
+import { resolveCompanyProfile, getActiveCompanyId } from "@/lib/payroll/company-profile";
 import { aggregateDecemberContext, pickStatutoryConfigForPeriod, toStatutoryConfig, ensureDemoEmployeesExist, isStatutoryEnabled, setStatutoryToggle } from "@/lib/payroll/pay-data";
 import type {
   DecemberAggregate, PiCompensationRow, PiEmployeeRow, PiPayrollLineRow, PiPayrollRunRow, PiStatutoryConfigRow,
@@ -305,7 +305,8 @@ export default function PayrollPage() {
   const [includeThr, setIncludeThr] = useState(false);
   const [thrReferenceDate, setThrReferenceDate] = useState(`${DEFAULT_PERIOD}-01`);
   const [togglesVersion, setTogglesVersion] = useState(0);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("valoris_tv");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => getActiveCompanyId());
+  const activeCompany = resolveCompanyProfile(selectedCompanyId);
 
   const isDecember = /^\d{4}-12$/.test(period);
 
@@ -499,14 +500,14 @@ export default function PayrollPage() {
       {/* Company Info Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-4 text-white shadow-xl mb-4">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">📺</span>
+          <span className="text-2xl">{activeCompany.industry === "broadcast" ? "📺" : "🧵"}</span>
           <div>
-            <h2 className="text-base font-bold tracking-tight text-white">{ALL_COMPANIES[0].name}</h2>
-            <p className="text-xs text-slate-400">{ALL_COMPANIES[0].address}</p>
+            <h2 className="text-base font-bold tracking-tight text-white">{activeCompany.name}</h2>
+            <p className="text-xs text-slate-400">{activeCompany.address}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 rounded-xl bg-slate-800/80 px-4 py-2 text-xs font-medium text-slate-300 border border-slate-700/60">
-          <span className="font-semibold text-blue-400">{ALL_COMPANIES[0].signerTitle}:</span> {ALL_COMPANIES[0].signerName}
+          <span className="font-semibold text-blue-400">{activeCompany.signerTitle}:</span> {activeCompany.signerName}
         </div>
       </div>
 

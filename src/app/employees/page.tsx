@@ -42,7 +42,7 @@ export default function CoreEmployeesPage() {
   const [rows, setRows] = useState<EmployeeView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [togglesVersion, setTogglesVersion] = useState(0);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("valoris_tv");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => getActiveCompanyId());
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("ALL");
   const [selectedEmpTypeFilter, setSelectedEmpTypeFilter] = useState<string>("ALL");
@@ -208,7 +208,7 @@ export default function CoreEmployeesPage() {
           {/* Company Info Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-4 text-white shadow-xl">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">📺</span>
+              <span className="text-2xl">{currentCompany.industry === "broadcast" ? "📺" : "🧵"}</span>
               <div>
                 <h2 className="text-base font-bold tracking-tight text-white">{currentCompany.name}</h2>
                 <p className="text-xs text-slate-400">{currentCompany.address}</p>

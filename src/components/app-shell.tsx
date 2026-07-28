@@ -449,8 +449,8 @@ export function AppShell({
 
           <footer className="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
             <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:text-slate-400">
-              <p>&copy; 2026 People Intelligence &middot; Enterprise HR Platform</p>
-              <p className="tabular-nums">v3.1.0 &middot; SOC 2 Type II &middot; GDPR compliant</p>
+              <p>&copy; 2026 People Intelligence &middot; Platform HR Terpadu</p>
+              <p className="tabular-nums">v0.1.0 &middot; Demo portofolio &middot; Data sintetis</p>
             </div>
           </footer>
         </main>

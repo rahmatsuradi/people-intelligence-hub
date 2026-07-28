@@ -320,7 +320,10 @@ function generateZusTextile245Employees() {
       const fn = firstNames[(idCounter - 1) % firstNames.length];
       const ln = lastNames[Math.floor((idCounter - 1) / firstNames.length) % lastNames.length];
       const fullName = `${fn} ${ln}`;
-      const id = `ZUS-${String(idCounter).padStart(3, "0")}`;
+      // pi_employees.id bertipe uuid — id string "ZUS-001" ditolak Postgres (gagal diam-diam).
+      // Pakai pola UUID sama seperti Valora, prefix e2 sebagai penanda tenant Zus.
+      const hexId = idCounter.toString(16).padStart(12, "0");
+      const id = `e2000000-0000-4000-8000-${hexId}`;
       const nik = `360401${String(100000 + idCounter)}`;
       const npwp = `85.${String(100 + idCounter).slice(0, 3)}.${String(idCounter).padStart(3, "0")}.8-402.000`;
       const ptkp = ptkpList[idCounter % ptkpList.length];
@@ -395,10 +398,12 @@ export async function ensureDemoEmployeesExist(supabase: any): Promise<void> {
 
     const BATCH_SIZE = 150;
     for (let i = 0; i < employeeRows.length; i += BATCH_SIZE) {
-      await supabase.from("pi_employees").upsert(employeeRows.slice(i, i + BATCH_SIZE), { onConflict: "id" });
+      const { error } = await supabase.from("pi_employees").upsert(employeeRows.slice(i, i + BATCH_SIZE), { onConflict: "id" });
+      if (error) { console.error(`Auto-seed pi_employees batch ${i / BATCH_SIZE + 1} gagal:`, error.message); break; }
     }
     for (let i = 0; i < compRows.length; i += BATCH_SIZE) {
-      await supabase.from("pi_compensation").upsert(compRows.slice(i, i + BATCH_SIZE), { onConflict: "employee_id,effective_date" });
+      const { error } = await supabase.from("pi_compensation").upsert(compRows.slice(i, i + BATCH_SIZE), { onConflict: "employee_id,effective_date" });
+      if (error) { console.error(`Auto-seed pi_compensation batch ${i / BATCH_SIZE + 1} gagal:`, error.message); break; }
     }
   } catch (e) {
     console.error("Gagal auto-seed demo employees:", e);
