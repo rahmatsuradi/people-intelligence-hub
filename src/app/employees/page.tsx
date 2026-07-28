@@ -533,7 +533,7 @@ export default function CoreEmployeesPage() {
                           <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">Periode {review.period} · {review.status}</span>
                         </div>
                         <div className="rounded-xl bg-blue-50 p-3 border border-blue-200/80 dark:bg-blue-950/20 dark:border-blue-800/60">
-                          <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 block mb-1">Skor Potensi (AI Insight)</span>
+                          <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 block mb-1">Skor Potensi (Insight 9-Box)</span>
                           <span className="text-xl font-black text-blue-900 dark:text-blue-200">{review.aiInsight ? review.aiInsight.potentialScore : "—"}</span>
                           <span className="text-[10px] text-slate-500 block mt-0.5">{review.aiInsight ? "Dari analisis insight" : "Belum dianalisis"}</span>
                         </div>

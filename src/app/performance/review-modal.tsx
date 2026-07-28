@@ -63,10 +63,11 @@ export default function ReviewModal({
     setCompetencies(prev => prev.map((c, i) => i === idx ? { ...c, ...patch } : c));
   };
 
+  // Insight disusun berbasis aturan (rata-rata skor → kuadran 9-box → rekomendasi
+  // template) — bukan panggilan model AI; dieksekusi instan tanpa delay buatan.
   const handleAnalyze = async () => {
     setAnalyzing(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1200));
       const avgKpi = kpis.reduce((a, b) => a + b.score, 0) / (kpis.length || 1);
       const avgComp = competencies.reduce((a, b) => a + b.score, 0) / (competencies.length || 1);
       
@@ -113,7 +114,7 @@ export default function ReviewModal({
         actionPlan,
       };
       setAiInsight(insight);
-      toast("Analisis SKKNI 9-Box selesai diproses AI", "success");
+      toast("Insight 9-Box SKKNI selesai dihitung", "success");
     } finally {
       setAnalyzing(false);
     }
@@ -211,11 +212,11 @@ export default function ReviewModal({
 
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold">3. AI Insights & Action Plan</h3>
+              <h3 className="text-sm font-semibold">3. Insight 9-Box & Action Plan (Berbasis Aturan)</h3>
               {!aiInsight && (
                 <Button size="sm" variant="primary" onClick={handleAnalyze} disabled={analyzing}>
-                  <Icon className={cn("h-4 w-4 mr-1", analyzing && "animate-spin")}><SvgPath name="sparkles" /></Icon>
-                  {analyzing ? "Analyzing..." : "Generate Insights"}
+                  <Icon className="h-4 w-4 mr-1"><SvgPath name="chart" /></Icon>
+                  {analyzing ? "Menghitung..." : "Hitung Insight"}
                 </Button>
               )}
             </div>
@@ -248,7 +249,7 @@ export default function ReviewModal({
               </div>
             ) : (
               <div className="h-32 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center text-slate-400 text-sm">
-                Isi form di atas lalu klik Generate Insights.
+                Isi form di atas lalu klik Hitung Insight.
               </div>
             )}
           </section>

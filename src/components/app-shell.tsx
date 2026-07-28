@@ -246,7 +246,7 @@ export function AppShell({
     {
       label: "Employer Branding & Culture",
       items: [
-        { id: "ai-trends", label: "AI Trend & Ideas", href: "/employer-branding/ai-trends" },
+        { id: "ai-trends", label: "Trend & Ide Konten", href: "/employer-branding/ai-trends" },
         { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial", soon: true },
         { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement", soon: true },
       ],

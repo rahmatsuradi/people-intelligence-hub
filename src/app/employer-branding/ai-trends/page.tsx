@@ -5,14 +5,14 @@ import { AppShell, Card, Button, SvgPath } from "@/components/app-shell";
 
 export default function AITrendsPage() {
   const [topic, setTopic] = useState("");
-  const [generating, setGenerating] = useState(false);
+  const generating = false; // template lokal — tidak ada proses async/AI
   const [ideas, setIdeas] = useState<any[]>([]);
 
   const handleGenerate = () => {
     if (!topic) return;
-    setGenerating(true);
-    setTimeout(() => {
-      setIdeas([
+    // Ide disusun dari template kerangka konten (bukan panggilan AI) — topik
+    // diinterpolasi ke pola yang sudah terbukti di sosmed rekrutmen Indonesia.
+    setIdeas([
         {
           platform: "TikTok",
           type: "A Day in The Life (Vlog)",
@@ -38,18 +38,16 @@ export default function AITrendsPage() {
           metrics: "Est. 10k+ Impressions | High Conversion",
         },
       ]);
-      setGenerating(false);
-    }, 1500);
   };
 
   return (
-    <AppShell activeNavId="ai-trends" title="AI Trend & Ideas">
+    <AppShell activeNavId="ai-trends" title="Trend & Ide Konten">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Employer Branding AI</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Generator Ide Konten Employer Branding</h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Generate ide konten sosial media berdasarkan tren terkini di Indonesia.
+              Kerangka konten sosmed rekrutmen dari template pola yang lazim di Indonesia — estimasi metrik bersifat ilustratif. (Integrasi AI live: roadmap.)
             </p>
           </div>
         </div>
@@ -71,19 +69,10 @@ export default function AITrendsPage() {
               />
             </div>
             <Button variant="primary" size="lg" onClick={handleGenerate} disabled={generating || !topic}>
-              {generating ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-                  </svg>
-                  Generate Content
-                </>
-              )}
+              <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
+              Susun Kerangka Konten
             </Button>
           </div>
         </Card>

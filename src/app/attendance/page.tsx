@@ -88,10 +88,11 @@ export default function AttendancePage() {
     setAttendance(getAttendance());
   };
 
-  const handleRunBurnoutAI = async () => {
+  // Deteksi berbasis ambang aturan (rule-based) atas data lembur & cuti sakit —
+  // bukan model AI; dieksekusi instan tanpa delay buatan.
+  const handleRunBurnoutScan = async () => {
     setAnalyzing(true);
     try {
-      await new Promise(r => setTimeout(r, 1500)); // mock network
       if (!employees) return;
 
       const risks: BurnoutRisk[] = [];
@@ -139,7 +140,7 @@ export default function AttendancePage() {
   };
 
   return (
-    <AppShell activeNavId="attendance" title="Time & Attendance" subtitle="Presensi, Cuti, & AI Burnout Detection">
+    <AppShell activeNavId="attendance" title="Time & Attendance" subtitle="Presensi, Cuti, & Deteksi Risiko Burnout (Aturan Ambang)">
       {error && (
         <Card className="mb-6 border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
@@ -215,12 +216,12 @@ export default function AttendancePage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Icon className={cn("h-5 w-5", burnoutRisks.length > 0 ? "text-red-500" : "text-blue-500")}>
-                    <SvgPath name="sparkles" />
+                    <SvgPath name="warning" />
                   </Icon>
-                  <h3 className="font-semibold text-slate-900 dark:text-white">AI Burnout Risk</h3>
+                  <h3 className="font-semibold text-slate-900 dark:text-white">Risiko Burnout (Aturan Ambang)</h3>
                 </div>
-                <Button size="sm" variant={burnoutRisks.length > 0 ? "secondary" : "primary"} onClick={handleRunBurnoutAI} disabled={analyzing}>
-                  {analyzing ? "Menganalisis..." : "Scan Karyawan"}
+                <Button size="sm" variant={burnoutRisks.length > 0 ? "secondary" : "primary"} onClick={handleRunBurnoutScan} disabled={analyzing}>
+                  {analyzing ? "Memindai..." : "Scan Karyawan"}
                 </Button>
               </div>
               
@@ -249,7 +250,7 @@ export default function AttendancePage() {
                         {risk.factors.map((f, idx) => <li key={idx}>{f}</li>)}
                       </ul>
                       <div className="text-xs font-medium text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-950 p-2 rounded">
-                        <span className="text-blue-600">💡 AI Rec:</span> {risk.recommendation}
+                        <span className="text-blue-600">💡 Rekomendasi:</span> {risk.recommendation}
                       </div>
                     </div>
                   );

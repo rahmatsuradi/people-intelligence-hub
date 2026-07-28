@@ -1144,7 +1144,7 @@ export default function InterviewPage() {
   const [selectedTypes, setSelectedTypes] = useState<InterviewType[]>([
     ...INTERVIEW_TYPES,
   ]);
-  const [generating, setGenerating] = useState(false);
+  const generating = false; // kit tersusun instan dari bank soal lokal — tidak ada proses async/AI
   const [pack, setPack] = useState<QuestionPack | null>(null);
   const [cvAnalysisData, setCvAnalysisData] = useState<CvPrefill | null>(null);
   const [scoringState, setScoringState] = useState<ScoringState>("idle");
@@ -1283,30 +1283,28 @@ export default function InterviewPage() {
 
   const handleGenerate = () => {
     if (!canGenerate) return;
-    setGenerating(true);
     setPack(null);
     setScoringState("idle");
     setScores({});
 
-    setTimeout(() => {
-      const now = new Date();
-      const department = cvAnalysisData?.department ?? "";
-      const questions = buildMockQuestions(position, seniority, selectedTypes, department);
-      setPack({
-        packId: `KIT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-        generatedAt: now.toLocaleString("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        }),
-        position: position.trim(),
-        seniority,
-        types: selectedTypes,
-        durationMin: Math.max(45, selectedTypes.length * 15 + questions.length * 5),
-        questions,
-        interviewerNotes: buildInterviewerNotes(position, seniority, selectedTypes, department, questions),
-      });
-      setGenerating(false);
-    }, 1800);
+    // Kit disusun dari bank soal terkurasi per klaster kompetensi — instan, tanpa
+    // delay buatan yang menyamar sebagai proses AI.
+    const now = new Date();
+    const department = cvAnalysisData?.department ?? "";
+    const questions = buildMockQuestions(position, seniority, selectedTypes, department);
+    setPack({
+      packId: `KIT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      generatedAt: now.toLocaleString("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }),
+      position: position.trim(),
+      seniority,
+      types: selectedTypes,
+      durationMin: Math.max(45, selectedTypes.length * 15 + questions.length * 5),
+      questions,
+      interviewerNotes: buildInterviewerNotes(position, seniority, selectedTypes, department, questions),
+    });
   };
 
   return (
@@ -1348,14 +1346,14 @@ export default function InterviewPage() {
           <Card>
             <div className="flex items-center gap-2">
               <Icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400">
-                <SvgPath name="sparkles" />
+                <SvgPath name="clipboard" />
               </Icon>
               <div>
                 <h2 className="text-base font-semibold text-slate-900 dark:text-white">
                   Configure Interview Kit
                 </h2>
                 <p className="text-sm text-slate-500">
-                  Role-calibrated questions with rubrics
+                  Bank soal terkurasi per klaster kompetensi, dengan rubrik penilaian
                 </p>
               </div>
             </div>
@@ -1450,19 +1448,10 @@ export default function InterviewPage() {
                 className="w-full"
                 disabled={!canGenerate || generating}
               >
-                {generating ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    Generating questions...
-                  </>
-                ) : (
-                  <>
-                    <Icon className="h-5 w-5">
-                      <SvgPath name="sparkles" />
-                    </Icon>
-                    Generate Questions
-                  </>
-                )}
+                <Icon className="h-5 w-5">
+                  <SvgPath name="clipboard" />
+                </Icon>
+                Susun Kit dari Bank Soal
               </Button>
 
               {!canGenerate && !generating && (
