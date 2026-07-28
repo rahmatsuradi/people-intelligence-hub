@@ -1,7 +1,7 @@
 // Masking data pribadi untuk slip gaji (UU PDP No. 27/2022 — minimalisasi data & pengamanan,
 // Pasal 35-36). UU PDP tidak mewajibkan teknik masking spesifik; last-4 / blok-tengah adalah
 // praktik pemenuhan lazim. Nilai penuh HANYA dipakai untuk pelaporan resmi (1721-A1, BPJS),
-// tidak pernah ditampilkan di slip. Di produksi, data mentah disimpan terenkripsi di DB.
+// tidak pernah ditampilkan di slip. Di server production, data mentah disimpan terenkripsi di DB.
 
 const EMPTY = "—";
 

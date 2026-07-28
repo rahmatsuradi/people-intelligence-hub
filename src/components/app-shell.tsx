@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCandidates, getJobReqs, syncFromSupabase } from "@/lib/store";
+import { ALL_COMPANIES, getActiveCompanyId, setActiveCompanyId, type CompanyProfile } from "@/lib/payroll/company-profile";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -83,6 +84,10 @@ export const ICON_PATHS = {
   trendDown: "M2.25 6L9 12.75l4.286-4.286a11.948 11.948 0 014.306 6.43l.776-2.898m0 0l-3.182-5.511m3.182 5.51l-5.511-3.181",
   filter: "M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z",
   dots: "M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z",
+  megaphone: "M10.34 2.872a.375.375 0 01.32-.073L19.5 5.564c1.235.412 2.25 1.558 2.25 2.89v3.092c0 1.332-1.015 2.478-2.25 2.89l-8.84 2.764a.375.375 0 01-.32-.073.375.375 0 01-.14-.298V2.872zM3 15.394l-.74-.24a.375.375 0 00-.477.164L.435 17.65a.375.375 0 00.165.476l.74.24a.375.375 0 00.476-.164l1.348-2.333a.375.375 0 00-.164-.475z",
+  map: "M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z",
+  book: "M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25",
+  scale: "M12 3v17.25m0 0c1.414 0 2.813-.256 4.125-.75M12 20.25c-1.414 0-2.813-.256-4.125-.75M12 3c-1.414 0-2.813.256-4.125.75M12 3c1.414 0 2.813.256 4.125.75M2.25 10.5h19.5M4.5 10.5v1.5a7.5 7.5 0 0015 0v-1.5M8.25 21a50.15 50.15 0 007.5 0",
 } as const;
 
 export function SvgPath({ name }: { name: keyof typeof ICON_PATHS }) {
@@ -90,10 +95,22 @@ export function SvgPath({ name }: { name: keyof typeof ICON_PATHS }) {
 }
 
 const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
-  dashboard: "dashboard", candidates: "users", roles: "briefcase", interviews: "calendar",
-  analytics: "chart", reports: "document", "cv-analyzer": "scan",
-  "interview-workspace": "workspace", "hiring-report": "report", integrations: "plug", settings: "cog",
-  payroll: "report", employees: "users", laporan: "chart", onboarding: "arrowRight",
+  // 1. Dashboard
+  dashboard: "dashboard", analytics: "chart", "report-gen": "document",
+  // 2. Employer Branding
+  "ai-trends": "sparkles", "editorial-plan": "calendarDays", engagement: "users",
+  // 3. Talent Acquisition
+  mpp: "chart", roles: "briefcase", "talent-pool": "users", candidates: "users", "cv-analyzer": "scan", interviews: "calendar", "hiring-report": "report", "hiring-analytics": "chart",
+  // 4. Core HR
+  employees: "users", ir: "scale", onboarding: "arrowRight", attendance: "clock",
+  // 5. Performance & Talent
+  performance: "star", succession: "arrowTrend", od: "map",
+  // 6. Learning & Development
+  courses: "book", competency: "star",
+  // 7. Payroll & Rewards
+  payroll: "report", laporan: "chart",
+  // 8. Settings & Integrations
+  "job-portal": "plug", "social-media": "plug",
 };
 
 /* ─── UI Primitives ─── */
@@ -142,6 +159,21 @@ export function AppShell({
   const router = useRouter();
   const { status: authStatus, email: authEmail } = useAuthGate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeCompany, setActiveCompany] = useState<CompanyProfile>(() => {
+    const id = typeof window !== "undefined" ? getActiveCompanyId() : "11111111-1111-4111-8111-111111111111";
+    return ALL_COMPANIES.find((c) => c.id === id) || ALL_COMPANIES[0];
+  });
+
+  useEffect(() => {
+    const handleCompanyChange = () => {
+      const id = getActiveCompanyId();
+      const comp = ALL_COMPANIES.find((c) => c.id === id) || ALL_COMPANIES[0];
+      setActiveCompany(comp);
+    };
+    window.addEventListener("pi-company-change", handleCompanyChange);
+    return () => window.removeEventListener("pi-company-change", handleCompanyChange);
+  }, []);
+
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
     return (localStorage.getItem("hi_theme") as Theme) ?? "system";
@@ -202,27 +234,74 @@ export function AppShell({
     router.replace("/login");
   }, [router]);
 
-  const navItems: NavItem[] = useMemo(() => [
-    { id: "dashboard", label: "Dashboard", href: "/", section: "main" },
-    { id: "candidates", label: "Candidates", href: "/candidates", badge: badges.candidates || undefined, section: "main" },
-    { id: "roles", label: "Open Roles", href: "/roles", badge: badges.roles || undefined, section: "main" },
-    { id: "interviews", label: "Interviews", href: "/interview", section: "main" },
-    { id: "analytics", label: "Analytics", href: "/analytics", section: "main" },
-    { id: "reports", label: "Reports", href: "/report", section: "main" },
-    { id: "onboarding", label: "Onboarding", href: "/pay/onboarding", section: "pay" },
-    { id: "payroll", label: "Payroll", href: "/pay/payroll", section: "pay" },
-    { id: "employees", label: "Employees", href: "/pay/employees", section: "pay" },
-    { id: "laporan", label: "Laporan", href: "/pay/laporan", section: "pay" },
-    { id: "cv-analyzer", label: "CV Analyzer", href: "/cv-analyzer", section: "tools" },
-    { id: "interview-workspace", label: "Interview Workspace", href: "/interview", section: "tools" },
-    { id: "hiring-report", label: "Hiring Report", href: "/report", section: "tools" },
-    { id: "integrations", label: "Integrations", href: "/integrations", section: "tools", soon: true },
-    { id: "settings", label: "Settings", href: "/settings", section: "tools", soon: true },
+  const navGroups = useMemo(() => [
+    {
+      label: "Dashboard & Insights",
+      items: [
+        { id: "dashboard", label: "Overview", href: "/" },
+        { id: "analytics", label: "HR Analytics", href: "/analytics" },
+        { id: "report-gen", label: "Report Generator", href: "/report" },
+      ],
+    },
+    {
+      label: "Employer Branding & Culture",
+      items: [
+        { id: "ai-trends", label: "AI Trend & Ideas", href: "/employer-branding/ai-trends" },
+        { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial", soon: true },
+        { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement", soon: true },
+      ],
+    },
+    {
+      label: "Talent Acquisition",
+      items: [
+        { id: "mpp", label: "Manpower Planning", href: "/planning/mpp" },
+        { id: "roles", label: "Open Roles", href: "/roles", badge: badges.roles || undefined },
+        { id: "talent-pool", label: "Talent Pool", href: "/talent-pool" },
+        { id: "candidates", label: "Candidates", href: "/candidates", badge: badges.candidates || undefined },
+        { id: "cv-analyzer", label: "CV Analyzer", href: "/cv-analyzer" },
+        { id: "interviews", label: "Interview Workspace", href: "/interview" },
+        { id: "hiring-analytics", label: "Hiring Analytics", href: "/analytics/hiring", soon: true },
+      ],
+    },
+    {
+      label: "Core HR & IR",
+      items: [
+        { id: "employees", label: "Employee Directory", href: "/employees" },
+        { id: "ir", label: "Industrial Relations", href: "/core-hr/ir", soon: true },
+        { id: "onboarding", label: "Onboarding & Offboarding", href: "/pay/onboarding" },
+        { id: "attendance", label: "Attendance", href: "/attendance" },
+      ],
+    },
+    {
+      label: "Performance & Talent",
+      items: [
+        { id: "performance", label: "Performance (PMS)", href: "/performance" },
+        { id: "succession", label: "Succession Planning", href: "/talent/succession", soon: true },
+        { id: "od", label: "Org. Development", href: "/talent/od", soon: true },
+      ],
+    },
+    {
+      label: "Learning & Development",
+      items: [
+        { id: "courses", label: "Training & Courses", href: "/learning/courses", soon: true },
+        { id: "competency", label: "Competency Matrix", href: "/learning/competency", soon: true },
+      ],
+    },
+    {
+      label: "Payroll & Rewards",
+      items: [
+        { id: "payroll", label: "Payroll Run", href: "/pay/payroll" },
+        { id: "laporan", label: "Laporan Pajak & BPJS", href: "/pay/laporan" },
+      ],
+    },
+    {
+      label: "Settings & Integrations",
+      items: [
+        { id: "job-portal", label: "Job Portal Integrations", href: "/settings/job-portal", soon: true },
+        { id: "social-media", label: "Social Media API", href: "/settings/social-media", soon: true },
+      ],
+    },
   ], [badges]);
-
-  const mainNav = navItems.filter((n) => n.section === "main");
-  const payNav = navItems.filter((n) => n.section === "pay");
-  const toolsNav = navItems.filter((n) => n.section === "tools");
 
   // Auth gate: show a loader while checking, render nothing while redirecting.
   if (authStatus === "loading") {
@@ -271,25 +350,19 @@ export function AppShell({
           </Link>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">People Intelligence</p>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">Enterprise Platform</p>
+            <p className="truncate text-xs font-medium text-blue-600 dark:text-blue-400">{activeCompany.shortName}</p>
           </div>
           <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-slate-800" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
             <Icon className="h-5 w-5"><SvgPath name="close" /></Icon>
           </button>
         </div>
         <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
-          <div>
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Main</p>
-            <div className="space-y-0.5">{renderNav(mainNav)}</div>
-          </div>
-          <div>
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pay</p>
-            <div className="space-y-0.5">{renderNav(payNav)}</div>
-          </div>
-          <div>
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Tools</p>
-            <div className="space-y-0.5">{renderNav(toolsNav)}</div>
-          </div>
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{group.label}</p>
+              <div className="space-y-0.5">{renderNav(group.items as NavItem[])}</div>
+            </div>
+          ))}
         </nav>
       </aside>
 
@@ -303,8 +376,38 @@ export function AppShell({
             <h1 className="truncate text-lg font-semibold text-slate-900 dark:text-white">{title}</h1>
             {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
           </div>
-          {headerActions && <div className="ml-auto flex items-center gap-2">{headerActions}</div>}
-          <div className={cn("flex items-center gap-1 sm:gap-2", !headerActions && "ml-auto")}>
+          {/* Multi-Tenant Company Selector */}
+          <div className={cn("flex items-center gap-2", !headerActions && "ml-auto")}>
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-1.5 shadow-sm transition-all hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/80 dark:hover:bg-slate-800">
+              <span className="text-base" aria-hidden>
+                {activeCompany.industry === "broadcast" ? "📺" : "🧵"}
+              </span>
+              <div className="flex flex-col text-left">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Perusahaan / Entity
+                </span>
+                <select
+                  value={activeCompany.id}
+                  onChange={(e) => {
+                    setActiveCompanyId(e.target.value);
+                    const found = ALL_COMPANIES.find((c) => c.id === e.target.value) || ALL_COMPANIES[0];
+                    setActiveCompany(found);
+                    window.location.reload();
+                  }}
+                  className="cursor-pointer bg-transparent text-xs font-bold text-slate-900 focus:outline-none dark:text-white"
+                  title="Switch Company Entity (Multi-Tenant)"
+                >
+                  {ALL_COMPANIES.map((comp) => (
+                    <option key={comp.id} value={comp.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
+                      {comp.industry === "broadcast" ? "📺 " : "🧵 "} {comp.shortName} ({comp.headcountTarget} pax)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          {headerActions && <div className="flex items-center gap-2">{headerActions}</div>}
+          <div className="flex items-center gap-1 sm:gap-2">
             <button type="button" onClick={cycleTheme} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}>
               <Icon className="h-5 w-5"><SvgPath name={isDark ? "sun" : "moon"} /></Icon>
             </button>

@@ -89,6 +89,9 @@ export const PILLAR_CITATIONS: Record<string, string> = {
   sfia: "SFIA Foundation (2023). Skills Framework for Information Age v8. sfia.org — adopted by Google, Microsoft, IBM, AWS.",
   lominger: "Korn Ferry Lominger (2014). Leadership Architect: The Complete Collection. Used by Fortune 500 for leadership selection.",
   cgma: "CGMA (2019). CGMA Competency Framework. Chartered Institute of Management Accountants / AICPA.",
+  "skkni-broadcast": "Kepmenaker No. 133/2019 (Bidang Penyiaran & Multimedia). BNSP/LSP Penyiaran Indonesia.",
+  "skkni-editorial": "Kepmenaker No. 246/2020 (Bidang Jurnalistik & Redaksi Berita). Dewan Pers / LSP Jurnalistik.",
+  "skkni-security": "Kepmenaker No. 259/2018 (Jasa Satuan Pengamanan). Perpol No. 4/2020. BNSP/LSP Polri. Gada Pratama/Madya.",
 };
 
 /** Predictive validity coefficients (r) — Schmidt & Hunter (1998) meta-analysis */
@@ -766,12 +769,404 @@ export const CGMA_COMPETENCIES: CompetencyDefinition[] = [
   },
 ];
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Operational / Blue-collar competency definitions
+
+   These are based on verified SKKNI (Standar Kompetensi Kerja Nasional
+   Indonesia) decrees for TV broadcasting, journalism/editorial, and
+   physical security roles. Each competency maps to specific Elemen Kompetensi
+   and Kriteria Unjuk Kerja (KUK) from the relevant Kepmenaker decree.
+
+   Evidence methods emphasize work samples (r=0.54, Schmidt & Hunter 1998)
+   as the gold standard for blue-collar selection validity, rather than
+   structured interviews alone (which work best with concrete, observable
+   behavioral anchors for operational roles).
+
+   Benchmarks are intentionally lower than white-collar (~65-75 vs 78-85):
+   the bar is "competently executes SOPs per SKKNI", not "exceeds in
+   strategic/abstract dimensions".
+═══════════════════════════════════════════════════════════════════════════ */
+
+// Rubric with Indonesian-language level labels — appropriate for SKKNI-based
+// operational competencies where the standard IS the national competency decree.
+const operationalRubric = (
+  levels: [string, string, string, string, string],
+): RubricLevel[] => [
+  { score: 1, label: "Di bawah standar", description: levels[0] },
+  { score: 2, label: "Perlu bimbingan", description: levels[1] },
+  { score: 3, label: "Memenuhi SKKNI", description: levels[2] },
+  { score: 4, label: "Di atas standar", description: levels[3] },
+  { score: 5, label: "Ahli / role model", description: levels[4] },
+];
+
+/* ─── SKKNI Penyiaran & Multimedia — Kepmenaker No. 133/2019 (6) ─── */
+/* Covers: Cameraman, Video Editor, Floor Director, Studio Technician, Audio Engineer */
+
+export const BROADCAST_COMPETENCIES: CompetencyDefinition[] = [
+  {
+    id: "brd-studio-cam",
+    pillar: "skkni-broadcast",
+    name: "Broadcast Studio & Camera Operation",
+    nameId: "Pengoperasian Kamera & Studio Siaran",
+    description:
+      "Operating broadcast cameras, pedestals, and studio lighting equipment with correct framing, focus, and exposure during live and taped television productions.",
+    crossRef: "SKKNI: J.59MVI00.001.1 (Mengoperasikan Kamera Video)",
+    evidenceMethod: "Work sample — live studio camera simulation",
+    validityCoeff: 0.54,
+    benchmark: 72,
+    rubric: operationalRubric([
+      "Cannot operate studio cameras without supervision; poor framing or focus drift during production.",
+      "Operates static shots well but struggles with dynamic live studio movements or multi-cam coordination.",
+      "Consistently delivers sharp, well-framed shots in live broadcasts; communicates smoothly with program director.",
+      "Anticipates director needs; executes complex live pedestal movements smoothly; assists in studio lighting setup.",
+      "Lead camera operator; trains junior cameramen; designs studio technical layouts and camera blocking.",
+    ]),
+  },
+  {
+    id: "brd-rundown-dir",
+    pillar: "skkni-broadcast",
+    name: "Rundown & Program Directing",
+    nameId: "Manajemen Rundown & Tata Acara Siaran",
+    description:
+      "Managing live program timelines, coordinating studio floor activities, and ensuring seamless transitions between program segments, commercial breaks, and live feeds.",
+    crossRef: "SKKNI: J.59MVI00.015.1 (Mengatur Pelaksanaan Siaran TV)",
+    evidenceMethod: "Work sample — live floor directing simulation",
+    validityCoeff: 0.54,
+    benchmark: 75,
+    rubric: operationalRubric([
+      "Struggles to keep time; misses cue points for talent or commercial breaks during live broadcasts.",
+      "Follows rundown when show is routine but gets flustered during breaking news or live schedule changes.",
+      "Manages live studio floor smoothly; maintains precise timing; gives clear visual cues to anchors and guests.",
+      "Flawlessly handles live breaking news interruptions and dynamic timing adjustments without air silence.",
+      "Master floor director; designs rundown contingency procedures; role model for broadcast composure.",
+    ]),
+  },
+  {
+    id: "brd-video-edit",
+    pillar: "skkni-broadcast",
+    name: "Video Editing & Post-Production",
+    nameId: "Editing Video & Post-Production",
+    description:
+      "Editing news packages, promos, and program segments using professional NLE systems (Adobe Premiere, Avid) with proper color grading, audio leveling, and broadcast compliance.",
+    crossRef: "SKKNI: J.59MVI00.022.1 (Melakukan Editing Video)",
+    evidenceMethod: "Work sample — timed editing trial",
+    validityCoeff: 0.54,
+    benchmark: 74,
+    rubric: operationalRubric([
+      "Slow editing pace; fails to meet broadcast deadline; technical errors in audio levels or color balance.",
+      "Completes edits on time for routine clips but requires guidance on complex packages or color correction.",
+      "Consistently produces broadcast-ready packages under tight newsroom deadlines; excellent pacing and audio balance.",
+      "Creative editor who enhances storytelling through dynamic graphics and pacing; go-to person for prime-time promos.",
+      "Senior post-production editor; establishes station visual standards and NLE workflow templates.",
+    ]),
+  },
+  {
+    id: "brd-mcr-trans",
+    pillar: "skkni-broadcast",
+    name: "MCR & Transmission Control",
+    nameId: "Master Control Room (MCR) & Transmisi",
+    description:
+      "Monitoring Master Control Room operations, managing playout automation, switching feeds, and ensuring uninterrupted broadcast signal transmission and quality.",
+    crossRef: "SKKNI: J.59MVI00.030.1 (Mengoperasikan Master Control Room)",
+    evidenceMethod: "Work sample — MCR switching simulation",
+    validityCoeff: 0.54,
+    benchmark: 76,
+    rubric: operationalRubric([
+      "Inattentive monitoring; causes on-air blackouts or incorrect commercial insertion; slow error recovery.",
+      "Operates routine playout schedules well but slow to switch backup systems during signal loss.",
+      "Maintains flawless broadcast transmission; executes seamless switching; responds instantly to signal anomalies.",
+      "Optimises MCR redundancy procedures; manages multi-channel digital playout without errors.",
+      "Chief transmission engineer; designs MCR failsafe architectures; zero preventable broadcast outages.",
+    ]),
+  },
+  {
+    id: "brd-audio-eng",
+    pillar: "skkni-broadcast",
+    name: "Studio Audio Engineering",
+    nameId: "Tata Suara & Audio Engineering",
+    description:
+      "Managing studio audio mixing consoles, wireless microphone RF coordination, acoustic balance, and eliminating feedback or audio clipping during live shows.",
+    crossRef: "SKKNI: J.59MVI00.018.1 (Mengatur Tata Suara Siaran)",
+    evidenceMethod: "Work sample — live audio mixing trial",
+    validityCoeff: 0.54,
+    benchmark: 73,
+    rubric: operationalRubric([
+      "Frequent audio feedback, clipping, or dead mics during live production; poor RF frequency coordination.",
+      "Sets up basic talkshow audio well but struggles with live musical acts or multi-feed remote panels.",
+      "Delivers crystal-clear broadcast audio; manages complex multi-mic live panels; proactive RF management.",
+      "Solves complex acoustic challenges on remote broadcasts; masters surround sound and loudness compliance.",
+      "Lead audio engineer; designs studio acoustic treatments and audio SOPs across all production units.",
+    ]),
+  },
+  {
+    id: "brd-lighting",
+    pillar: "skkni-broadcast",
+    name: "Studio Lighting Directing",
+    nameId: "Tata Cahaya & Lighting Studio",
+    description:
+      "Designing and operating studio lighting rigs, DMX controllers, color temperature balancing, and creating mood lighting for various television show formats.",
+    crossRef: "SKKNI: J.59MVI00.019.1 (Mengatur Tata Cahaya Studio)",
+    evidenceMethod: "Work sample — lighting setup trial",
+    validityCoeff: 0.54,
+    benchmark: 71,
+    rubric: operationalRubric([
+      "Uneven studio lighting; harsh shadows on anchor faces; improper color temperature matching.",
+      "Follows existing lighting presets well but slow to adjust for new set designs or special guest positions.",
+      "Creates professional, flattering studio lighting setups; operates DMX consoles smoothly during production.",
+      "Innovative lighting director who creates visually stunning atmospheres for prime-time variety shows.",
+      "Master lighting designer; establishes station lighting guidelines and energy-efficient LED studio conversions.",
+    ]),
+  },
+];
+
+/* ─── SKKNI Jurnalistik & Redaksi — Kepmenaker No. 246/2020 (5) ─── */
+/* Covers: Reporter, News Producer, Scriptwriter, Video Journalist, News Editor */
+
+export const EDITORIAL_COMPETENCIES: CompetencyDefinition[] = [
+  {
+    id: "edt-news-research",
+    pillar: "skkni-editorial",
+    name: "Investigative Journalism & News Research",
+    nameId: "Riset Berita & Jurnalistik Investigatif",
+    description:
+      "Conducting in-depth journalistic research, cultivating reliable news sources, analyzing data, and uncovering exclusive news stories of public interest.",
+    crossRef: "SKKNI: M.70JUR00.001.1 (Melakukan Riset dan Investigasi Berita)",
+    evidenceMethod: "Work sample — investigative research proposal",
+    validityCoeff: 0.54,
+    benchmark: 75,
+    rubric: operationalRubric([
+      "Relies only on press releases; lacks depth or initiative in finding original news angles or sources.",
+      "Conducts basic background checks but needs guidance on complex data journalism or investigative digging.",
+      "Consistently uncovers strong original story angles; verifies facts rigorously; maintains credible source network.",
+      "Breaks high-impact investigative reports; handles sensitive whistleblower data safely and ethically.",
+      "Senior investigative reporter; role model for journalistic integrity; mentors newsroom in research methods.",
+    ]),
+  },
+  {
+    id: "edt-scriptwriting",
+    pillar: "skkni-editorial",
+    name: "News Scriptwriting & Copyediting",
+    nameId: "Penulisan Naskah Berita & Scriptwriting",
+    description:
+      "Writing concise, engaging broadcast news scripts (voice-over, package, lead-in) tailored for television audiences under tight newsroom deadlines.",
+    crossRef: "SKKNI: M.70JUR00.005.1 (Menulis Naskah Berita Televisi)",
+    evidenceMethod: "Work sample — timed news scriptwriting",
+    validityCoeff: 0.54,
+    benchmark: 74,
+    rubric: operationalRubric([
+      "Scripts are wordy, grammatically flawed, or awkward to read aloud; frequently misses deadlines.",
+      "Writes clear basic news scripts but structure can be dry; occasional factual punctuation slips.",
+      "Writes punchy, accurate, engaging broadcast scripts that align perfectly with video footage; always on deadline.",
+      "Master storyteller who turns complex news topics into compelling, easy-to-understand television scripts.",
+      "Chief copyeditor; sets newsroom writing standards and style guide; edits headline news scripts.",
+    ]),
+  },
+  {
+    id: "edt-fact-checking",
+    pillar: "skkni-editorial",
+    name: "Fact-Checking & Journalistic Ethics",
+    nameId: "Verifikasi Fakta & Etika Jurnalistik",
+    description:
+      "Applying rigorous fact-checking protocols, cross-referencing multiple independent sources, and upholding strict journalistic ethics and media law compliance.",
+    crossRef: "SKKNI: M.70JUR00.008.1 (Menerapkan Kode Etik Jurnalistik)",
+    evidenceMethod: "Structured interview + case simulation",
+    validityCoeff: 0.54,
+    benchmark: 78,
+    rubric: operationalRubric([
+      "Publishes unverified claims; misses obvious misinformation or potential libel risks; ignores right of reply.",
+      "Checks primary facts but occasionally relies on single-source verification for non-headline stories.",
+      "Strictly adheres to journalistic ethics; verifies claims through multiple sources; ensures balanced reporting.",
+      "Expert in debunking digital misinformation and deepfakes; navigates complex legal and ethical dilemmas flawlessly.",
+      "Newsroom ethics ombudsman; sets verification protocols; protects station credibility and journalistic standards.",
+    ]),
+  },
+  {
+    id: "edt-field-report",
+    pillar: "skkni-editorial",
+    name: "Field Reporting & Breaking News",
+    nameId: "Liputan Lapangan & Breaking News",
+    description:
+      "Delivering live on-camera reports from field locations, conducting on-scene interviews, and maintaining composure and accuracy during breaking news events.",
+    crossRef: "SKKNI: M.70JUR00.012.1 (Melakukan Liputan Langsung / Live Report)",
+    evidenceMethod: "Work sample — live reporting simulation",
+    validityCoeff: 0.54,
+    benchmark: 75,
+    rubric: operationalRubric([
+      "Nervous or articulate on camera; loses train of thought without teleprompter; poor situational awareness.",
+      "Delivers solid planned field reports but gets rattled during chaotic or fast-changing breaking news.",
+      "Confident, authoritative on-camera presence; delivers clear, factual live reports in dynamic field conditions.",
+      "Excels in high-stakes breaking news (disasters, elections); gathers crucial facts while broadcasting live.",
+      "Star anchor and senior correspondent; role model for live broadcast journalism across national media.",
+    ]),
+  },
+  {
+    id: "edt-talkshow-host",
+    pillar: "skkni-editorial",
+    name: "Live Interviewing & Talkshow Hosting",
+    nameId: "Wawancara & Hosting Talkshow",
+    description:
+      "Conducting probing, balanced interviews with public figures, politicians, and experts, guiding talkshow discussions while keeping the audience engaged.",
+    crossRef: "SKKNI: M.70JUR00.018.1 (Melakukan Wawancara Mendalam / In-Depth Interview)",
+    evidenceMethod: "Work sample — live talkshow simulation",
+    validityCoeff: 0.54,
+    benchmark: 76,
+    rubric: operationalRubric([
+      "Reads prepared questions rigidly; fails to follow up on evasive answers; loses control of panel debates.",
+      "Conducts competent interviews but misses opportunities for deeper follow-up questions or sharp insights.",
+      "Skilled interviewer who asks sharp follow-ups, manages difficult guests politely, and keeps discussions on track.",
+      "Master host who extracts headline-making revelations from evasive guests while maintaining fairness and poise.",
+      "Flagship talkshow host; sets standard for national televised interviews and political debates.",
+    ]),
+  },
+];
+
+/* ─── SKKNI Satpam — Kepmenaker No. 259/2018 + Perpol No. 4/2020 (7) ─── */
+/* Covers: Satpam (Gada Pratama), Danru / Supervisor Keamanan (Gada Madya) */
+
+export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
+  {
+    id: "sec-access-control",
+    pillar: "skkni-security",
+    name: "Access Control & Guarding",
+    nameId: "Kontrol Akses & Penjagaan",
+    description:
+      "Gate guarding, visitor/vendor logging, vehicle inspection at loading docks, employee bag checks, and reconciliation of Surat Jalan against physical cargo.",
+    crossRef: "SKKNI: N.80PAM00.003.2 (Melaksanakan Penjagaan)",
+    evidenceMethod: "Situational Judgment Test + observation",
+    validityCoeff: 0.51,
+    benchmark: 72,
+    rubric: operationalRubric([
+      "Allows unauthorised access; no visitor logging; fails to check Surat Jalan or cargo.",
+      "Logs visitors but inconsistent vehicle checks; misses discrepancies in delivery documents.",
+      "Consistent gate control; accurate visitor logging; verifies Surat Jalan against cargo; bag checks per SOP.",
+      "Detects document forgery or cargo discrepancies proactively; maintains situational awareness.",
+      "Designs access control procedures; zero unauthorised access incidents; trains new guards.",
+    ]),
+  },
+  {
+    id: "sec-patrol",
+    pillar: "skkni-security",
+    name: "Patrol & Perimeter Surveillance",
+    nameId: "Pelaksanaan Patroli & Pengawasan",
+    description:
+      "Executing guard tour with checkpoint scanning, identifying vulnerabilities at loading bays and perimeter, monitoring CCTV, and immediate hazard reporting.",
+    crossRef: "SKKNI: N.80PAM00.005.2 (Melaksanakan Patroli)",
+    evidenceMethod: "Observation + patrol log review",
+    validityCoeff: 0.51,
+    benchmark: 70,
+    rubric: operationalRubric([
+      "Skips patrol checkpoints; misses obvious security vulnerabilities; no log entries.",
+      "Completes patrol route but superficially; checkpoint scans inconsistent; logs lack detail.",
+      "100% checkpoint compliance; identifies and logs hazards; accurate shift handover documentation.",
+      "Identifies non-obvious vulnerabilities; varies patrol pattern to prevent predictability; proactive reporting.",
+      "Designs patrol routes and checkpoint placement; drives perimeter security improvements; mentors junior guards.",
+    ]),
+  },
+  {
+    id: "sec-emergency-response",
+    pillar: "skkni-security",
+    name: "Emergency Response & Crime Scene Preservation",
+    nameId: "Tanggap Darurat & TPTKP",
+    description:
+      "First response to fire, medical emergency, or security incidents; crime scene preservation (TPTKP — police line, status quo, witness documentation); fire suppression with APAR.",
+    crossRef: "SKKNI: N.80PAM00.012.2 (TPTKP), N.80PAM00.006.2 (Pengamanan TKP)",
+    evidenceMethod: "Situational Judgment Test + drill observation",
+    validityCoeff: 0.51,
+    benchmark: 72,
+    rubric: operationalRubric([
+      "Panics or freezes in emergencies; contaminates crime scenes; no first aid knowledge.",
+      "Responds but with incorrect sequence; partial scene preservation; basic APAR knowledge only.",
+      "Correct emergency response sequence; proper TPTKP execution (police line, evidence preservation); uses APAR.",
+      "Calm under pressure; coordinates with authorities; complete BAP (Berita Acara) documentation.",
+      "Leads emergency drills; designs evacuation plans; recognised authority on incident response.",
+    ]),
+  },
+  {
+    id: "sec-conflict-management",
+    pillar: "skkni-security",
+    name: "Conflict De-escalation & Crowd Control",
+    nameId: "Penanganan Konflik & De-eskalasi",
+    description:
+      "Managing confrontational situations with emotional individuals, de-escalating verbal or physical conflicts between workers or outsiders, maintaining professional composure.",
+    crossRef: "SKKNI Gada Madya: N.80PAM00.020.2 (Menangani Konflik)",
+    evidenceMethod: "Situational Judgment Test",
+    validityCoeff: 0.51,
+    benchmark: 70,
+    rubric: operationalRubric([
+      "Escalates situations through aggression or inaction; loses composure under pressure.",
+      "Attempts de-escalation but lacks technique; may use excessive or insufficient authority.",
+      "De-escalates verbal conflicts using measured communication; maintains composure; reports accurately.",
+      "Handles complex multi-party conflicts; prevents physical escalation; trusted by both sides.",
+      "Master de-escalator; trains others; designs conflict protocols; zero excessive-force incidents.",
+    ]),
+  },
+  {
+    id: "sec-reporting",
+    pillar: "skkni-security",
+    name: "Incident Reporting & Documentation",
+    nameId: "Pelaporan & Dokumentasi Insiden",
+    description:
+      "Writing accurate Incident Reports (BAP — Berita Acara Pemeriksaan), maintaining shift logbooks, documenting evidence with photos/notes, and chain-of-custody procedures.",
+    evidenceMethod: "Work sample — report writing exercise",
+    validityCoeff: 0.54,
+    benchmark: 68,
+    rubric: operationalRubric([
+      "No written reports; verbal-only handovers; critical information lost between shifts.",
+      "Basic logbook entries but reports lack detail, timeline accuracy, or witness information.",
+      "Complete, accurate incident reports with timeline, witnesses, and evidence documentation.",
+      "Reports meet legal standards (BAP format); photos and notes support investigation; clear chain of custody.",
+      "Designs reporting templates; trains guards on documentation; reports cited as exemplary by management/police.",
+    ]),
+  },
+  {
+    id: "sec-physical-readiness",
+    pillar: "skkni-security",
+    name: "Physical Readiness & Mental Alertness",
+    nameId: "Kesiapsiagaan Fisik & Mental",
+    description:
+      "Maintaining physical fitness for security duties (patrol stamina, emergency sprint, restraint capability), staying alert during long shifts, and professional bearing.",
+    crossRef: "SKKNI: N.80PAM00.001.2 (Persiapan Pelaksanaan Tugas)",
+    evidenceMethod: "Physical fitness test (Tes Kesamaptaan) + observation",
+    validityCoeff: 0.51,
+    benchmark: 68,
+    rubric: operationalRubric([
+      "Poor fitness; falls asleep on duty; unprofessional appearance or behaviour.",
+      "Adequate fitness for routine duty but struggles with extended patrols or physical response.",
+      "Passes fitness standards (Tes Kesamaptaan); alert throughout shift; professional bearing maintained.",
+      "Excellent fitness; fast emergency response; maintains alertness under fatigue; sets example.",
+      "Peak condition; trains others in fitness; leads physical readiness programmes.",
+    ]),
+  },
+  {
+    id: "sec-legal-compliance",
+    pillar: "skkni-security",
+    name: "Regulatory Compliance & Security Ethics",
+    nameId: "Kepatuhan Regulasi & Etika Keamanan",
+    description:
+      "Holding valid KTA Satpam and Gada Pratama/Madya certificate, understanding legal authority limits, acting within the law (UU 2/2002), and maintaining integrity.",
+    crossRef: "Perpol No. 4/2020 (Pengamanan Swakarsa)",
+    evidenceMethod: "Knowledge test + integrity assessment",
+    validityCoeff: 0.51,
+    benchmark: 70,
+    rubric: operationalRubric([
+      "No valid KTA or Gada certification; unaware of legal authority limits; integrity concerns.",
+      "Valid certification but poor understanding of when force is authorised; occasional protocol breaches.",
+      "Valid KTA + Gada Pratama; understands authority limits; acts within legal boundaries; trustworthy.",
+      "Deep understanding of security law; mentors on ethical conduct; zero integrity incidents.",
+      "Gada Madya certified; shapes security policy; recognised for professional integrity by management and Polri.",
+    ]),
+  },
+];
+
 export const ALL_COMPETENCY_DEFINITIONS: CompetencyDefinition[] = [
   ...ULRICH_COMPETENCIES,
   ...SKKNI_COMPETENCIES,
   ...SFIA_COMPETENCIES,
   ...LOMINGER_COMPETENCIES,
   ...CGMA_COMPETENCIES,
+  ...BROADCAST_COMPETENCIES,
+  ...EDITORIAL_COMPETENCIES,
+  ...SECURITY_COMPETENCIES,
 ];
 
 export const COMPETENCY_BY_ID = Object.fromEntries(
@@ -785,7 +1180,7 @@ export const COMPETENCY_BY_ID = Object.fromEntries(
    apart the way they did when each file kept its own copy.
 ═══════════════════════════════════════════════════════════════════════════ */
 
-export type CompetencyCluster = "hr" | "tech" | "business" | "finance";
+export type CompetencyCluster = "hr" | "tech" | "business" | "finance" | "broadcast" | "editorial" | "security";
 
 export interface ClusterFramework {
   label: string;
@@ -813,6 +1208,21 @@ export const CLUSTER_FRAMEWORKS: Record<CompetencyCluster, ClusterFramework> = {
     label: "CGMA Competency Framework (CIMA/AICPA)",
     reference: "CGMA (2019); CFA Institute Standards",
     competencies: CGMA_COMPETENCIES,
+  },
+  broadcast: {
+    label: "SKKNI Penyiaran & Multimedia — Kepmenaker No. 133/2019",
+    reference: "Kemnaker RI (2019); BNSP/LSP Penyiaran; Schmidt & Hunter (1998) work sample validity",
+    competencies: BROADCAST_COMPETENCIES,
+  },
+  editorial: {
+    label: "SKKNI Jurnalistik & Redaksi — Kepmenaker No. 246/2020",
+    reference: "Kemnaker RI (2020); Dewan Pers / LSP Jurnalistik",
+    competencies: EDITORIAL_COMPETENCIES,
+  },
+  security: {
+    label: "SKKNI Satuan Pengamanan — Kepmenaker No. 259/2018",
+    reference: "Kemnaker RI (2018); Perpol No. 4/2020; BNSP/LSP Polri; Gada Pratama/Madya",
+    competencies: SECURITY_COMPETENCIES,
   },
 };
 
@@ -924,6 +1334,9 @@ export function getPillarLabel(pillar: CompetencyPillar): string {
     sfia: "SFIA v8 — Skills Framework for Information Age",
     lominger: "Lominger Leadership Architect (Korn Ferry)",
     cgma: "CGMA Competency Framework (CIMA/AICPA)",
+    "skkni-broadcast": "SKKNI Penyiaran & Multimedia (Kepmenaker 133/2019)",
+    "skkni-editorial": "SKKNI Jurnalistik & Redaksi (Kepmenaker 246/2020)",
+    "skkni-security": "SKKNI Satuan Pengamanan (Kepmenaker 259/2018)",
   };
   return map[pillar] ?? pillar;
 }

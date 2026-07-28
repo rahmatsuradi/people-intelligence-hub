@@ -1,6 +1,6 @@
 import type { CompanyProfile } from "./company-profile";
 import { maskBankAccount, maskNik, maskNpwp } from "./payslip-masking";
-import type { Compensation, PayrollLineResult } from "./run-payroll";
+import type { Compensation, PayrollLineResult, PieceRateInput } from "./run-payroll";
 
 export interface PayslipLine {
   label: string;
@@ -25,6 +25,8 @@ export interface PayslipData {
   grossTotal: number;
   deductions: PayslipLine[];
   deductionsTotal: number;
+  bpjsTotal: number;
+  pph21: number;
   net: number;
   hasOtherDeductions: boolean; // true bila ada potongan non-statutori (kasbon/denda) diterapkan
   // Blok informasi (BUKAN potongan gaji karyawan): kontribusi/beban pemberi kerja.
@@ -39,18 +41,10 @@ export interface EmployeeRecord {
   npwp: string | null;
   ptkp_status: string;
   employment_type: string;
-  department: string | null;
-  bank_account: string | null;
+  department?: string | null;
+  bank_account?: string | null;
 }
 
-// Membangun data slip gaji dari output engine (pure). Meng-itemisasi pendapatan dari komponen
-// kompensasi + lembur + THR, dan potongan dari BPJS karyawan + PPh21. Memeriksa INTEGRITAS:
-// jumlah baris pendapatan harus sama dengan result.gross, dan gross - potongan harus sama net.
-// Ini menangkap drift antara buildPayslip dan runPayroll bila salah satu berubah tanpa yang lain.
-//
-// otherDeductions (kasbon/denda/dll) BUKAN bagian runPayroll murni (di luar cakupan UU
-// ketenagakerjaan/BPJS/pajak) -- diterapkan SETELAH pemeriksaan integritas engine, mengurangi
-// net final. Default kosong: tanpa otherDeductions, net slip = net engine (perilaku lama utuh).
 export function buildPayslip(
   employee: EmployeeRecord,
   compensation: Compensation,
@@ -58,13 +52,18 @@ export function buildPayslip(
   period: string,
   company: CompanyProfile,
   otherDeductions: PayslipLine[] = [],
+  pieceRates: PieceRateInput[] = []
 ): PayslipData {
+
   const earnings: PayslipLine[] = [{ label: "Upah Pokok", amount: compensation.upah_pokok }];
   for (const t of compensation.tunjangan_tetap) {
     earnings.push({ label: t.name, amount: t.amount });
   }
   for (const t of compensation.tunjangan_tidak_tetap) {
     earnings.push({ label: t.name, amount: t.amount });
+  }
+  for (const p of pieceRates) {
+    earnings.push({ label: `Honor Siaran & Kreatif: ${p.label} (${p.quantity} x ${p.rate})`, amount: p.quantity * p.rate });
   }
   if (result.overtimePay > 0) earnings.push({ label: "Upah Lembur", amount: result.overtimePay });
   if (result.thrAmount > 0) earnings.push({ label: "THR Keagamaan", amount: result.thrAmount });
@@ -112,12 +111,14 @@ export function buildPayslip(
       ptkpStatus: employee.ptkp_status,
       npwpMasked: maskNpwp(employee.npwp),
       nikMasked: maskNik(employee.nik),
-      bankAccountMasked: maskBankAccount(employee.bank_account),
+      bankAccountMasked: maskBankAccount(employee.bank_account ?? null),
     },
     earnings,
     grossTotal: result.gross,
     deductions,
     deductionsTotal,
+    bpjsTotal: result.bpjs.employee.total,
+    pph21: result.pph21,
     net,
     hasOtherDeductions: otherDeductions.length > 0,
     employerContributions,

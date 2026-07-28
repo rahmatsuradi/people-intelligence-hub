@@ -2,11 +2,14 @@
    CV Analyzer AI — Multi-framework competency analysis
    Model: Groq Llama 3.3 70B
    
-   4 Cluster Framework (sesuai standar multinasional):
+   7 Cluster Framework (sesuai standar industri media & penyiaran):
    1. HR         → Ulrich (2012) + SKKNI No.149/2020
    2. Tech       → SFIA v8 (Skills Framework for Information Age)
    3. Business   → Lominger Leadership Architect (Korn Ferry)
    4. Finance    → CGMA Competency Framework (CIMA/AICPA)
+   5. Broadcast  → SKKNI Penyiaran (Kepmenaker No. 133/2019)
+   6. Editorial  → SKKNI Jurnalistik & Redaksi (Kepmenaker No. 246/2020)
+   7. Security   → SKKNI Satpam (Kepmenaker No. 259/2018)
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import {
@@ -77,16 +80,44 @@ export function detectCluster(position: string, department: string): CompetencyC
     "engineering": "tech",
     "product": "tech",
     "data": "tech",
-    "security": "tech",
     "finance": "finance",
     "legal": "finance",
     "design": "business",
     "sales": "business",
     "operations": "business",
+    // Operational — Broadcast & Multimedia
+    "penyiaran": "broadcast",
+    "broadcast": "broadcast",
+    "studio": "broadcast",
+    "kamera": "broadcast",
+    "mcr": "broadcast",
+    "multimedia": "broadcast",
+    // Editorial & Newsroom
+    "redaksi": "editorial",
+    "jurnalistik": "editorial",
+    "news": "editorial",
+    "berita": "editorial",
+    "reporter": "editorial",
+    "editorial": "editorial",
+    // Physical security (BUKAN cybersecurity — konteks Indonesia: satpam)
+    "security": "security",
+    "keamanan": "security",
   };
-  if (DEPT_MAP[dept]) return DEPT_MAP[dept];
+  // Check position first, then department (as department is broader)
 
   // 2. Position keyword matching — spesifik, tidak overlap
+  // Operational position keywords — checked BEFORE white-collar keywords
+  const BROADCAST_POS = ["cameraman", "kamera", "video editor", "editor video",
+    "floor director", "studio technician", "teknisi studio", "audio engineer",
+    "lighting", "mcr", "broadcast", "penyiaran"];
+
+  const EDITORIAL_POS = ["reporter", "jurnalis", "journalist", "news producer",
+    "produser berita", "scriptwriter", "penulis naskah", "news editor",
+    "redaksi", "editor berita", "anchor", "host", "pembawa acara"];
+
+  const SECURITY_POS = ["satpam", "security guard", "jaga malam",
+    "petugas keamanan", "penjaga", "pengamanan"];
+
   const HR_POS = ["hr ", " hr", "human resource", "hrd", "hrga", "hrbp",
     "rekrutmen", "talent acquisition", "talent management", "payroll",
     "compensation", "people ops", "people partner", "industrial relation"];
@@ -102,6 +133,11 @@ export function detectCluster(position: string, department: string): CompetencyC
     "cybersecurity", "infosec", "solution architect", "tech lead",
     "programmer", "qa engineer", "sre", "platform engineer"];
 
+  // Cek operational dulu (paling spesifik untuk konteks media/penyiaran)
+  if (BROADCAST_POS.some(k => pos.includes(k))) return "broadcast";
+  if (EDITORIAL_POS.some(k => pos.includes(k))) return "editorial";
+  if (SECURITY_POS.some(k => pos.includes(k))) return "security";
+
   // Cek HR dulu (spesifik)
   if (HR_POS.some(k => pos.includes(k))) return "hr";
   // Cek Finance (spesifik)
@@ -109,7 +145,10 @@ export function detectCluster(position: string, department: string): CompetencyC
   // Cek Tech (spesifik)
   if (TECH_POS.some(k => pos.includes(k))) return "tech";
 
-  // 3. Default: business — MT, General Manager, Operations, Sales, dll
+  // 3. Cek Department sebagai fallback jika posisi tidak spesifik
+  if (DEPT_MAP[dept]) return DEPT_MAP[dept];
+
+  // 4. Default: business — MT, General Manager, Operations, Sales, dll
   return "business";
 }
 

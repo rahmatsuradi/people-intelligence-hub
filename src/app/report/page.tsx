@@ -115,7 +115,7 @@ const CANDIDATE_REPORTS: HiringReport[] = [
       { name: "Maria Torres", role: "VP Product", score: 92, recommendation: "Strong Hire" },
       { name: "James Patel", role: "Staff Engineer", score: 86, recommendation: "Hire" },
       { name: "Alex Kim", role: "Talent Lead", score: 90, recommendation: "Strong Hire" },
-      { name: "Rina Okoye", role: "HR Business Partner", score: 88, recommendation: "Hire" },
+      { name: "Carles Puyol", role: "HR Business Partner", score: 88, recommendation: "Hire" },
     ],
     consensus: "Strong Hire",
     consensusNote:

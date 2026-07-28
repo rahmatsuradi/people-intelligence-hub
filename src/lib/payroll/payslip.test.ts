@@ -5,10 +5,15 @@ import type { CompanyProfile } from "./company-profile";
 import type { Compensation, PayrollLineResult } from "./run-payroll";
 
 const COMPANY: CompanyProfile = {
+  id: "test_company",
   name: "PT Sintetis Nusantara Demo",
+  shortName: "Sintetis Demo",
   address: "Jl. Portofolio No. 1, Jakarta",
-  signerName: "Didi Rahmat",
+  signerName: "Arsène Wenger",
   signerTitle: "HRGA",
+  tagline: "Demo TV & Garment",
+  industry: "broadcast",
+  headcountTarget: 100,
 };
 
 const EKO: EmployeeRecord = {
@@ -17,7 +22,7 @@ const EKO: EmployeeRecord = {
   npwp: "09.111.222.3-011.003",
   ptkp_status: "K/0",
   employment_type: "PKWTT",
-  department: "Produksi",
+  department: "Divisi Kreatif & Program Siaran TV",
   bank_account: null,
 };
 
@@ -34,6 +39,7 @@ const EKO_RESULT: PayrollLineResult = {
   bpjsWageBase: 10_000_000,
   overtimePay: 0,
   thrAmount: 0,
+  pieceRatePay: 0,
   bpjs: {
     employee: { jht: 200_000, jp: 100_000, kesehatan: 100_000, total: 400_000 },
     employer: { jht: 370_000, jp: 200_000, jkk: 54_000, jkm: 30_000, kesehatan: 400_000, total: 1_054_000 },
@@ -79,6 +85,7 @@ describe("buildPayslip", () => {
       gross: 10_775_000, // 10jt + 275.000 lembur + 500.000 THR
       overtimePay: 275_000,
       thrAmount: 500_000,
+      pieceRatePay: 0,
       net: 10_175_000, // 10.775.000 - 600.000
     };
     const slip = buildPayslip(EKO, EKO_COMP, withExtras, "2026-04", COMPANY);

@@ -29,7 +29,7 @@ import { useRouter } from "next/navigation";
    Types & constants
 ═══════════════════════════════════════════════════════════════════════════ */
 
-type InterviewType = "Behavioral" | "Technical" | "Leadership" | "Cultural Fit";
+type InterviewType = "Behavioral" | "Technical" | "Leadership" | "Cultural Fit" | "Situational";
 type Seniority =
   | "Junior"
   | "Mid-Level"
@@ -91,6 +91,7 @@ const INTERVIEW_TYPES: InterviewType[] = [
   "Technical",
   "Leadership",
   "Cultural Fit",
+  "Situational",
 ];
 
 const TYPE_STYLES: Record<
@@ -116,6 +117,11 @@ const TYPE_STYLES: Record<
     chip: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/30",
     header: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-500/5",
     border: "border-emerald-200 dark:border-emerald-500/30",
+  },
+  Situational: {
+    chip: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/30",
+    header: "border-amber-200 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/5",
+    border: "border-amber-200 dark:border-amber-500/30",
   },
 };
 
@@ -307,6 +313,183 @@ const FINANCE_QUESTION_POOL: InterviewQuestion[] = [
   },
 ];
 
+const BROADCAST_QUESTION_POOL: InterviewQuestion[] = [
+  {
+    id: "BR1", type: "Behavioral", competencyId: "brd-studio-cam", competencyName: "Broadcast Studio & Camera Operation",
+    question: "Ceritakan situasi saat Anda mengoperasikan kamera atau peralatan teknis dalam siaran langsung (live broadcast) dan mengalami kendala teknis tiba-tiba. Bagaimana Anda mengatasinya tanpa mengganggu tayangan?",
+    strongAnswer: "Maintains composure under live pressure; communicates quickly with program director; switches to backup camera or framing smoothly.",
+    redFlags: ["Panics during live broadcast", "Abandons camera position", "Blames equipment without attempting recovery"],
+    rubric: rubricFor("brd-studio-cam"),
+  },
+  {
+    id: "BR2", type: "Behavioral", competencyId: "brd-rundown-dir", competencyName: "Rundown & Program Directing",
+    question: "Ceritakan pengalaman Anda ketika rundown acara TV yang sudah disiapkan harus berubah drastis saat siaran langsung karena adanya breaking news atau durasi narasumber yang molor.",
+    strongAnswer: "Makes rapid timing adjustments; coordinates smoothly with anchor, MCR, and floor team; ensures zero air silence or clumsy transition.",
+    redFlags: ["Freezes under schedule pressure", "Argues with producer during live show", "Fails to give clear visual cues"],
+    rubric: rubricFor("brd-rundown-dir"),
+  },
+  {
+    id: "BR3", type: "Technical", competencyId: "brd-video-edit", competencyName: "Video Editing & Post-Production",
+    question: "Jelaskan alur kerja (workflow) Anda dalam mengedit paket berita atau promo televisi di bawah deadline ketat menjelang jadwal tayang (on-air).",
+    strongAnswer: "Prioritizes rough cut and audio leveling first; uses NLE templates and shortcuts efficiently; ensures broadcast color/audio standards.",
+    redFlags: ["Misses on-air deadline due to over-editing", "Poor audio balancing", "Does not follow station style guide"],
+    rubric: rubricFor("brd-video-edit"),
+  },
+  {
+    id: "BR4", type: "Technical", competencyId: "brd-mcr-trans", competencyName: "MCR & Transmission Control",
+    question: "Bagaimana standar prosedur yang Anda terapkan di Master Control Room (MCR) untuk memastikan transisi siaran dan insersi iklan komersial berjalan tepat waktu tanpa jeda hitam (blackout)?",
+    strongAnswer: "Checks playlist automation rigorously; verifies backup server readiness; monitors RF and audio levels continuously; reacts instantly to signal drops.",
+    redFlags: ["Inattentive monitoring", "Causes commercial insertion errors", "Slow to switch backup feeds"],
+    rubric: rubricFor("brd-mcr-trans"),
+  },
+  {
+    id: "BR5", type: "Leadership", competencyId: "brd-audio-eng", competencyName: "Studio Audio Engineering",
+    question: "Dalam penyiaran talkshow TV dengan banyak tamu di studio, bagaimana Anda memimpin tim audio atau mengatur frekuensi RF mic wireless agar terhindar dari feedback atau gangguan sinyal?",
+    strongAnswer: "Performs thorough RF frequency scan before show; instructs floor team on proper mic placement; monitors mixing console levels actively.",
+    redFlags: ["Tolerates audio feedback on air", "Poor communication with floor crew", "Lacks technical RF preparation"],
+    rubric: rubricFor("brd-audio-eng"),
+  },
+  {
+    id: "BR6", type: "Leadership", competencyId: "brd-lighting", competencyName: "Studio Lighting Directing",
+    question: "Ceritakan pengalaman Anda memimpin penataan cahaya (lighting setup) untuk set studio baru atau program khusus. Bagaimana Anda menyeimbangkan kualitas visual dan efisiensi waktu penyiaran?",
+    strongAnswer: "Plans lighting plot in advance; collaborates closely with set designer and cameraman; calibrates color temperature precisely; delegates tasks to lighting crew.",
+    redFlags: ["Harsh shadows on anchor faces", "Slow setup delaying studio rehearsal", "Resists feedback from director"],
+    rubric: rubricFor("brd-lighting"),
+  },
+  {
+    id: "BR7", type: "Cultural Fit", competencyId: "brd-rundown-dir", competencyName: "Rundown & Program Directing",
+    question: "Industri televisi menuntut kedisiplinan waktu yang mutlak (per hitungan detik). Bagaimana budaya kedisiplinan dan akurasi waktu ini mempengaruhi cara kerja Anda sehari-hari?",
+    strongAnswer: "Values precise timekeeping; arrives early for briefings and rehearsals; integrates second-by-second timing into all professional habits.",
+    redFlags: ["Casual attitude toward deadlines", "Habituated to tardiness", "Underestimates live television rigor"],
+    rubric: rubricFor("brd-rundown-dir"),
+  },
+  {
+    id: "BR8", type: "Cultural Fit", competencyId: "brd-studio-cam", competencyName: "Broadcast Studio & Camera Operation",
+    question: "Pembuatan program televisi adalah kerja tim lintas kerabat kerja (kamera, audio, lighting, sutradara, produser). Ceritakan situasi ketika terjadi perbedaan pendapat teknis di studio dan bagaimana Anda menjaga keharmonisan tim.",
+    strongAnswer: "Focuses on best show outcome; respects director's final call; communicates constructively without ego; maintains studio morale.",
+    redFlags: ["Egotistical or disruptive in studio", "Blames other technical units", "Unwilling to collaborate"],
+    rubric: rubricFor("brd-studio-cam"),
+  },
+];
+
+const EDITORIAL_QUESTION_POOL: InterviewQuestion[] = [
+  {
+    id: "ED1", type: "Behavioral", competencyId: "edt-news-research", competencyName: "Investigative Journalism & News Research",
+    question: "Ceritakan pengalaman Anda saat harus meliput isu sensitif atau investigatif dan menemui kendala akses informasi dari narasumber. Bagaimana strategi Anda mendapatkan fakta yang akurat?",
+    strongAnswer: "Uses multi-source verification (triangulation); builds ethical rapport with contacts; protects confidential sources; persists through official/unofficial channels.",
+    redFlags: ["Relies on single unverified source", "Breaches journalistic ethics or law", "Gives up easily on difficult research"],
+    rubric: rubricFor("edt-news-research"),
+  },
+  {
+    id: "ED2", type: "Behavioral", competencyId: "edt-fact-checking", competencyName: "Fact-Checking & Journalistic Ethics",
+    question: "Ceritakan situasi ketika Anda menemukan informasi yang sangat menarik untuk menjadi headline atau breaking news, tetapi Anda meragukan kebenarannya. Apa tindakan Anda?",
+    strongAnswer: "Prioritizes truth over speed; conducts thorough fact-checking before publishing; consults editorial standard/legal if defamation risk exists.",
+    redFlags: ["Publishes rumor for sensation/clickbait", "Ignores verification protocols", "Blames social media if information is false"],
+    rubric: rubricFor("edt-fact-checking"),
+  },
+  {
+    id: "ED3", type: "Technical", competencyId: "edt-scriptwriting", competencyName: "News Scriptwriting & Copyediting",
+    question: "Jelaskan bagaimana Anda merancang struktur naskah berita televisi (voice-over/soundbite/stand-up) agar narasi ringkas, lugas, dan sinkron dengan gambar visual (natural sound).",
+    strongAnswer: "Writes conversational active-voice script; matches visual cues (lead-in to SOT); avoids redundant description of what is already visible; paces audio flow.",
+    redFlags: ["Long, bureaucratic sentences", "Script disconnected from video visuals", "Ignores natural sound/audio context"],
+    rubric: rubricFor("edt-scriptwriting"),
+  },
+  {
+    id: "ED4", type: "Technical", competencyId: "edt-talkshow-host", competencyName: "Live Interviewing & Talkshow Hosting",
+    question: "Bagaimana teknik wawancara Anda (di studio atau lapangan) ketika menghadapi narasumber yang evasive (menghindar menjawab pokok pertanyaan) pada isu publik yang kritis?",
+    strongAnswer: "Maintains professional composure; rephrases question sharply and persistently; uses data/facts to challenge evasive answers; controls interview pacing.",
+    redFlags: ["Rude or emotionally confrontational", "Lets interviewee take over the broadcast", "Fails to ask follow-up questions"],
+    rubric: rubricFor("edt-talkshow-host"),
+  },
+  {
+    id: "ED5", type: "Leadership", competencyId: "edt-field-report", competencyName: "Field Reporting & Breaking News",
+    question: "Sebagai koordinator liputan atau redaktur, bagaimana Anda menugaskan dan mengarahkan reporter lapangan saat terjadi peristiwa luar biasa (bencana/kerusuhan) agar tetap aman namun liputan maksimal?",
+    strongAnswer: "Prioritizes reporter safety; establishes clear check-in protocols and evacuation routes; assigns coverage angles efficiently; coordinates live feeds.",
+    redFlags: ["Forces reporter into fatal hazard without PPE/support", "Poor communication with field team", "Lacks crisis coverage strategy"],
+    rubric: rubricFor("edt-field-report"),
+  },
+  {
+    id: "ED6", type: "Leadership", competencyId: "edt-fact-checking", competencyName: "Fact-Checking & Journalistic Ethics",
+    question: "Bagaimana Anda membimbing jurnalis junior di ruang redaksi untuk menghindari plagiarisme dan menjaga standar etika jurnalistik sesuai UU Pers dan Kode Etik?",
+    strongAnswer: "Enforces strict attribution rules; reviews source material regularly; explains legal risks of libel/slander; fosters culture of integrity.",
+    redFlags: ["Tolerates copy-paste journalism", "Unfamiliar with journalistic code of ethics", "Ignores junior staff mistakes"],
+    rubric: rubricFor("edt-fact-checking"),
+  },
+  {
+    id: "ED7", type: "Cultural Fit", competencyId: "edt-fact-checking", competencyName: "Fact-Checking & Journalistic Ethics",
+    question: "Dalam industri media, independensi dan integritas adalah segalanya. Bagaimana Anda bersikap apabila ada pihak eksternal yang mencoba mengintervensi atau menyuap agar berita tertentu ditiadakan/diubah?",
+    strongAnswer: "Refuses bribery or undue influence categorically; reports intervention attempt to chief editor/legal; stands firm on editorial independence.",
+    redFlags: ["Accepts gifts/bribes from sources", "Willing to compromise news integrity for favor", "Lacks ethical boundary awareness"],
+    rubric: rubricFor("edt-fact-checking"),
+  },
+  {
+    id: "ED8", type: "Cultural Fit", competencyId: "edt-scriptwriting", competencyName: "News Scriptwriting & Copyediting",
+    question: "Dunia redaksi berita bekerja dalam ritme deadline 24/7 yang sangat cepat dan terkadang penuh tekanan mental. Bagaimana Anda menjaga performa dan objektivitas di bawah ritme ini?",
+    strongAnswer: "Manages time and stress effectively; maintains emotional balance; separates personal bias from objective reporting; supports newsroom colleagues.",
+    redFlags: ["Burnout leading to careless errors", "Injects personal emotion/opinion into hard news", "Unreliable during breaking news cycles"],
+    rubric: rubricFor("edt-scriptwriting"),
+  },
+];
+
+const SECURITY_QUESTION_POOL: InterviewQuestion[] = [
+  {
+    id: "SC1", type: "Behavioral", competencyId: "sec-conflict-management", competencyName: "Conflict De-escalation & Crowd Control",
+    question: "Ceritakan pengalaman Anda saat harus menenangkan (de-eskalasi) konflik fisik atau adu mulut antar pengunjung atau staf di area studio/kantor televisi. Bagaimana Anda menyelesaikannya tanpa kekerasan?",
+    strongAnswer: "Stays calm; separates involved parties; uses assertive but non-aggressive body language; listens actively; calls for backup if needed.",
+    redFlags: ["Uses unnecessary force", "Panics or escalates situation", "Takes sides prematurely"],
+    rubric: rubricFor("sec-conflict-management"),
+  },
+  {
+    id: "SC2", type: "Behavioral", competencyId: "sec-access-control", competencyName: "Access Control & Guarding",
+    question: "Pernahkah Anda menghadapi situasi di mana seseorang (bisa jadi tamu VIP atau atasan) mencoba masuk area terbatas tanpa izin/ID yang sesuai? Bagaimana Anda menanganinya?",
+    strongAnswer: "Remains polite but firm; explains SOP clearly; offers to contact authorized personnel for escort/approval; does not bend rules for status.",
+    redFlags: ["Intimidated easily by VIPs", "Rude or confrontational", "Lets unauthorized people in to avoid conflict"],
+    rubric: rubricFor("sec-access-control"),
+  },
+  {
+    id: "SC3", type: "Situational", competencyId: "sec-emergency-response", competencyName: "Emergency Response & Crime Scene Preservation",
+    question: "Jelaskan prosedur TPTKP (Tindakan Pertama Tempat Kejadian Perkara) yang harus Anda lakukan jika terjadi pencurian aset di area studio atau kantor siaran sebelum polisi tiba.",
+    strongAnswer: "Secures the perimeter (police line/barricade); prevents anyone from entering; documents initial observations; preserves evidence untouched; reports to superiors.",
+    redFlags: ["Touches or moves evidence", "Allows crowds to gather at scene", "Fails to secure the area"],
+    rubric: rubricFor("sec-emergency-response"),
+  },
+  {
+    id: "SC4", type: "Technical", competencyId: "sec-patrol", competencyName: "Patrol & Perimeter Surveillance",
+    question: "Bagaimana prosedur patroli yang benar di area titik rawan seperti ruang server MCR dan studio penyiaran pada saat shift malam?",
+    strongAnswer: "Varies patrol routes/times; checks locks, lighting, and blind spots; uses guard tour system/checkpoints; maintains situational awareness; reports anomalies immediately.",
+    redFlags: ["Predictable patrol routes", "Ignores dark spots", "Sleeps on duty or falsifies patrol logs"],
+    rubric: rubricFor("sec-patrol"),
+  },
+  {
+    id: "SC5", type: "Leadership", competencyId: "sec-reporting", competencyName: "Incident Reporting & Documentation",
+    question: "Bagaimana cara Anda membimbing anggota regu pengamanan (satpam) untuk membuat laporan kejadian (incident reporting) secara kronologis, lengkap, dan obyektif?",
+    strongAnswer: "Teaches the 5W1H method (Who, What, When, Where, Why, How); emphasizes factual over emotional language; reviews and provides constructive feedback on reports.",
+    redFlags: ["Writes reports based on assumptions", "Cannot articulate 5W1H", "Does not review subordinates' logs"],
+    rubric: rubricFor("sec-reporting"),
+  },
+  {
+    id: "SC6", type: "Leadership", competencyId: "sec-legal-compliance", competencyName: "Regulatory Compliance & Security Ethics",
+    question: "Ceritakan inisiatif Anda dalam mensosialisasikan aturan perusahaan atau kepatuhan hukum kepada kru studio dan karyawan kantor agar pelanggaran keamanan dapat dicegah.",
+    strongAnswer: "Conducts friendly briefings during shift changes; uses clear signage; builds rapport with workers to encourage voluntary compliance; acts as a role model.",
+    redFlags: ["Relies solely on punishment", "Fails to communicate rules clearly", "Shows favoritism in enforcement"],
+    rubric: rubricFor("sec-legal-compliance"),
+  },
+  {
+    id: "SC7", type: "Cultural Fit", competencyId: "sec-physical-readiness", competencyName: "Physical Readiness & Mental Alertness",
+    question: "Kesiapsiagaan fisik dan mental sangat penting. Bagaimana Anda menjaga rutinitas disiplin diri dan kesigapan tim Anda di tengah jadwal shift yang panjang?",
+    strongAnswer: "Maintains fitness routine; manages rest off-duty; encourages alertness checks; leads stretching or brief exercises during roll call.",
+    redFlags: ["Appears fatigued or unfit", "Complains excessively about shift work", "Lacks discipline in uniform/appearance"],
+    rubric: rubricFor("sec-physical-readiness"),
+  },
+  {
+    id: "SC8", type: "Cultural Fit", competencyId: "sec-access-control", competencyName: "Access Control & Guarding",
+    question: "Bagaimana Anda membangun hubungan baik dengan warga sekitar lingkungan studio dan karyawan, namun tetap tegas dalam menegakkan aturan akses keluar-masuk (access control)?",
+    strongAnswer: "Uses \"Senyum, Sapa, Salam\"; separates personal relationships from professional duties; handles rejections gracefully; builds community trust.",
+    redFlags: ["Overly aggressive with locals", "Bribable or easily compromised by friends", "Lacks interpersonal skills"],
+    rubric: rubricFor("sec-access-control"),
+  },
+];
+
 function buildMockQuestions(
   position: string,
   seniority: Seniority,
@@ -319,6 +502,9 @@ function buildMockQuestions(
   if (cluster === "tech") pool = TECH_QUESTION_POOL;
   else if (cluster === "business") pool = BUSINESS_QUESTION_POOL;
   else if (cluster === "finance") pool = FINANCE_QUESTION_POOL;
+  else if (cluster === "broadcast") pool = BROADCAST_QUESTION_POOL;
+  else if (cluster === "editorial") pool = EDITORIAL_QUESTION_POOL;
+  else if (cluster === "security") pool = SECURITY_QUESTION_POOL;
   else pool = HR_QUESTION_POOL;
 
   // Inject position/seniority into question text

@@ -61,7 +61,7 @@ interface HistoryItem {
 }
 
 const DEPARTMENTS = [
-  "Engineering", "Product", "Data", "Design", "Sales",
+  "Penyiaran", "Redaksi", "Engineering", "Product", "Data", "Design", "Sales",
   "Finance", "Security", "Operations", "HR", "Legal",
 ];
 
@@ -71,6 +71,9 @@ const CLUSTER_BADGE: Record<CompetencyCluster, { label: string; className: strin
   tech: { label: "SFIA v8", className: "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300" },
   business: { label: "Lominger / Korn Ferry", className: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" },
   finance: { label: "CGMA / CIMA", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" },
+  broadcast: { label: "SKKNI Penyiaran", className: "bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300" },
+  editorial: { label: "SKKNI Redaksi", className: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300" },
+  security: { label: "SKKNI Satpam", className: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300" },
 };
 
 function buildReportFromAi(ai: AiAnalysisResult, startMs: number): Omit<AnalysisReport, "reportId" | "generatedAt"> {
@@ -692,15 +695,15 @@ export default function CvAnalyzerPage() {
 
           <Card>
             <h2 className="text-base font-semibold text-slate-900 dark:text-white">Candidate Details</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Framework auto-selected by role · Ulrich · SFIA · Lominger · CGMA</p>
+            <p className="mt-0.5 text-sm text-slate-500">Framework auto-selected by role · Ulrich · SFIA · Lominger · CGMA · SKKNI Penyiaran & Redaksi</p>
             <div className="mt-4 space-y-4">
               <div>
                 <Label htmlFor="candidate-name">Candidate name</Label>
-                <input id="candidate-name" type="text" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} placeholder="e.g. Rahmat Suradi" className={inputClass} />
+                <input id="candidate-name" type="text" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} placeholder="e.g. Lionel Messi" className={inputClass} />
               </div>
               <div>
                 <Label htmlFor="target-position">Target position</Label>
-                <input id="target-position" type="text" value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} placeholder="e.g. Software Engineer / HR Manager / CFO" className={inputClass} />
+                <input id="target-position" type="text" value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} placeholder="e.g. Video Editor / Reporter / MCR Operator / Satpam" className={inputClass} />
               </div>
               <div>
                 <Label htmlFor="department">Department</Label>

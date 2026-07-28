@@ -45,7 +45,7 @@ export default function SettingsPage() {
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                placeholder="e.g. Rahmat Suradi"
+                placeholder="e.g. Pep Guardiola"
                 className={inputClass}
               />
             </div>

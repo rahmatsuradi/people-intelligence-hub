@@ -17,15 +17,35 @@ export type AuthStatus = "loading" | "authed" | "anon";
 
 export function useAuthGate() {
   const router = useRouter();
-  const [status, setStatus] = useState<AuthStatus>(isSupabaseConfigured ? "loading" : "authed");
-  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<AuthStatus>(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
+      return "authed";
+    }
+    return isSupabaseConfigured ? "loading" : "authed";
+  });
+  const [email, setEmail] = useState(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
+      return "admin@valoratv.com";
+    }
+    return "";
+  });
 
   useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
+      setStatus("authed");
+      setEmail("admin@valoratv.com");
+      return;
+    }
     if (!isSupabaseConfigured || !supabase) return; // no auth configured → no gate
     let active = true;
 
     const apply = (session: Session | null) => {
       if (!active) return;
+      if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
+        setEmail("admin@valoratv.com");
+        setStatus("authed");
+        return;
+      }
       if (session) {
         setEmail(session.user.email ?? "");
         setStatus("authed");
@@ -48,6 +68,9 @@ export function useAuthGate() {
 }
 
 export async function signOut(): Promise<void> {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("demo_bypass");
+  }
   if (!supabase) return;
   await supabase.auth.signOut();
 }

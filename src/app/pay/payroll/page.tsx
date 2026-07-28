@@ -5,12 +5,12 @@ import { AppShell, Button, Card, Icon, SvgPath, cn } from "@/components/app-shel
 import { toast } from "@/components/toast";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { runPayroll } from "@/lib/payroll/run-payroll";
-import type { Compensation, OvertimeInput, PayrollLineResult } from "@/lib/payroll/run-payroll";
+import type { Compensation, OvertimeInput, PayrollLineResult, PieceRateInput } from "@/lib/payroll/run-payroll";
 import { buildPayslip } from "@/lib/payroll/payslip";
 import type { PayslipLine } from "@/lib/payroll/payslip";
 import { renderPayslipHTML } from "@/lib/payroll/payslip-html";
-import { resolveCompanyProfile } from "@/lib/payroll/company-profile";
-import { aggregateDecemberContext, pickStatutoryConfigForPeriod, toStatutoryConfig } from "@/lib/payroll/pay-data";
+import { ALL_COMPANIES, resolveCompanyProfile, getActiveCompanyId } from "@/lib/payroll/company-profile";
+import { aggregateDecemberContext, pickStatutoryConfigForPeriod, toStatutoryConfig, ensureDemoEmployeesExist, isStatutoryEnabled, setStatutoryToggle } from "@/lib/payroll/pay-data";
 import type {
   DecemberAggregate, PiCompensationRow, PiEmployeeRow, PiPayrollLineRow, PiPayrollRunRow, PiStatutoryConfigRow,
 } from "@/lib/payroll/pay-data";
@@ -31,11 +31,11 @@ interface ComputedLine {
   result: PayrollLineResult;
 }
 
-const DEFAULT_PERIOD = "2026-01";
+const DEFAULT_PERIOD = "2026-07";
 
 // Modal in-page (iframe srcDoc), BUKAN window.open(blob) — window.open dari klik
 // terprogram/otomasi kerap diam-diam diblokir popup blocker tanpa pesan error apa pun.
-function PayslipModal({ html, employeeName, onClose }: { html: string; employeeName: string; onClose: () => void }) {
+function PayslipModal({ html, employeeName, employeePhone, onClose }: { html: string; employeeName: string; employeePhone?: string; onClose: () => void }) {
   const download = () => {
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
@@ -44,6 +44,19 @@ function PayslipModal({ html, employeeName, onClose }: { html: string; employeeN
     a.download = `slip-gaji-${employeeName.replace(/\s+/g, "-").toLowerCase()}.html`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const printAsPDF = () => {
+    const printWin = window.open('', '_blank', 'width=850,height=950');
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(html);
+      printWin.document.close();
+      printWin.focus();
+      setTimeout(() => {
+        printWin.print();
+      }, 350);
+    }
   };
 
   return (
@@ -55,8 +68,19 @@ function PayslipModal({ html, employeeName, onClose }: { html: string; employeeN
             <h2 className="text-base font-semibold text-slate-900 dark:text-white">Slip Gaji — {employeeName}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="secondary" onClick={download}>
-              <Icon className="h-3.5 w-3.5"><SvgPath name="download" /></Icon> Unduh
+            {employeePhone && (
+              <Button size="sm" variant="secondary" onClick={() => {
+                const text = encodeURIComponent(`Halo ${employeeName},\nBerikut tautan slip gaji Anda untuk periode ini. Silakan periksa di aplikasi portal HR.`);
+                window.open(`https://wa.me/${employeePhone}?text=${text}`, '_blank');
+              }} className="text-emerald-600 dark:text-emerald-500 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20">
+                <Icon className="h-3.5 w-3.5"><SvgPath name="envelope" /></Icon> Kirim WA
+              </Button>
+            )}
+            <Button size="sm" variant="primary" onClick={printAsPDF} className="bg-blue-600 hover:bg-blue-700 text-white font-medium">
+              <Icon className="h-3.5 w-3.5"><SvgPath name="document" /></Icon> Cetak / Simpan PDF
+            </Button>
+            <Button size="sm" variant="secondary" onClick={download} title="Unduh file web HTML">
+              <Icon className="h-3.5 w-3.5"><SvgPath name="download" /></Icon> HTML
             </Button>
             <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Tutup">
               <Icon className="h-5 w-5"><SvgPath name="close" /></Icon>
@@ -195,6 +219,75 @@ function OvertimeModal({
   );
 }
 
+function PieceRateModal({
+  employeeName, initial, onSave, onClose,
+}: {
+  employeeName: string;
+  initial: PieceRateInput[];
+  onSave: (items: PieceRateInput[]) => void;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<PieceRateInput[]>(initial.length ? initial : [{ label: "", quantity: 0, rate: 0 }]);
+
+  const update = (i: number, patch: Partial<PieceRateInput>) => {
+    setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  };
+  const removeRow = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
+  const addRow = () => setItems((prev) => [...prev, { label: "", quantity: 0, rate: 0 }]);
+  const save = () => {
+    onSave(items.filter((it) => it.label.trim() && it.quantity > 0 && it.rate > 0));
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">Honor Siaran &amp; Liputan — {employeeName}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Tutup">
+            <Icon className="h-5 w-5"><SvgPath name="close" /></Icon>
+          </button>
+        </div>
+        <div className="space-y-3 overflow-y-auto p-5">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Masukkan rekap honorarium kreatif & program (siaran, liputan, atau dubbing) periode ini. Memengaruhi gross income dan PPh 21, namun tidak memengaruhi BPJS.
+          </p>
+          {items.map((it, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <input
+                value={it.label} onChange={(e) => update(i, { label: e.target.value })}
+                placeholder="Jenis Honor (mis. Honor Liputan Live / Dubbing)"
+                className="flex-1 min-w-[150px] rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <input
+                type="number" min={0} value={it.quantity || ""} onChange={(e) => update(i, { quantity: Number(e.target.value) })}
+                placeholder="Qty"
+                className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-right text-sm text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <span className="text-sm text-slate-400">x</span>
+              <input
+                type="number" min={0} value={it.rate || ""} onChange={(e) => update(i, { rate: Number(e.target.value) })}
+                placeholder="Rp/pcs"
+                className="w-24 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-right text-sm text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <button type="button" onClick={() => removeRow(i)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Hapus baris">
+                <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
+              </button>
+            </div>
+          ))}
+          <Button size="sm" variant="ghost" onClick={addRow}>
+            <Icon className="h-3.5 w-3.5"><SvgPath name="plus" /></Icon> Tambah baris
+          </Button>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3 dark:border-slate-800">
+          <Button variant="secondary" onClick={onClose}>Batal</Button>
+          <Button variant="primary" onClick={save}>Simpan</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PayrollPage() {
   const [period, setPeriod] = useState(DEFAULT_PERIOD);
   const [lines, setLines] = useState<ComputedLine[] | null>(null);
@@ -202,13 +295,17 @@ export default function PayrollPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedPeriod, setSavedPeriod] = useState<string | null>(null);
-  const [payslipModal, setPayslipModal] = useState<{ html: string; employeeName: string } | null>(null);
+  const [payslipModal, setPayslipModal] = useState<{ html: string; employeeName: string; employeePhone?: string } | null>(null);
   const [deductionsModalFor, setDeductionsModalFor] = useState<PiEmployeeRow | null>(null);
   const [otherDeductions, setOtherDeductions] = useState<Record<string, OtherDeduction[]>>({});
   const [overtimeModalFor, setOvertimeModalFor] = useState<PiEmployeeRow | null>(null);
   const [overtimeByEmployee, setOvertimeByEmployee] = useState<Record<string, OvertimeInput>>({});
+  const [pieceRateModalFor, setPieceRateModalFor] = useState<PiEmployeeRow | null>(null);
+  const [pieceRatesByEmployee, setPieceRatesByEmployee] = useState<Record<string, PieceRateInput[]>>({});
   const [includeThr, setIncludeThr] = useState(false);
   const [thrReferenceDate, setThrReferenceDate] = useState(`${DEFAULT_PERIOD}-01`);
+  const [togglesVersion, setTogglesVersion] = useState(0);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("valoris_tv");
 
   const isDecember = /^\d{4}-12$/.test(period);
 
@@ -218,8 +315,10 @@ export default function PayrollPage() {
     setLines(null);
     setIncompleteEmployees([]);
 
+    await ensureDemoEmployeesExist(supabase);
+
     const [emp, comp, cfg] = await Promise.all([
-      supabase.from("pi_employees").select("*").eq("status", "active").order("full_name"),
+      supabase.from("pi_employees").select("*").eq("status", "active").eq("tenant_id", getActiveCompanyId()).order("full_name"),
       supabase.from("pi_compensation").select("*"),
       supabase.from("pi_statutory_config").select("*").order("effective_date", { ascending: false }),
     ]);
@@ -233,7 +332,7 @@ export default function PayrollPage() {
     if (!configRow) { setError(`Tidak ada config statutori yang berlaku untuk periode ${period}.`); return; }
     const statutoryConfig = toStatutoryConfig(configRow);
     const compByEmp = new Map<string, PiCompensationRow>((comp.data ?? []).map((c) => [c.employee_id, c]));
-    const employees = emp.data as PiEmployeeRow[];
+    const employees = (emp.data as PiEmployeeRow[]) || [];
 
     let decemberContext: Map<string, DecemberAggregate> | null = null;
     if (isDecember) {
@@ -267,6 +366,7 @@ export default function PayrollPage() {
       };
 
       const overtime = overtimeByEmployee[e.id]?.hours > 0 ? overtimeByEmployee[e.id] : undefined;
+      const pieceRates = pieceRatesByEmployee[e.id]?.length > 0 ? pieceRatesByEmployee[e.id] : undefined;
       const thr = includeThr ? { joinDate: e.join_date, referenceDate: thrReferenceDate } : undefined;
 
       if (isDecember) {
@@ -276,6 +376,8 @@ export default function PayrollPage() {
           continue; // JANGAN hitung Desember dengan data Jan-Nov yang tidak lengkap (diam-diam salah)
         }
         const result = runPayroll({
+          employeeName: e.full_name,
+          statutoryEnabled: isStatutoryEnabled(e.id, e.full_name),
           compensation,
           ptkpStatus: e.ptkp_status as PtkpStatus,
           riskClass: e.risk_class as RiskClass,
@@ -283,6 +385,7 @@ export default function PayrollPage() {
           statutoryConfig,
           overtime,
           thr,
+          pieceRates,
           decemberReconciliation: {
             grossJanNov: agg.grossJanNov,
             iuranPensiunKaryawanJanNov: agg.iuranPensiunKaryawanJanNov,
@@ -292,6 +395,8 @@ export default function PayrollPage() {
         computed.push({ employee: e, compensation, result });
       } else {
         const result = runPayroll({
+          employeeName: e.full_name,
+          statutoryEnabled: isStatutoryEnabled(e.id, e.full_name),
           compensation,
           ptkpStatus: e.ptkp_status as PtkpStatus,
           riskClass: e.risk_class as RiskClass,
@@ -299,13 +404,14 @@ export default function PayrollPage() {
           statutoryConfig,
           overtime,
           thr,
+          pieceRates,
         });
         computed.push({ employee: e, compensation, result });
       }
     }
     setLines(computed);
     setIncompleteEmployees(incomplete);
-  }, [period, isDecember, overtimeByEmployee, includeThr, thrReferenceDate]);
+  }, [period, includeThr, thrReferenceDate, isDecember, togglesVersion, selectedCompanyId]);
 
   useEffect(() => { compute(); }, [compute]);
 
@@ -325,12 +431,15 @@ export default function PayrollPage() {
   }, [lines, netFor]);
 
   const openPayslip = useCallback((line: ComputedLine) => {
-    const company = resolveCompanyProfile();
+    const company = resolveCompanyProfile(selectedCompanyId);
     const deductions: PayslipLine[] = (otherDeductions[line.employee.id] ?? []).map((d) => ({ label: d.name, amount: d.amount }));
-    const slip = buildPayslip(line.employee, line.compensation, line.result, period, company, deductions);
+    const pr = pieceRatesByEmployee[line.employee.id] ?? [];
+    const slip = buildPayslip(line.employee, line.compensation, line.result, period, company, deductions, pr);
     const html = renderPayslipHTML(slip);
-    setPayslipModal({ html, employeeName: line.employee.full_name });
-  }, [period, otherDeductions]);
+    // Mock phone number if none provided in db
+    const phone = "6281234567890";
+    setPayslipModal({ html, employeeName: line.employee.full_name, employeePhone: phone });
+  }, [period, otherDeductions, pieceRatesByEmployee]);
 
   const saveRun = useCallback(async () => {
     if (!supabase || !lines?.length) return;
@@ -354,6 +463,7 @@ export default function PayrollPage() {
             bpjsWageBase: l.result.bpjsWageBase,
             overtimePay: l.result.overtimePay,
             thrAmount: l.result.thrAmount,
+            pieceRates: pieceRatesByEmployee[l.employee.id] ?? [],
           },
           bpjs_employee: l.result.bpjs.employee.total,
           bpjs_employer: l.result.bpjs.employer.total,
@@ -372,7 +482,7 @@ export default function PayrollPage() {
     } finally {
       setSaving(false);
     }
-  }, [lines, period, otherDeductions, netFor]);
+  }, [lines, period, otherDeductions, netFor, pieceRatesByEmployee]);
 
   return (
     <AppShell
@@ -386,6 +496,20 @@ export default function PayrollPage() {
         </Button>
       }
     >
+      {/* Company Info Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-4 text-white shadow-xl mb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">📺</span>
+          <div>
+            <h2 className="text-base font-bold tracking-tight text-white">{ALL_COMPANIES[0].name}</h2>
+            <p className="text-xs text-slate-400">{ALL_COMPANIES[0].address}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl bg-slate-800/80 px-4 py-2 text-xs font-medium text-slate-300 border border-slate-700/60">
+          <span className="font-semibold text-blue-400">{ALL_COMPANIES[0].signerTitle}:</span> {ALL_COMPANIES[0].signerName}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor="period" className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Periode</label>
@@ -462,8 +586,10 @@ export default function PayrollPage() {
                   <th className="px-5 py-3 font-medium">Nama</th>
                   <th className="px-5 py-3 font-medium">PTKP</th>
                   <th className="px-5 py-3 text-right font-medium">Bruto</th>
+                  <th className="px-5 py-3 text-center font-medium">Pajak/BPJS</th>
                   <th className="px-5 py-3 text-right font-medium">BPJS Kry</th>
                   <th className="px-5 py-3 text-right font-medium">PPh 21</th>
+                  <th className="px-5 py-3 text-right font-medium">Honor Siaran</th>
                   <th className="px-5 py-3 text-right font-medium">Lembur</th>
                   <th className="px-5 py-3 text-right font-medium">Potongan Lain</th>
                   <th className="px-5 py-3 text-right font-medium">Gaji Bersih</th>
@@ -479,8 +605,37 @@ export default function PayrollPage() {
                       <td className="px-5 py-3 font-medium text-slate-900 dark:text-white">{l.employee.full_name}</td>
                       <td className="px-5 py-3 tabular-nums text-slate-600 dark:text-slate-400">{l.employee.ptkp_status}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{rupiah(l.result.gross)}</td>
+                      <td className="px-5 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = isStatutoryEnabled(l.employee.id, l.employee.full_name);
+                            setStatutoryToggle(l.employee.id, !current);
+                            setTogglesVersion((v) => v + 1);
+                          }}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
+                            isStatutoryEnabled(l.employee.id, l.employee.full_name)
+                              ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300"
+                              : "bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-400"
+                          )}
+                          title="Klik untuk mengaktifkan / menonaktifkan hitungan BPJS dan PPh 21 untuk karyawan ini"
+                        >
+                          <span className={cn("h-1.5 w-1.5 rounded-full", isStatutoryEnabled(l.employee.id, l.employee.full_name) ? "bg-emerald-500" : "bg-slate-400")} />
+                          {isStatutoryEnabled(l.employee.id, l.employee.full_name) ? "ON (Dipotong)" : "OFF (Rp 0)"}
+                        </button>
+                      </td>
                       <td className="px-5 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{rupiah(l.result.bpjs.employee.total)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{rupiah(l.result.pph21)}</td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          type="button" onClick={() => setPieceRateModalFor(l.employee)}
+                          className={cn("tabular-nums underline decoration-dotted underline-offset-2",
+                            l.result.pieceRatePay > 0 ? "text-cyan-600 dark:text-cyan-400" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300")}
+                        >
+                          {l.result.pieceRatePay > 0 ? rupiah(l.result.pieceRatePay) : "+ Tambah"}
+                        </button>
+                      </td>
                       <td className="px-5 py-3 text-right">
                         <button
                           type="button" onClick={() => setOvertimeModalFor(l.employee)}
@@ -518,6 +673,7 @@ export default function PayrollPage() {
         <PayslipModal
           html={payslipModal.html}
           employeeName={payslipModal.employeeName}
+          employeePhone={payslipModal.employeePhone}
           onClose={() => setPayslipModal(null)}
         />
       )}
@@ -537,6 +693,15 @@ export default function PayrollPage() {
           initial={overtimeByEmployee[overtimeModalFor.id] ?? { hours: 0, dayType: "weekday" }}
           onSave={(value) => setOvertimeByEmployee((prev) => ({ ...prev, [overtimeModalFor.id]: value }))}
           onClose={() => setOvertimeModalFor(null)}
+        />
+      )}
+
+      {pieceRateModalFor && (
+        <PieceRateModal
+          employeeName={pieceRateModalFor.full_name}
+          initial={pieceRatesByEmployee[pieceRateModalFor.id] ?? []}
+          onSave={(value) => setPieceRatesByEmployee((prev) => ({ ...prev, [pieceRateModalFor.id]: value }))}
+          onClose={() => setPieceRateModalFor(null)}
         />
       )}
     </AppShell>

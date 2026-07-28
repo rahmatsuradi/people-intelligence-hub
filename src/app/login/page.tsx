@@ -23,6 +23,10 @@ export default function LoginPage() {
 
   // Already logged in? Skip straight to the dashboard.
   useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
+      router.replace("/");
+      return;
+    }
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) router.replace("/");
@@ -114,9 +118,23 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-5 text-center text-xs text-slate-400 dark:text-slate-500">
-            Access is invite-only. Contact your administrator for an account.
-          </p>
+          <div className="mt-6 border-t border-slate-200/60 pt-5 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("demo_bypass", "true");
+                }
+                router.replace("/");
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition-all duration-200 hover:from-emerald-500 hover:to-teal-500 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <span>🚀 Masuk Tanpa Login (Mode Demo VALORA TV)</span>
+            </button>
+            <p className="mt-2.5 text-center text-xs text-slate-500 dark:text-slate-400">
+              Klik tombol di atas untuk masuk langsung & mencoba seluruh modul HR VALORA TV tanpa sandi.
+            </p>
+          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">

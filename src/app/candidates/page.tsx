@@ -5,11 +5,12 @@ import {
   AppShell, Button, Card, Icon, SvgPath, ICON_PATHS, cn, Label, inputClass,
 } from "@/components/app-shell";
 import {
-  type CandidateRecord, type PipelineStage, type JobRequisition, type ImportRow,
+  type CandidateRecord, type PipelineStage, type JobRequisition, type ImportRow, type TalentProfile,
   PIPELINE_STAGES, STAGE_LABELS,
-  getCandidates, getJobReqs, saveCandidate, deleteCandidate,
-  moveCandidateStage, createCandidate, importCandidates, addActivity,
+  getCandidates, getJobReqs, getTalentPool, saveCandidate, deleteCandidate,
+  moveCandidateStage, createCandidate, importCandidates, addActivity, convertCandidateToTalent,
 } from "@/lib/store";
+import { getActiveCompanyId, ALL_COMPANIES } from "@/lib/payroll/company-profile";
 import { toast } from "@/components/toast";
 import {
   type EmailTemplateKey, TEMPLATE_ORDER, getTemplates, composeEmail, buildMailto,
@@ -20,6 +21,7 @@ import {
 const STAGE_COLORS: Record<PipelineStage, { bg: string; text: string; dot: string; border: string }> = {
   applied: { bg: "bg-slate-50 dark:bg-slate-800/50", text: "text-slate-700 dark:text-slate-300", dot: "bg-slate-400", border: "border-slate-200 dark:border-slate-700" },
   screened: { bg: "bg-blue-50 dark:bg-blue-900/20", text: "text-blue-700 dark:text-blue-300", dot: "bg-blue-500", border: "border-blue-200 dark:border-blue-800" },
+  work_sample: { bg: "bg-cyan-50 dark:bg-cyan-900/20", text: "text-cyan-700 dark:text-cyan-300", dot: "bg-cyan-500", border: "border-cyan-200 dark:border-cyan-800" },
   interviewed: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500", border: "border-amber-200 dark:border-amber-800" },
   offered: { bg: "bg-purple-50 dark:bg-purple-900/20", text: "text-purple-700 dark:text-purple-300", dot: "bg-purple-500", border: "border-purple-200 dark:border-purple-800" },
   hired: { bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500", border: "border-emerald-200 dark:border-emerald-800" },
@@ -58,6 +60,39 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+const SOURCE_BADGES: Record<string, { bg: string; text: string; icon: string }> = {
+  "Career Site (Web)": { bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", icon: "🌐" },
+  "Direct Web": { bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", icon: "🌐" },
+  "LinkedIn Jobs": { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", icon: "💼" },
+  "LinkedIn": { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", icon: "💼" },
+  "Jobstreet Portal": { bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300", icon: "🔍" },
+  "Jobstreet": { bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300", icon: "🔍" },
+  "Internal Referral": { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", icon: "🤝" },
+  "Referral": { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", icon: "🤝" },
+  "Executive Headhunting": { bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-300", icon: "🎯" },
+  "Headhunting": { bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-300", icon: "🎯" },
+  "WhatsApp Apply": { bg: "bg-green-50 dark:bg-green-900/30", text: "text-green-700 dark:text-green-300", icon: "💬" },
+  "WhatsApp": { bg: "bg-green-50 dark:bg-green-900/30", text: "text-green-700 dark:text-green-300", icon: "💬" },
+  "Telegram Apply": { bg: "bg-sky-50 dark:bg-sky-900/30", text: "text-sky-700 dark:text-sky-300", icon: "✈️" },
+  "Instagram": { bg: "bg-pink-50 dark:bg-pink-900/30", text: "text-pink-700 dark:text-pink-300", icon: "📸" },
+  "Glints": { bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-700 dark:text-indigo-300", icon: "🚀" },
+  "Kalibrr": { bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-700 dark:text-teal-300", icon: "🎯" },
+  "Campus Hiring": { bg: "bg-yellow-50 dark:bg-yellow-900/30", text: "text-yellow-700 dark:text-yellow-300", icon: "🎓" },
+};
+
+function getSourceBadge(src: string) {
+  if (!src) return { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-700 dark:text-slate-300", icon: "📌" };
+  if (SOURCE_BADGES[src]) return SOURCE_BADGES[src];
+  const lower = src.toLowerCase();
+  if (lower.includes("whatsapp") || lower.includes("wa")) return { bg: "bg-green-50 dark:bg-green-900/30", text: "text-green-700 dark:text-green-300", icon: "💬" };
+  if (lower.includes("linkedin")) return { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", icon: "💼" };
+  if (lower.includes("jobstreet") || lower.includes("glints")) return { bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300", icon: "🔍" };
+  if (lower.includes("referral") || lower.includes("rekomendasi")) return { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", icon: "🤝" };
+  if (lower.includes("headhunt") || lower.includes("exec")) return { bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-300", icon: "🎯" };
+  if (lower.includes("web") || lower.includes("site") || lower.includes("career")) return { bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", icon: "🌐" };
+  return { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-700 dark:text-slate-300", icon: "📌" };
+}
+
 /* ─── Candidate Card ─── */
 
 function CandidateCard({
@@ -83,27 +118,41 @@ function CandidateCard({
           <p className="truncate text-xs text-slate-500 dark:text-slate-400">{candidate.position}</p>
         </div>
         {score !== undefined && (
-          <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums",
-            score >= 80 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-              : score >= 60 ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
-          )}>
-            {score}
-          </span>
+          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+            <svg className="absolute inset-0 h-full w-full -rotate-90 transform" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="16" fill="none" className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="3" />
+              <circle cx="18" cy="18" r="16" fill="none" 
+                className={cn("transition-all duration-1000 ease-out", 
+                  score >= 80 ? "stroke-emerald-500" : score >= 60 ? "stroke-amber-500" : "stroke-red-500"
+                )} 
+                strokeWidth="3" 
+                strokeDasharray="100" 
+                strokeDashoffset={100 - score} 
+                strokeLinecap="round" 
+              />
+            </svg>
+            <span className={cn("text-[10px] font-bold", 
+              score >= 80 ? "text-emerald-700 dark:text-emerald-400" : score >= 60 ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400"
+            )}>{score}</span>
+          </div>
         )}
       </div>
-      <div className="mt-2.5 flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
-        <span className="truncate">{candidate.department || "—"}</span>
-        <span className="ml-auto shrink-0">{timeAgo(candidate.updatedAt)}</span>
+      <div className="mt-2.5 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+        <span className="truncate font-medium">{candidate.department || "—"}</span>
+        <span className="shrink-0">{timeAgo(candidate.updatedAt)}</span>
       </div>
-      {candidate.interviewResults.length > 0 && (
-        <div className="mt-2 flex items-center gap-1.5 text-[11px]">
-          <Icon className="h-3.5 w-3.5 text-amber-500"><SvgPath name="sparkles" /></Icon>
-          <span className="text-slate-600 dark:text-slate-400">
-            Interview: {candidate.interviewResults[0].avgRating.toFixed(1)}/5
-          </span>
-        </div>
-      )}
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800/80">
+        <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold tracking-tight shadow-2xs", getSourceBadge(candidate.source).bg, getSourceBadge(candidate.source).text)}>
+          <span>{getSourceBadge(candidate.source).icon}</span>
+          <span className="truncate max-w-[130px]">{candidate.source || "Direct Web"}</span>
+        </span>
+        {candidate.interviewResults.length > 0 && (
+          <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+            <Icon className="h-3 w-3 text-amber-500"><SvgPath name="sparkles" /></Icon>
+            <span>{candidate.interviewResults[0].avgRating.toFixed(1)}/5</span>
+          </div>
+        )}
+      </div>
     </button>
   );
 }
@@ -225,6 +274,15 @@ function EmailComposeModal({
           <Button variant="primary" onClick={openInMail} disabled={!hasEmail}>
             <Icon className="h-4 w-4"><SvgPath name="envelope" /></Icon> Buka di aplikasi email
           </Button>
+          {candidate.phone && (
+            <Button variant="secondary" onClick={() => {
+              const text = encodeURIComponent(`Halo ${candidate.name},\n${body}`);
+              window.open(`https://wa.me/${candidate.phone}?text=${text}`, '_blank');
+              addActivity({ action: "WA disiapkan:", target: `${candidate.name} — ${label}`, type: "create" });
+            }} className="text-emerald-600 dark:text-emerald-500 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20">
+              Kirim via WA
+            </Button>
+          )}
           <Button variant="secondary" onClick={copyText}>Salin teks</Button>
           <div className="flex-1" />
           <Button variant="ghost" onClick={onClose}>Tutup</Button>
@@ -252,8 +310,9 @@ function DetailPanel({
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(candidate);
   const [composeKey, setComposeKey] = useState<EmailTemplateKey | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "history">("overview");
 
-  useEffect(() => { setForm(candidate); setEditing(false); setComposeKey(null); }, [candidate]);
+  useEffect(() => { setForm(candidate); setEditing(false); setComposeKey(null); setActiveTab("overview"); }, [candidate]);
 
   const handleSave = () => {
     const updated = { ...form, updatedAt: new Date().toISOString() };
@@ -272,7 +331,13 @@ function DetailPanel({
           {initials(candidate.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-slate-900 dark:text-white">{candidate.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-base font-semibold text-slate-900 dark:text-white">{candidate.name}</p>
+            <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold tracking-tight shadow-2xs border", getSourceBadge(candidate.source).bg, getSourceBadge(candidate.source).text, "border-current/10")}>
+              <span>{getSourceBadge(candidate.source).icon}</span>
+              <span className="truncate max-w-[120px]">{candidate.source || "Direct Web"}</span>
+            </span>
+          </div>
           <p className="truncate text-sm text-slate-500 dark:text-slate-400">{candidate.position} &middot; {candidate.department}</p>
         </div>
         <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
@@ -280,8 +345,31 @@ function DetailPanel({
         </button>
       </div>
 
+      {/* Detail Modal Tabs */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-5 text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => setActiveTab("overview")}
+          className={cn("border-b-2 py-2.5 px-3 transition-colors flex items-center gap-1.5", activeTab === "overview" ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 font-bold" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400")}
+        >
+          <Icon className="h-3.5 w-3.5"><SvgPath name="users" /></Icon>
+          <span>Overview & Stage</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={cn("border-b-2 py-2.5 px-3 transition-colors flex items-center gap-1.5", activeTab === "history" ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 font-bold" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400")}
+        >
+          <Icon className="h-3.5 w-3.5"><SvgPath name="clock" /></Icon>
+          <span>Activity Log & Origin</span>
+          <span className="rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 text-[10px]">Source</span>
+        </button>
+      </div>
+
       <div className="flex-1 space-y-5 overflow-y-auto p-5">
-        {/* Pipeline stage controls */}
+        {activeTab === "overview" ? (
+          <>
+            {/* Pipeline stage controls */}
         <div>
           <Label>Pipeline Stage</Label>
           <div className="mt-1 flex flex-wrap gap-1.5">
@@ -355,11 +443,13 @@ function DetailPanel({
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">{candidate.cvAnalysis.summary}</p>
             <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold",
-              candidate.cvAnalysis.recommendation === "Strongly Recommended" || candidate.cvAnalysis.recommendation === "Recommended"
+              ["Strong Hire", "Hire", "Strongly Recommended", "Recommended"].includes(candidate.cvAnalysis.recommendation)
                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                : candidate.cvAnalysis.recommendation === "Consider with Reservations"
+                : ["Review", "Consider with Reservations"].includes(candidate.cvAnalysis.recommendation)
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                  : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                  : candidate.cvAnalysis.recommendation === "Reject"
+                    ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                    : "bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300"
             )}>
               {candidate.cvAnalysis.recommendation}
             </span>
@@ -444,6 +534,68 @@ function DetailPanel({
             )}
           </Card>
         )}
+          </>
+        ) : (
+          <div className="space-y-5 animate-in fade-in-50 duration-200">
+            {/* Sourcing Channel Attribution Box */}
+            <Card className="bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-slate-800 dark:to-blue-950/20 border-blue-200/60 dark:border-blue-800/40">
+              <div className="flex items-center justify-between mb-3 border-b border-slate-200/60 pb-2 dark:border-slate-700">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Icon className="h-4 w-4 text-blue-600 dark:text-blue-400"><SvgPath name="sparkles" /></Icon>
+                  <span>Sourcing Channel Attribution</span>
+                </span>
+                {candidate.source ? (
+                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full">Tercatat via UTM</span>
+                ) : (
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">Sumber tidak tercatat</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 py-1">
+                <span className={cn("inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold shadow-sm ring-1 ring-inset", getSourceBadge(candidate.source).bg, getSourceBadge(candidate.source).text, "ring-blue-200/50 dark:ring-blue-700/30")}>
+                  <span className="text-lg">{getSourceBadge(candidate.source).icon}</span>
+                  <span>{candidate.source || "Manual Entry"}</span>
+                </span>
+                <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5">
+                  <p>Date Entered: <strong>{new Date(candidate.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</strong></p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Audit Trail / Timeline */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Icon className="h-3.5 w-3.5"><SvgPath name="clock" /></Icon>
+                <span>Recruitment Audit Trail & Activity Log</span>
+              </h4>
+              <div className="relative border-l-2 border-blue-200 dark:border-blue-800 ml-2.5 space-y-5 pl-4 pt-1 pb-2">
+                <div className="relative">
+                  <span className="absolute -left-[21px] top-0.5 h-3 w-3 rounded-full bg-blue-500 ring-4 ring-white dark:ring-slate-900" />
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">{candidate.source ? `Melamar melalui Jalur ${candidate.source}` : "Masuk ke pipeline rekrutmen"}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{new Date(candidate.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} — Kandidat tercatat untuk posisi {candidate.position} di database ATS.</p>
+                </div>
+                {candidate.cvAnalysis && (
+                  <div className="relative">
+                    <span className="absolute -left-[21px] top-0.5 h-3 w-3 rounded-full bg-purple-500 ring-4 ring-white dark:ring-slate-900" />
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">Disaring otomatis oleh AI CV Analyzer</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Match Score: <strong className="text-purple-600 dark:text-purple-400 font-semibold">{candidate.cvAnalysis.matchScore}%</strong> • Rekomendasi AI: <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">{candidate.cvAnalysis.recommendation}</strong></p>
+                  </div>
+                )}
+                {candidate.interviewResults.length > 0 && (
+                  <div className="relative">
+                    <span className="absolute -left-[21px] top-0.5 h-3 w-3 rounded-full bg-amber-500 ring-4 ring-white dark:ring-slate-900" />
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">Wawancara Terstruktur (Interview Workspace)</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Skor Wawancara: <strong className="text-amber-600 dark:text-amber-400 font-semibold">{candidate.interviewResults[0].avgRating.toFixed(1)} / 5.0</strong> ({candidate.interviewResults[0].recommendation})</p>
+                  </div>
+                )}
+                <div className="relative">
+                  <span className="absolute -left-[21px] top-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-4 ring-white dark:ring-slate-900" />
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">Status Tahapan Saat Ini: {STAGE_LABELS[candidate.stage]}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Terakhir diperbarui: {timeAgo(candidate.updatedAt)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -464,6 +616,16 @@ function DetailPanel({
         }}>
           <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
         </Button>
+        {candidate.stage !== "hired" && (
+          <Button variant="primary" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => {
+            if (confirm(`Save ${candidate.name} to Talent Pool?`)) {
+              convertCandidateToTalent(candidate.id);
+              toast(`${candidate.name} saved to Talent Pool`, "success");
+            }
+          }}>
+            <Icon className="h-4 w-4"><SvgPath name="briefcase" /></Icon> Save to Pool
+          </Button>
+        )}
       </div>
 
       {composeKey && (
@@ -722,15 +884,273 @@ function ImportCsvModal({ onClose, onImported }: { onClose: () => void; onImport
   );
 }
 
+/* ─── Career Portal & Shareable UTM Link Builder Modal ─── */
+
+function CareerPortalModal({
+  reqs,
+  candidates,
+  onClose,
+  onSimulate,
+}: {
+  reqs: JobRequisition[];
+  candidates: CandidateRecord[];
+  onClose: () => void;
+  onSimulate?: (req: JobRequisition, src: string) => void;
+}) {
+  const [selectedSource, setSelectedSource] = useState("WhatsApp Apply");
+  const [copiedReqId, setCopiedReqId] = useState<string | null>(null);
+
+  const activeReqs = reqs.filter((r) => r.status === "active");
+
+  const channels = [
+    { label: "💬 WhatsApp Apply", value: "WhatsApp Apply" },
+    { label: "💼 LinkedIn Jobs", value: "LinkedIn Jobs" },
+    { label: "🤝 Internal Referral", value: "Internal Referral" },
+    { label: "🌐 Direct Web / QR", value: "Direct Web" },
+    { label: "🎯 Headhunting", value: "Executive Headhunting" },
+    { label: "🔍 Jobstreet Portal", value: "Jobstreet Portal" },
+  ];
+
+  const handleCopy = (reqId: string) => {
+    const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:3000";
+    const url = `${origin}/apply/${reqId}?src=${encodeURIComponent(selectedSource)}`;
+    navigator.clipboard.writeText(url);
+    setCopiedReqId(reqId);
+    toast(`Tautan tracking [${selectedSource}] berhasil disalin!`, "success");
+    setTimeout(() => setCopiedReqId(null), 3000);
+  };
+
+  const handlePreview = (reqId: string) => {
+    const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:3000";
+    window.open(`${origin}/apply/${reqId}?src=${encodeURIComponent(selectedSource)}`, "_blank");
+  };
+
+  const handleOpenAll = () => {
+    const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:3000";
+    window.open(`${origin}/apply`, "_blank");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-5 text-white dark:border-slate-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider text-white">HRBP PORTAL</span>
+              <span className="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-200">UTM Origin Tracking</span>
+            </div>
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-white">📢 Portal Karir & Shareable Link Tracking</h2>
+            <p className="text-xs text-blue-100">
+              Lihat posisi aktif ("mana yang lagi buka"), pilih saluran sebar link (WhatsApp, LinkedIn, dll), dan pantau lamaran masuk secara otomatis.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-white/10 p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+          >
+            <Icon className="h-5 w-5"><SvgPath name="close" /></Icon>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Top banner: open public portal */}
+          <div className="mb-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50 p-4 sm:flex-row sm:items-center dark:border-blue-900/40 dark:from-blue-950/30 dark:to-indigo-950/20">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-md shadow-blue-500/20">
+                🌐
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Portal Karir Publik (/apply)</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Halaman publik tempat pelamar melihat seluruh lowongan aktif. Anda dapat membagikan link portal ini atau link spesifik per lowongan di bawah.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenAll}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              <span>Lihat Portal Publik</span>
+              <span aria-hidden>↗</span>
+            </button>
+          </div>
+
+          {/* Channel Selector */}
+          <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              1. Pilih Kanal Penyebaran Link (UTM Origin Target):
+            </label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
+              {channels.map((ch) => {
+                const active = selectedSource === ch.value;
+                return (
+                  <button
+                    key={ch.value}
+                    type="button"
+                    onClick={() => setSelectedSource(ch.value)}
+                    className={cn(
+                      "flex flex-col items-start rounded-lg border p-2.5 text-left transition-all",
+                      active
+                        ? "border-blue-600 bg-white ring-2 ring-blue-600/20 shadow-sm dark:border-blue-500 dark:bg-slate-800"
+                        : "border-slate-200 bg-white/60 hover:bg-white dark:border-slate-700 dark:bg-slate-800/40 dark:hover:bg-slate-800"
+                    )}
+                  >
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">{ch.label}</span>
+                    <span className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500 line-clamp-1">{ch.value}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* List of active requisitions */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                2. Daftar Lowongan Aktif ("Mana Yang Lagi Buka") & Link Generator
+              </h3>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                {activeReqs.length} Posisi Aktif
+              </span>
+            </div>
+
+            {activeReqs.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">
+                Tidak ada lowongan berstatus aktif saat ini.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {activeReqs.map((req) => {
+                  const reqCandidates = candidates.filter((c) => c.jobReqId === req.id || (c.position && c.position.toLowerCase() === req.title.toLowerCase()));
+                  const isCopied = copiedReqId === req.id;
+                  const isSpecial = req.id.includes("SPE");
+
+                  return (
+                    <div
+                      key={req.id}
+                      className={cn(
+                        "flex flex-col justify-between rounded-xl border p-4 transition-all hover:shadow-md",
+                        isSpecial
+                          ? "border-amber-300 bg-gradient-to-br from-amber-50/60 via-white to-orange-50/40 dark:border-amber-700/50 dark:from-amber-950/20 dark:via-slate-900 dark:to-orange-950/10"
+                          : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+                      )}
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              {isSpecial && (
+                                <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                                  Program Khusus
+                                </span>
+                              )}
+                              <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                {req.department}
+                              </span>
+                            </div>
+                            <h4 className="mt-1.5 text-sm font-bold text-slate-900 dark:text-white">{req.title}</h4>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                            {reqCandidates.length} Pelamar
+                          </span>
+                        </div>
+
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                          {req.description}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                          <span>📍 {req.location}</span>
+                          <span>•</span>
+                          <span>⏳ Deadline: {req.targetDate ? new Date(req.targetDate).toLocaleDateString("id-ID") : "—"}</span>
+                          <span>•</span>
+                          <span>👤 {req.hiringManager}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+                        <div className="mb-2 flex items-center justify-between text-[11px]">
+                          <span className="font-medium text-slate-500">Link untuk: <strong className="text-blue-600 dark:text-blue-400">{selectedSource}</strong></span>
+                          <span className="text-slate-400 font-mono text-[10px]">?src={selectedSource}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(req.id)}
+                            className={cn(
+                              "flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all shadow-sm",
+                              isCopied
+                                ? "bg-emerald-600 text-white"
+                                : "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                            )}
+                          >
+                            <span>{isCopied ? "✔ Tersalin!" : "📋 Salin Link Tracking"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePreview(req.id)}
+                            title="Buka dan tes form lamaran di tab baru"
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                          >
+                            <span>🚀 Tes Form</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onSimulate) {
+                                onSimulate(req, selectedSource);
+                                onClose();
+                              } else {
+                                toast(`⚡ Simulasi dari ${selectedSource} diproses...`, "info");
+                              }
+                            }}
+                            title="Simulasi pelamar baru masuk otomatis dari kanal ini"
+                            className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:from-emerald-700 hover:to-teal-700"
+                          >
+                            <span>⚡ Simulasi Masuk</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-800/40">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            💡 <strong className="text-slate-700 dark:text-slate-300">Tips HRBP:</strong> Setiap kali Anda membagikan link ke grup WhatsApp atau LinkedIn, gunakan parameter kanal di atas agar laporan ROI rekrutmen di analitik akurat.
+          </p>
+          <Button onClick={onClose} variant="secondary">Tutup</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Page ─── */
 
 export default function CandidatesPage() {
   const [allCandidates, setAllCandidates] = useState<CandidateRecord[]>([]);
   const [reqs, setReqs] = useState<JobRequisition[]>([]);
+  const [talentPool, setTalentPool] = useState<TalentProfile[]>([]);
+  const [activeMainTab, setActiveMainTab] = useState<"pipeline" | "portal" | "archive">("pipeline");
+  const [portalSource, setPortalSource] = useState("WhatsApp Apply");
   const [selected, setSelected] = useState<CandidateRecord | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showPortal, setShowPortal] = useState(false);
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("");
+  const [filterSource, setFilterSource] = useState("");
   const [showRejected, setShowRejected] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [showImport, setShowImport] = useState(false);
@@ -738,9 +1158,15 @@ export default function CandidatesPage() {
   const reload = useCallback(() => {
     setAllCandidates(getCandidates());
     setReqs(getJobReqs());
+    setTalentPool(getTalentPool());
   }, []);
 
-  useEffect(reload, [reload]);
+  useEffect(() => {
+    reload();
+    const handleComp = () => reload();
+    window.addEventListener("pi-company-change", handleComp);
+    return () => window.removeEventListener("pi-company-change", handleComp);
+  }, [reload]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -753,6 +1179,11 @@ export default function CandidatesPage() {
     return Array.from(s).sort();
   }, [allCandidates]);
 
+  const sources = useMemo(() => {
+    const s = new Set(allCandidates.map((c) => c.source).filter(Boolean));
+    return Array.from(s).sort();
+  }, [allCandidates]);
+
   const filtered = useMemo(() => {
     let list = allCandidates;
     if (search) {
@@ -760,12 +1191,13 @@ export default function CandidatesPage() {
       list = list.filter((c) => c.name.toLowerCase().includes(q) || c.position.toLowerCase().includes(q) || c.email.toLowerCase().includes(q));
     }
     if (filterDept) list = list.filter((c) => c.department === filterDept);
+    if (filterSource) list = list.filter((c) => c.source === filterSource);
     return list;
-  }, [allCandidates, search, filterDept]);
+  }, [allCandidates, search, filterDept, filterSource]);
 
   const byStage = useMemo(() => {
     const map: Record<PipelineStage, CandidateRecord[]> = {
-      applied: [], screened: [], interviewed: [], offered: [], hired: [], rejected: [],
+      applied: [], screened: [], work_sample: [], interviewed: [], offered: [], hired: [], rejected: [],
     };
     for (const c of filtered) map[c.stage].push(c);
     return map;
@@ -807,6 +1239,88 @@ export default function CandidatesPage() {
     toast(`Exported ${allCandidates.length} candidates to CSV`);
   }, [allCandidates]);
 
+  const simulateNewApplication = useCallback((req: JobRequisition, src?: string) => {
+    const targetSource = src || portalSource || "WhatsApp Apply";
+    const names = [
+      "Rizky Ramadhan", "Annisa Putri", "Farhan Maulana", "Fauzan Akbar",
+      "Nadia Saphira", "Bagas Pratama", "Jessica Tan", "Bayu Saputra",
+      "Citra Kirana", "Dian Sastrowardoyo", "Muhammad Iqbal", "Sarah Wijaya"
+    ];
+    const name = names[Math.floor(Math.random() * names.length)];
+    const id = `C-SIM-${Date.now().toString().slice(-4)}`;
+    const score = Math.floor(Math.random() * 18) + 78;
+    const newCand: CandidateRecord = {
+      id, name,
+      email: `${name.toLowerCase().replace(/\s+/g, ".")}@example.id`,
+      phone: `081${Math.floor(Math.random() * 900000000) + 100000000}`,
+      stage: "applied",
+      jobReqId: req.id,
+      department: req.department,
+      position: req.title,
+      source: targetSource,
+      notes: `Simulasi lamaran masuk dari jalur ${targetSource}`,
+      cvAnalysis: {
+        reportId: `RPT-SIM-${id}`, overallScore: score, matchScore: score - 2, confidence: 92,
+        recommendation: score >= 85 ? "Strong Hire" : "Hire",
+        summary: `Pelamar dengan latar belakang yang relevan untuk posisi ${req.title}. Melamar via ${targetSource}.`,
+        frameworkLabel: "Simulasi Demo (bukan analisis AI)", analyzedAt: new Date().toISOString(),
+        criteriaBreakdown: [
+          { name: "Technical Fit", score: score, weight: 60, evidence: "Pengalaman 4+ tahun sesuai spesifikasi." },
+          { name: "Culture & Leadership", score: score - 4, weight: 40, evidence: "Skor tes kepribadian positif." }
+        ],
+        strengths: ["Kualifikasi cocok", "Melamar dari jalur prioritas"], gaps: ["Perlu wawancara teknis lanjutan"],
+        riskAssessment: { level: "Low", factors: ["Tidak ada red flag"] }
+      },
+      interviewResults: [],
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    };
+    saveCandidate(newCand);
+    addActivity({ action: `Lamaran Baru (${targetSource})`, target: `${name} — ${req.title}`, type: "candidate" });
+    reload();
+    toast(`⚡ Simulasi berhasil: ${name} melamar posisi ${req.title} via ${targetSource}!`, "success");
+    setActiveMainTab("pipeline");
+  }, [portalSource, reload]);
+
+  const handleReactivateCandidate = useCallback((cand: CandidateRecord) => {
+    moveCandidateStage(cand.id, "screened");
+    addActivity({ action: "Re-activated candidate from Archive", target: `${cand.name} (${cand.position})`, type: "candidate" });
+    reload();
+    toast(`🔄 ${cand.name} berhasil diaktifkan kembali ke tahap Screened!`, "success");
+    setActiveMainTab("pipeline");
+  }, [reload]);
+
+  const handleInviteTalent = useCallback((talent: TalentProfile) => {
+    const activeReqs = reqs.filter(r => r.status === "active");
+    const targetReq = activeReqs[0] || reqs[0];
+    if (!targetReq) {
+      toast("Tidak ada lowongan aktif untuk mengundang talent ini.", "error");
+      return;
+    }
+    const id = `C-TAL-${Date.now().toString().slice(-4)}`;
+    const score = Math.min(98, Math.floor(talent.rating * 18) + 5);
+    const newCand: CandidateRecord = {
+      id, name: talent.name, email: `${talent.name.toLowerCase().replace(/[^a-z0-9]/g, "")}@talent.id`,
+      phone: talent.phone, stage: "screened", jobReqId: targetReq.id, department: targetReq.department,
+      position: targetReq.title, source: `Talent Bank (${talent.source})`,
+      notes: `Diundang dari Talent Pool: ${talent.skills.join(", ")}`,
+      cvAnalysis: {
+        reportId: `RPT-TAL-${id}`, overallScore: score, matchScore: score - 2, confidence: 95,
+        recommendation: "Strong Hire", summary: `Kandidat terverifikasi dari Talent Bank (${talent.category}). Keahlian: ${talent.skills.join(", ")}.`,
+        frameworkLabel: "Talent Pool Verified", analyzedAt: new Date().toISOString(),
+        criteriaBreakdown: [{ name: "Skill Match", score: score, weight: 100, evidence: talent.skills.join(", ") }],
+        strengths: talent.skills, gaps: ["Belum interview teknis terbaru"],
+        riskAssessment: { level: "Low", factors: ["Talent terverifikasi internal"] }
+      },
+      interviewResults: [],
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    };
+    saveCandidate(newCand);
+    addActivity({ action: "Invited from Talent Bank", target: `${talent.name} -> ${targetReq.title}`, type: "candidate" });
+    reload();
+    toast(`➕ ${talent.name} berhasil diundang dan masuk ke Pipeline Aktif!`, "success");
+    setActiveMainTab("pipeline");
+  }, [reqs, reload]);
+
   const totalActive = allCandidates.filter((c) => c.stage !== "hired" && c.stage !== "rejected").length;
 
   const stagesToShow: PipelineStage[] = showRejected ? [...PIPELINE_STAGES, "rejected"] : PIPELINE_STAGES;
@@ -815,6 +1329,10 @@ export default function CandidatesPage() {
     <AppShell activeNavId="candidates" title="Candidates" subtitle={`${allCandidates.length} total · ${totalActive} active in pipeline`}
       headerActions={
         <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => setActiveMainTab("portal")} className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+            <span aria-hidden>📢</span>
+            <span className="hidden sm:inline font-semibold">Portal Karir & Link Tracking</span>
+          </Button>
           <Button variant="secondary" onClick={() => setShowImport(true)}>
             <Icon className="h-4 w-4"><SvgPath name="upload" /></Icon>
             <span className="hidden sm:inline">Import</span>
@@ -830,100 +1348,420 @@ export default function CandidatesPage() {
         </div>
       }>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-          <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"><SvgPath name="search" /></Icon>
-          <input className={cn(inputClass, "pl-9")} placeholder="Search candidates..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      {/* CRM Stats Header */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex items-center gap-4">
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+            <Icon className="h-6 w-6"><SvgPath name="users" /></Icon>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">Active Candidates</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{totalActive}</p>
+          </div>
         </div>
-        <select className={cn(inputClass, "w-auto min-w-[150px]")} value={filterDept} onChange={(e) => setFilterDept(e.target.value)}>
-          <option value="">All Departments</option>
-          {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
-          <input type="checkbox" checked={showRejected} onChange={(e) => setShowRejected(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600" />
-          Rejected
-        </label>
-        <div className="ml-auto flex rounded-lg border border-slate-200 dark:border-slate-700">
-          {(["kanban", "table"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setViewMode(m)}
-              className={cn("px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg",
-                viewMode === m ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800")}
-            >
-              {m === "kanban" ? "Kanban" : "Table"}
-            </button>
-          ))}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex items-center gap-4">
+          <div className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg">
+            <Icon className="h-6 w-6"><SvgPath name="calendar" /></Icon>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">In Interview Stage</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{allCandidates.filter(c => c.stage === 'interviewed').length}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
+            <Icon className="h-6 w-6"><SvgPath name="check" /></Icon>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">Offered / Hired</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{allCandidates.filter(c => c.stage === 'offered' || c.stage === 'hired').length}</p>
+          </div>
         </div>
       </div>
 
-      {/* Kanban View */}
-      {viewMode === "kanban" ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {stagesToShow.map((stage) => (
-            <KanbanColumn
-              key={stage}
-              stage={stage}
-              candidates={byStage[stage]}
-              onCardClick={setSelected}
-              onDrop={handleMove}
-            />
-          ))}
-        </div>
-      ) : (
-        /* Table View */
-        <Card padding={false} className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
-                <tr>
-                  {["Name", "Position", "Department", "Stage", "Score", "Updated"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filtered.filter((c) => showRejected || c.stage !== "rejected").map((c) => {
-                  const sc = STAGE_COLORS[c.stage];
-                  return (
-                    <tr key={c.id} className="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => setSelected(c)}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-semibold text-white", avatarColor(c.name))}>
-                            {initials(c.name)}
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-900 dark:text-white">{c.name}</p>
-                            <p className="text-xs text-slate-500">{c.email || "—"}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{c.position}</td>
-                      <td className="px-4 py-3 text-slate-500">{c.department || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold", sc.bg, sc.text)}>
-                          <span className={cn("h-1.5 w-1.5 rounded-full", sc.dot)} />
-                          {STAGE_LABELS[c.stage]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-300">{c.cvAnalysis?.overallScore ?? "—"}</td>
-                      <td className="px-4 py-3 text-slate-500">{timeAgo(c.updatedAt)}</td>
-                    </tr>
-                  );
-                })}
-                {filtered.filter((c) => showRejected || c.stage !== "rejected").length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
-                      No candidates found. <button type="button" className="text-blue-600 hover:underline" onClick={() => setShowAdd(true)}>Add one</button>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+      {/* 3-Tab Navigation Bar */}
+      <div className="flex flex-wrap items-center border-b border-slate-200 dark:border-slate-800 mb-6 bg-slate-50/70 dark:bg-slate-800/40 rounded-t-xl px-4 text-sm font-semibold">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("pipeline")}
+          className={cn("border-b-2 py-3 px-4 transition-all flex items-center gap-2", activeMainTab === "pipeline" ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 font-bold bg-white/50 dark:bg-slate-800/60" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400")}
+        >
+          <span>📋 Pipeline Rekrutmen Aktif</span>
+          <span className="rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-300">{totalActive}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("portal")}
+          className={cn("border-b-2 py-3 px-4 transition-all flex items-center gap-2", activeMainTab === "portal" ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 font-bold bg-white/50 dark:bg-slate-800/60" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400")}
+        >
+          <span>📢 Portal Karir & UTM Links</span>
+          <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">Live</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("archive")}
+          className={cn("border-b-2 py-3 px-4 transition-all flex items-center gap-2", activeMainTab === "archive" ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 font-bold bg-white/50 dark:bg-slate-800/60" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400")}
+        >
+          <span>🗄️ Arsip ATS & Bank Talent</span>
+          <span className="rounded-full bg-slate-200 dark:bg-slate-700 px-2 py-0.5 text-xs text-slate-700 dark:text-slate-300">
+            {allCandidates.filter(c => c.stage === "rejected" || c.stage === "hired").length + talentPool.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Tab 1: Pipeline Rekrutmen Aktif */}
+      {activeMainTab === "pipeline" && (
+        <div className="space-y-6">
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
+              <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"><SvgPath name="search" /></Icon>
+              <input className={cn(inputClass, "pl-9")} placeholder="Search candidates..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <select className={cn(inputClass, "w-auto min-w-[150px]")} value={filterDept} onChange={(e) => setFilterDept(e.target.value)}>
+              <option value="">All Departments</option>
+              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select className={cn(inputClass, "w-auto min-w-[140px]")} value={filterSource} onChange={(e) => setFilterSource(e.target.value)}>
+              <option value="">All Sources</option>
+              {sources.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
+              <input type="checkbox" checked={showRejected} onChange={(e) => setShowRejected(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600" />
+              Rejected
+            </label>
+            <div className="ml-auto flex rounded-lg border border-slate-200 dark:border-slate-700">
+              {(["kanban", "table"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setViewMode(m)}
+                  className={cn("px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg",
+                    viewMode === m ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800")}
+                >
+                  {m === "kanban" ? "Kanban" : "Table"}
+                </button>
+              ))}
+            </div>
           </div>
-        </Card>
+
+          {/* Kanban View */}
+          {viewMode === "kanban" ? (
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {stagesToShow.map((stage) => (
+                <KanbanColumn
+                  key={stage}
+                  stage={stage}
+                  candidates={byStage[stage]}
+                  onCardClick={setSelected}
+                  onDrop={handleMove}
+                />
+              ))}
+            </div>
+          ) : (
+            /* Table View */
+            <Card padding={false} className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/50">
+                    <tr>
+                      {["Name", "Position", "Department", "Source", "Stage", "Score", "Updated"].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filtered.filter((c) => showRejected || c.stage !== "rejected").map((c) => {
+                      const sc = STAGE_COLORS[c.stage];
+                      return (
+                        <tr key={c.id} className="cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => setSelected(c)}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className={cn("flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-semibold text-white", avatarColor(c.name))}>
+                                {initials(c.name)}
+                              </div>
+                              <div>
+                                <p className="font-medium text-slate-900 dark:text-white">{c.name}</p>
+                                <p className="text-xs text-slate-500">{c.email || "—"}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{c.position}</td>
+                          <td className="px-4 py-3 text-slate-500">{c.department || "—"}</td>
+                          <td className="px-4 py-3">
+                            <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold shadow-2xs", getSourceBadge(c.source).bg, getSourceBadge(c.source).text)}>
+                              <span>{getSourceBadge(c.source).icon}</span>
+                              <span>{c.source || "Direct Web"}</span>
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold", sc.bg, sc.text)}>
+                              <span className={cn("h-1.5 w-1.5 rounded-full", sc.dot)} />
+                              {STAGE_LABELS[c.stage]}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-300">{c.cvAnalysis?.overallScore ?? "—"}</td>
+                          <td className="px-4 py-3 text-slate-500">{timeAgo(c.updatedAt)}</td>
+                        </tr>
+                      );
+                    })}
+                    {filtered.filter((c) => showRejected || c.stage !== "rejected").length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-sm text-slate-400">
+                          No candidates found. <button type="button" className="text-blue-600 hover:underline" onClick={() => setShowAdd(true)}>Add one</button>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Tab 2: Portal Karir & UTM Shareable Links */}
+      {activeMainTab === "portal" && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white shadow-lg">
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg bg-white/20 px-2.5 py-0.5 text-xs font-bold tracking-wider text-white">PORTAL REKRUTMEN</span>
+              <span className="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-200">UTM Origin Tracking Live</span>
+            </div>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">📢 Generator Link Lamaran & Pelacak Saluran (Sourcing Tracker)</h2>
+            <p className="mt-1 max-w-3xl text-sm text-blue-100">
+              Setiap link yang Anda sebarkan (misal melalui WhatsApp, LinkedIn, atau Referral Kampus) dibekali parameter UTM khusus. Ketika kandidat melamar melalui link tersebut, sistem secara otomatis melabeli sumber lamaran di kartu ATS.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+              1. Pilih Saluran Target Penyebaran Link (UTM Channel):
+            </h3>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+              {[
+                { label: "💬 WhatsApp Apply", value: "WhatsApp Apply", desc: "Share grup / chat WA" },
+                { label: "💼 LinkedIn Jobs", value: "LinkedIn Jobs", desc: "Posting di LinkedIn" },
+                { label: "🔍 Jobstreet Portal", value: "Jobstreet Portal", desc: "Daftar di Jobstreet" },
+                { label: "🤝 Internal Referral", value: "Internal Referral", desc: "Rekomendasi Karyawan" },
+                { label: "🎯 Headhunting", value: "Executive Headhunting", desc: "Pencarian Eksekutif" },
+                { label: "🌐 Direct Web / QR", value: "Direct Web", desc: "Website Resmi / Flyer" },
+              ].map((ch) => {
+                const active = portalSource === ch.value;
+                return (
+                  <button
+                    key={ch.value}
+                    type="button"
+                    onClick={() => setPortalSource(ch.value)}
+                    className={cn(
+                      "flex flex-col items-start rounded-xl border p-3 text-left transition-all",
+                      active
+                        ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/30 shadow-sm dark:border-blue-500 dark:bg-blue-950/30"
+                        : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 dark:hover:bg-slate-800"
+                    )}
+                  >
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">{ch.label}</span>
+                    <span className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{ch.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">
+              2. Daftar Lowongan Aktif — Salin Link & Simulasi Lamaran ({portalSource}):
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {reqs.filter(r => r.status === "active").map((req) => {
+                const origin = typeof window !== "undefined" ? window.location.origin : "https://app.valora.tv";
+                const utmUrl = `${origin}/apply?req=${req.id}&utm_source=${encodeURIComponent(portalSource)}`;
+                const waText = encodeURIComponent(`Dibutuhkan segera: *${req.title}* di ${req.location}!\nDaftar langsung di sini: ${utmUrl}`);
+                return (
+                  <div key={req.id} className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-4 transition-all hover:border-blue-300 dark:border-slate-800 dark:bg-slate-800/50">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                          {req.department}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          Target: {req.headcount} pax
+                        </span>
+                      </div>
+                      <h4 className="mt-2 text-base font-bold text-slate-900 dark:text-white">{req.title}</h4>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{req.description}</p>
+                      
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2 font-mono text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 truncate">
+                        {utmUrl}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2 pt-3 border-t border-slate-200/80 dark:border-slate-700/80">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(utmUrl);
+                          toast(`📋 Link dengan tag [${portalSource}] berhasil disalin!`, "success");
+                        }}
+                      >
+                        <span aria-hidden>📋</span> Salin Link
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          window.open(`https://wa.me/?text=${waText}`, "_blank");
+                        }}
+                        className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-800 dark:hover:bg-emerald-950/30"
+                      >
+                        📲 Share WA
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => simulateNewApplication(req)}
+                        className="ml-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold"
+                      >
+                        ⚡ Simulasi Masuk
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Arsip ATS & Talent Bank */}
+      {activeMainTab === "archive" && (
+        <div className="space-y-8">
+          {/* Section 1: Arsip Lamaran Masa Lalu */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>🗄️ Arsip Lamaran Masa Lalu (Rejected / Hired)</span>
+                  <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-xs text-slate-600 dark:text-slate-400 font-semibold">
+                    {allCandidates.filter(c => c.stage === "rejected" || c.stage === "hired").length} arsip
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Kandidat yang sebelumnya ditolak (rejected) atau sudah direkrut (hired). Anda dapat mengaktifkan kembali (re-activate) ke tahap awal pipeline.
+                </p>
+              </div>
+            </div>
+
+            {allCandidates.filter(c => c.stage === "rejected" || c.stage === "hired").length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl dark:border-slate-800">
+                <p className="text-sm text-slate-500">Belum ada kandidat di dalam arsip penolakan / penerimaan.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {allCandidates.filter(c => c.stage === "rejected" || c.stage === "hired").map((cand) => (
+                  <div key={cand.id} className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase", cand.stage === "hired" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300")}>
+                          {cand.stage === "hired" ? "✅ Hired" : "❌ Rejected"}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500">Skor CV: {cand.cvAnalysis?.overallScore || "—"}</span>
+                      </div>
+                      <h4 className="mt-2 text-base font-bold text-slate-900 dark:text-white">{cand.name}</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{cand.position} &middot; {cand.department}</p>
+                      
+                      <div className="mt-2.5 flex items-center gap-1.5">
+                        <span className={cn("inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold", getSourceBadge(cand.source).bg, getSourceBadge(cand.source).text)}>
+                          <span>{getSourceBadge(cand.source).icon}</span>
+                          <span>{cand.source || "Direct Web"}</span>
+                        </span>
+                      </div>
+                      {cand.notes && <p className="mt-2 text-xs italic text-slate-500 line-clamp-2">"{cand.notes}"</p>}
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleReactivateCandidate(cand)}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                      >
+                        🔄 Re-activate ke Screened
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Bank Talent */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>💡 Bank Talent Internal & Pipa Eksternal (Talent Pool Database)</span>
+                  <span className="rounded-full bg-blue-100 dark:bg-blue-900/40 px-2.5 py-0.5 text-xs text-blue-700 dark:text-blue-300 font-semibold">
+                    {talentPool.length} talenta
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Database talenta terverifikasi dari berbagai kanal rekrutmen masa lalu yang siap diundang sewaktu-waktu jika ada lowongan baru yang sesuai.
+                </p>
+              </div>
+            </div>
+
+            {talentPool.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl dark:border-slate-800">
+                <p className="text-sm text-slate-500">Belum ada profil di dalam Talent Pool perusahaan ini.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {talentPool.map((t) => (
+                  <div key={t.id} className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          {t.category}
+                        </span>
+                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400">⭐ {t.rating.toFixed(1)}/5</span>
+                      </div>
+                      <h4 className="mt-2 text-base font-bold text-slate-900 dark:text-white">{t.name}</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">📍 {t.location}</p>
+                      
+                      <div className="mt-2.5 flex flex-wrap gap-1">
+                        {t.skills.map(sk => (
+                          <span key={sk} className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                            {sk}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-2.5 flex items-center gap-1.5">
+                        <span className={cn("inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold", getSourceBadge(t.source).bg, getSourceBadge(t.source).text)}>
+                          <span>{getSourceBadge(t.source).icon}</span>
+                          <span>{t.source}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleInviteTalent(t)}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                      >
+                        ➕ Undang ke Pipeline Aktif
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Detail Side Panel */}
@@ -950,6 +1788,16 @@ export default function CandidatesPage() {
       {/* Import Modal */}
       {showImport && (
         <ImportCsvModal onClose={() => setShowImport(false)} onImported={handleImported} />
+      )}
+
+      {/* Career Portal & UTM Link Builder Modal */}
+      {showPortal && (
+        <CareerPortalModal
+          reqs={reqs}
+          candidates={allCandidates}
+          onClose={() => setShowPortal(false)}
+          onSimulate={simulateNewApplication}
+        />
       )}
     </AppShell>
   );

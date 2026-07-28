@@ -176,6 +176,8 @@ function ReqDetailPanel({
   onStatusChange: (status: ReqStatus) => void;
   onDelete: () => void;
 }) {
+  const [srcTag, setSrcTag] = useState("WhatsApp");
+  const [copiedLink, setCopiedLink] = useState(false);
   const sc = STATUS_COLORS[req.status];
 
   return (
@@ -230,6 +232,64 @@ function ReqDetailPanel({
             <p className="text-[10px] text-slate-500">Timeline</p>
           </Card>
         </div>
+
+        {/* Shareable UTM Tracking Link Card */}
+        <Card className="space-y-3 border-blue-200 bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:border-blue-800/60 dark:from-blue-950/20 dark:to-indigo-950/10">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
+              📢 Sebar Link Lamaran & UTM Tracking
+            </span>
+            <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              {req.status === "active" ? "Aktif Dibuka" : "Tidak Aktif"}
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            Pilih sumber sebar (WhatsApp, LinkedIn, dll) untuk melacak asal kedatangan kandidat:
+          </p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {["WhatsApp", "LinkedIn Jobs", "Internal Referral", "Social Media", "Jobstreet Portal", "Career Site (Web)"].map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => setSrcTag(ch)}
+                className={cn(
+                  "rounded px-2 py-1 text-[11px] font-medium transition-all text-center truncate",
+                  srcTag === ch
+                    ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300"
+                )}
+              >
+                {ch.split(" ")[0]}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:3000";
+                navigator.clipboard.writeText(`${origin}/apply/${req.id}?src=${encodeURIComponent(srcTag)}`);
+                setCopiedLink(true);
+                toast(`Link lamaran [${srcTag}] berhasil disalin!`, "success");
+                setTimeout(() => setCopiedLink(false), 3000);
+              }}
+              className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              {copiedLink ? "✔ Link Tersalin!" : "📋 Salin Link Tracking"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:3000";
+                window.open(`${origin}/apply/${req.id}?src=${encodeURIComponent(srcTag)}`, "_blank");
+              }}
+              title="Buka form lamaran publik di tab baru"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              🚀 Tes
+            </button>
+          </div>
+        </Card>
 
         {/* Details */}
         <Card className="space-y-2">

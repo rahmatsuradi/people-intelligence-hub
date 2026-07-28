@@ -5,6 +5,7 @@ import { AppShell, Button, Card, Icon, SvgPath, cn } from "@/components/app-shel
 import { toast } from "@/components/toast";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { HiredCandidateRow, PiEmployeeRow } from "@/lib/payroll/pay-data";
+import { getActiveCompanyId } from "@/lib/payroll/company-profile";
 import type { PtkpStatus, RiskClass } from "@/lib/payroll/types";
 
 const PTKP_OPTIONS: PtkpStatus[] = ["TK/0", "TK/1", "TK/2", "TK/3", "K/0", "K/1", "K/2", "K/3"];
@@ -87,15 +88,12 @@ function OnboardingModal({
 
     setSaving(true);
     try {
-      // tenant_id diambil dari karyawan yang sudah ada (single-tenant demo).
-      const { data: anyEmp, error: tErr } = await supabase
-        .from("pi_employees").select("tenant_id").limit(1).single();
-      if (tErr) throw new Error(`Tidak bisa menentukan tenant: ${tErr.message}`);
+      const activeCompId = getActiveCompanyId();
 
       const { data: emp, error: empErr } = await supabase
         .from("pi_employees")
         .insert({
-          tenant_id: anyEmp.tenant_id,
+          tenant_id: activeCompId,
           full_name: candidate.name,
           nik: form.nik.trim() || null,
           npwp: form.npwp.trim() || null,
@@ -103,34 +101,33 @@ function OnboardingModal({
           join_date: form.joinDate,
           employment_type: form.employmentType,
           risk_class: form.riskClass,
-          department: candidate.department ?? null,
+          department: candidate.department || "General",
+          position: candidate.position || null,
           bank_account: form.bankAccount.trim() || null,
           status: "active",
           hired_candidate_id: candidate.id,
         })
         .select()
         .single();
-      if (empErr) throw empErr;
+      if (empErr) throw new Error(`Gagal membuat pi_employees: ${empErr.message}`);
 
-      const { error: compErr } = await supabase.from("pi_compensation").insert({
+      const { error: cErr } = await supabase.from("pi_compensation").insert({
         employee_id: emp.id,
+        effective_date: form.joinDate,
         upah_pokok: form.upahPokok,
         tunjangan_tetap: form.tunjanganTetap.filter((t) => t.name.trim() && t.amount > 0),
         tunjangan_tidak_tetap: [],
-        effective_date: form.joinDate,
       });
-      if (compErr) {
-        // Kompensasi gagal -> karyawan tanpa gaji akan diam-diam dilewati saat payroll.
-        // Rollback manual (tidak ada transaksi lintas-request di PostgREST).
+      if (cErr) {
         await supabase.from("pi_employees").delete().eq("id", emp.id);
-        throw new Error(`Gagal simpan kompensasi, karyawan dibatalkan: ${compErr.message}`);
+        throw new Error(`Gagal membuat pi_compensation: ${cErr.message}`);
       }
 
-      toast(`${candidate.name} berhasil di-onboard ke payroll.`);
+      toast(`Karyawan ${candidate.name} berhasil di-onboard ke modul Payroll!`, "success");
       onDone();
       onClose();
-    } catch (e) {
-      toast(`Gagal: ${e instanceof Error ? e.message : String(e)}`, "error");
+    } catch (err: any) {
+      toast(err.message || "Gagal onboarding", "error");
     } finally {
       setSaving(false);
     }
@@ -236,9 +233,10 @@ export default function OnboardingPage() {
   const load = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) { setError("Supabase belum dikonfigurasi."); return; }
     setError(null);
+    const activeCompId = getActiveCompanyId();
     const [cand, emp] = await Promise.all([
       supabase.from("candidates").select("id,name,email,phone,position,department,stage").eq("stage", "hired"),
-      supabase.from("pi_employees").select("*").not("hired_candidate_id", "is", null),
+      supabase.from("pi_employees").select("*").eq("tenant_id", activeCompId).not("hired_candidate_id", "is", null),
     ]);
     if (cand.error) { setError(cand.error.message); return; }
     if (emp.error) { setError(emp.error.message); return; }

@@ -70,6 +70,9 @@ const PILLAR_BADGE_STYLES: Record<string, string> = {
   sfia: "bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/30",
   lominger: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/30",
   cgma: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/30",
+  "skkni-broadcast": "bg-teal-50 text-teal-700 ring-teal-600/20 dark:bg-teal-500/10 dark:text-teal-400 dark:ring-teal-500/30",
+  "skkni-editorial": "bg-cyan-50 text-cyan-700 ring-cyan-600/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:ring-cyan-500/30",
+  "skkni-security": "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/30",
 };
 
 const PILLAR_BADGE_LABELS: Record<string, string> = {
@@ -78,6 +81,9 @@ const PILLAR_BADGE_LABELS: Record<string, string> = {
   sfia: "SFIA v8",
   lominger: "Lominger",
   cgma: "CGMA",
+  "skkni-broadcast": "SKKNI Penyiaran",
+  "skkni-editorial": "SKKNI Redaksi",
+  "skkni-security": "SKKNI Satpam",
 };
 
 export function FrameworkPillarBadge({ pillar }: { pillar: CompetencyPillar }) {
@@ -119,7 +125,7 @@ export function RubricTable({ rubric, compact }: { rubric: RubricLevel[]; compac
 
 export function CompetencyScoreList({ scores }: { scores: CompetencyScore[] }) {
   // Kelompokkan berdasarkan pillar yang ada (dinamis)
-  const pillarOrder = ["ulrich", "skkni", "sfia", "lominger", "cgma"];
+  const pillarOrder = ["ulrich", "skkni", "sfia", "lominger", "cgma", "skkni-broadcast", "skkni-editorial", "skkni-security"];
   const pillarsPresent = pillarOrder.filter(p => scores.some(s => s.pillar === p));
   // Tambahkan pillar lain yang tidak ada di pillarOrder
   const otherPillars = [...new Set(scores.map(s => s.pillar))].filter(p => !pillarOrder.includes(p));
@@ -189,7 +195,7 @@ export function CompetencyScoreList({ scores }: { scores: CompetencyScore[] }) {
 export function CompetencyReportTable({ rows }: { rows: CompetencyReportRow[] }) {
   // Group by the pillars actually present. Hardcoding ulrich+skkni meant a real
   // SFIA/Lominger/CGMA candidate got two empty Ulrich/SKKNI tables instead.
-  const pillarOrder = ["ulrich", "skkni", "sfia", "lominger", "cgma"];
+  const pillarOrder = ["ulrich", "skkni", "sfia", "lominger", "cgma", "skkni-broadcast", "skkni-editorial", "skkni-security"];
   const present = [
     ...pillarOrder.filter((p) => rows.some((r) => r.pillar === p)),
     ...[...new Set(rows.map((r) => r.pillar))].filter((p) => !pillarOrder.includes(p)),

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell, Button, Card, Icon, SvgPath } from "@/components/app-shell";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { PiEmployeeRow, PiPayrollLineRow, PiPayrollRunRow } from "@/lib/payroll/pay-data";
+import { getActiveCompanyId } from "@/lib/payroll/company-profile";
 
 function rupiah(n: number): string {
   return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
@@ -47,7 +48,7 @@ export default function LaporanPage() {
     if (!isSupabaseConfigured || !supabase) { setError("Supabase belum dikonfigurasi."); return; }
     setError(null);
 
-    const runsRes = await supabase.from("pi_payroll_runs").select("*").order("period", { ascending: false });
+    const runsRes = await supabase.from("pi_payroll_runs").select("*").eq("tenant_id", getActiveCompanyId()).order("period", { ascending: false });
     if (runsRes.error) { setError(runsRes.error.message); return; }
     const runs = (runsRes.data ?? []) as PiPayrollRunRow[];
     if (!runs.length) { setSummaries([]); return; }
@@ -81,12 +82,12 @@ export default function LaporanPage() {
     if (!supabase) return;
     setDetailRows(null);
 
-    const runRes = await supabase.from("pi_payroll_runs").select("*").eq("period", period).maybeSingle();
+    const runRes = await supabase.from("pi_payroll_runs").select("*").eq("period", period).eq("tenant_id", getActiveCompanyId()).maybeSingle();
     if (runRes.error || !runRes.data) { setDetailRows([]); return; }
 
     const [linesRes, empRes] = await Promise.all([
       supabase.from("pi_payroll_lines").select("*").eq("run_id", runRes.data.id),
-      supabase.from("pi_employees").select("*"),
+      supabase.from("pi_employees").select("*").eq("tenant_id", getActiveCompanyId()),
     ]);
     if (linesRes.error) { setError(linesRes.error.message); return; }
     if (empRes.error) { setError(empRes.error.message); return; }
@@ -145,21 +146,28 @@ export default function LaporanPage() {
   return (
     <AppShell
       activeNavId="laporan"
-      title="Laporan"
-      subtitle="Ringkasan payroll lintas periode & ekspor pelaporan BPJS"
+      title="Laporan Operasional"
+      subtitle="Ringkasan payroll lintas periode, ekspor pelaporan BPJS & Cetak PDF"
     >
       {error && (
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20">
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20 print:hidden">
           <p className="text-sm text-amber-800 dark:text-amber-300">{error}</p>
         </Card>
       )}
 
       {!error && (
-        <Card padding={false}>
-          <div className="border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+        <Card padding={false} className="print:shadow-none print:border-none print:break-inside-avoid">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800 print:hidden">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Ringkasan per periode {summaries ? `(${summaries.length} periode tersimpan)` : ""}
             </p>
+            <Button size="sm" variant="primary" onClick={() => window.print()}>
+              <Icon className="h-3.5 w-3.5"><SvgPath name="document" /></Icon> Cetak Laporan
+            </Button>
+          </div>
+          <div className="hidden print:block mb-4 px-5 pt-4">
+            <h1 className="text-2xl font-bold text-slate-900">Laporan Pengeluaran Payroll</h1>
+            <p className="text-sm text-slate-500">Dicetak pada: {new Date().toLocaleString('id-ID')}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -204,8 +212,8 @@ export default function LaporanPage() {
       )}
 
       {!error && selectedPeriod && (
-        <Card padding={false}>
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+        <Card padding={false} className="print:shadow-none print:border-none print:break-before-page">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800 print:hidden">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Pelaporan BPJS — periode {selectedPeriod}
             </p>
@@ -213,8 +221,12 @@ export default function LaporanPage() {
               <Icon className="h-3.5 w-3.5"><SvgPath name="download" /></Icon> Unduh CSV
             </Button>
           </div>
+          <div className="hidden print:block mb-4 px-5 pt-4">
+            <h1 className="text-2xl font-bold text-slate-900">Laporan Rincian BPJS</h1>
+            <p className="text-sm text-slate-500">Periode: {selectedPeriod}</p>
+          </div>
           {missingWageBaseCount > 0 && (
-            <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">
+            <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300 print:hidden">
               {missingWageBaseCount} baris tidak punya basis upah BPJS tercatat (tersimpan sebelum field ini ditambahkan) — kolom &quot;Upah&quot; tampil &quot;-&quot;, bukan ditebak.
             </div>
           )}

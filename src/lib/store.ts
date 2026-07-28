@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Hire Intelligence — Persistent Data Store
+   People Intelligence Hub — Persistent Data Store
    localStorage is the local cache; Supabase is the persistent cloud backend.
    On app mount, data is fetched from Supabase and written to localStorage.
    Every write goes to localStorage first (synchronous), then fires an async
@@ -7,15 +7,17 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import { supabase } from './supabase';
+import { getActiveCompanyId } from './payroll/company-profile';
 import type { CompetencyCluster, AiCompetencyScore, AiRiskFlag, AiInterviewQuestion } from './cv-analyzer-ai';
 
-export type PipelineStage = "applied" | "screened" | "interviewed" | "offered" | "hired" | "rejected";
+export type PipelineStage = "applied" | "screened" | "work_sample" | "interviewed" | "offered" | "hired" | "rejected";
 export type ReqStatus = "draft" | "active" | "paused" | "closed";
 
-export const PIPELINE_STAGES: PipelineStage[] = ["applied", "screened", "interviewed", "offered", "hired"];
+export const PIPELINE_STAGES: PipelineStage[] = ["applied", "screened", "work_sample", "interviewed", "offered", "hired"];
 export const STAGE_LABELS: Record<PipelineStage, string> = {
   applied: "Applied",
   screened: "Screened",
+  work_sample: "Tes Praktik / Sample",
   interviewed: "Interviewed",
   offered: "Offered",
   hired: "Hired",
@@ -31,11 +33,14 @@ export interface CvAnalysisSnapshot {
   summary: string;
   frameworkLabel: string;
   analyzedAt: string;
-  /** Optional: absent on snapshots saved before this field existed. */
   cluster?: CompetencyCluster;
   competencies?: AiCompetencyScore[];
   risks?: AiRiskFlag[];
   questions?: AiInterviewQuestion[];
+  criteriaBreakdown?: { name: string; score: number; weight: number; evidence: string }[];
+  strengths?: string[];
+  gaps?: string[];
+  riskAssessment?: { level: string; factors: string[] };
 }
 
 /** One scored interview question. Carries competencyId so interview scores can be
@@ -51,6 +56,21 @@ export interface InterviewQuestionScore {
 }
 
 export interface InterviewResultSnapshot {
+  id?: string;
+  candidateId?: string;
+  jobReqId?: string;
+  position?: string;
+  department?: string;
+  stage?: string;
+  interviewer?: string;
+  date?: string;
+  duration?: number;
+  status?: string;
+  overallRating?: number;
+  notes?: string;
+  strengths?: string;
+  weaknesses?: string;
+  nextSteps?: string;
   kitId: string;
   avgRating: number;
   recommendation: string;
@@ -58,9 +78,6 @@ export interface InterviewResultSnapshot {
   completedAt: string;
   questionCount: number;
   ratedCount: number;
-  /** Optional: absent on results saved before per-question detail was persisted.
-   *  Previously ratings and verbatim notes lived only in sessionStorage and were
-   *  lost when the tab closed — even after the interview was completed. */
   questionScores?: InterviewQuestionScore[];
 }
 
@@ -106,12 +123,28 @@ export interface ActivityEntry {
   target: string;
   user: string;
   time: string;
-  type: "hire" | "interview" | "analysis" | "offer" | "move" | "create";
+  type: "hire" | "interview" | "analysis" | "offer" | "move" | "create" | "candidate" | "hired" | "req_created" | "reject";
+}
+
+export interface TalentProfile {
+  id: string;
+  name: string;
+  phone: string;
+  location: string;
+  skills: string[];
+  category: "Mitra Borongan" | "Karyawan Inti" | "Freelance" | "Vendor";
+  capacity: number; // pcs per week, etc.
+  status: "Available" | "Active" | "Inactive";
+  rating: number; // 1.0 to 5.0
+  source: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const CANDIDATES_KEY = "hi_candidates";
 const JOBREQS_KEY = "hi_jobreqs";
 const ACTIVITY_KEY = "hi_activity";
+const TALENT_POOL_KEY = "hi_talent_pool";
 
 export function generateId(prefix: string): string {
   const d = new Date();
@@ -190,10 +223,24 @@ function rowToActivity(r: Record<string, unknown>): ActivityEntry {
   };
 }
 
+function getTenantKey(key: string): string {
+  if (typeof window === "undefined") return key;
+  const compId = getActiveCompanyId();
+  if (compId === "11111111-1111-4111-8111-111111111111" || compId === "valora_tv") return key; // Base key for Valora TV to preserve existing 754-employee demo data
+  return `${key}_${compId}`;
+}
+
+let isSeedingZus = false;
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
-    const raw = localStorage.getItem(key);
+    const tKey = getTenantKey(key);
+    let raw = localStorage.getItem(tKey);
+    if (!raw && !isSeedingZus && (getActiveCompanyId() === "22222222-2222-4222-8222-222222222222" || getActiveCompanyId() === "zus_textile") && (key === "hi_candidates" || key === "hi_jobreqs" || key === "hi_talent_pool" || key === "hi_activity")) {
+      isSeedingZus = true;
+      try { loadZusTextileDemoData(); } finally { isSeedingZus = false; }
+      raw = localStorage.getItem(tKey);
+    }
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
@@ -203,7 +250,7 @@ function readJson<T>(key: string, fallback: T): T {
 function writeJson<T>(key: string, value: T): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(getTenantKey(key), JSON.stringify(value));
   } catch { /* quota exceeded — silently fail */ }
 }
 
@@ -229,6 +276,52 @@ export function saveCandidate(candidate: CandidateRecord): void {
 export function deleteCandidate(id: string): void {
   writeJson(CANDIDATES_KEY, getCandidates().filter((c) => c.id !== id));
   supabase?.from('candidates').delete().eq('id', id).then(() => {});
+}
+
+/* ─── Talent Pool ─── */
+
+export function getTalentPool(): TalentProfile[] {
+  return readJson<TalentProfile[]>(TALENT_POOL_KEY, []);
+}
+
+export function saveTalentProfile(profile: TalentProfile): void {
+  const all = getTalentPool();
+  const idx = all.findIndex((t) => t.id === profile.id);
+  if (idx >= 0) all[idx] = profile;
+  else all.unshift(profile);
+  writeJson(TALENT_POOL_KEY, all);
+}
+
+export function deleteTalentProfile(id: string): void {
+  writeJson(TALENT_POOL_KEY, getTalentPool().filter((t) => t.id !== id));
+}
+
+export function convertCandidateToTalent(candidateId: string): void {
+  const c = getCandidate(candidateId);
+  if (!c) return;
+
+  const newTalent: TalentProfile = {
+    id: `T-${c.id.replace('C-', '')}`,
+    name: c.name,
+    phone: c.phone,
+    location: "Unknown", // Can be updated by user later
+    skills: [], // Candidates don't have direct skills array yet, can map from competencies if needed
+    category: "Freelance", // Defaulting to freelance for pipeline fallbacks
+    capacity: 0,
+    status: "Available",
+    rating: c.cvAnalysis?.overallScore ? Number((c.cvAnalysis.overallScore / 20).toFixed(1)) : 0, // Convert 0-100 to 0-5
+    source: "Transferred from CRM",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  saveTalentProfile(newTalent);
+  
+  // Log the activity
+  addActivity({
+    action: "Moved to Talent Pool",
+    target: c.name,
+    type: "move"
+  });
 }
 
 export function moveCandidateStage(id: string, stage: PipelineStage): void {
@@ -534,7 +627,7 @@ export function getDashboardStats(): DashboardStats {
   const active = candidates.filter((c) => activeStages.includes(c.stage));
 
   const stageBreakdown: Record<PipelineStage, number> = {
-    applied: 0, screened: 0, interviewed: 0, offered: 0, hired: 0, rejected: 0,
+    applied: 0, screened: 0, work_sample: 0, interviewed: 0, offered: 0, hired: 0, rejected: 0,
   };
   for (const c of candidates) stageBreakdown[c.stage]++;
 
@@ -582,13 +675,164 @@ export function getCandidatesForReq(reqId: string): CandidateRecord[] {
 
 /* ─── Demo Data ─── */
 
+function loadZusTextileDemoData(): void {
+  const base = new Date("2026-05-15T08:00:00.000Z");
+  const daysAgo = (d: number) => new Date(base.getTime() - d * 86400000).toISOString();
+
+  const reqs: JobRequisition[] = [
+    {
+      id: "REQ-ZUS-PRD01", title: "Kepala Pabrik / Plant Manager Garment", department: "Sewing Production",
+      level: "Manager", status: "active", description: "Memimpin operasional lini jahit 245 operator, efisiensi waktu siklus (SMV), dan kontrol kualitas garment ekspor.",
+      requirements: "8+ tahun pengalaman manajemen pabrik tekstil/garment, menguasai Lean Manufacturing dan manajemen tenaga kerja massal.", salaryMin: 15000000,
+      salaryMax: 25000000, currency: "IDR", location: "Pabrik Cikarang (Zus Textile)", targetDate: "2026-08-15",
+      headcount: 1, hiringManager: "Demo:Hendra Kusuma", createdAt: daysAgo(40), updatedAt: daysAgo(5),
+    },
+    {
+      id: "REQ-ZUS-CUT01", title: "Senior Pattern Maker & CAD Grading", department: "Cutting & Pattern",
+      level: "Senior", status: "active", description: "Bertanggung jawab atas pola potongan pakaian, optimasi marker CAD untuk meminimalkan sisa kain (waste fabric).",
+      requirements: "5+ tahun pengalaman di Optitex/Gerber CAD, memahami karakteristik kain woven dan knit.", salaryMin: 7000000,
+      salaryMax: 10500000, currency: "IDR", location: "Pabrik Cikarang (Zus Textile)", targetDate: "2026-07-30",
+      headcount: 2, hiringManager: "Demo:Siti Hartati", createdAt: daysAgo(25), updatedAt: daysAgo(3),
+    },
+    {
+      id: "REQ-ZUS-QC01", title: "Supervisor Quality Control (QC) Finishing", department: "Quality Control",
+      level: "Mid-Level", status: "active", description: "Mengawasi standar mutu jahitan AQL 2.5 pada tahap akhir sebelum pengepakan ekspor dan distribusi ritel.",
+      requirements: "3+ tahun sebagai QC Supervisor di industri apparel/konveksi, sertifikasi pemahaman ISO mutu pakaian.", salaryMin: 6000000,
+      salaryMax: 8500000, currency: "IDR", location: "Pabrik Cikarang (Zus Textile)", targetDate: "2026-08-05",
+      headcount: 2, hiringManager: "Demo:Bambang Setyo", createdAt: daysAgo(20), updatedAt: daysAgo(2),
+    },
+    {
+      id: "REQ-ZUS-HR01", title: "Manager Industrial Relations (IR) & GA Pabrik", department: "Human Resources",
+      level: "Manager", status: "active", description: "Menangani hubungan industrial serikat pekerja pabrik, kepatuhan Disnaker, K3 lingkungan pabrik, dan pengelolaan GA 245 karyawan.",
+      requirements: "7+ tahun HR/IR di pabrik manufaktur padat karya, memahami UU Ketenagakerjaan dan mediasi bipartit/tripartit.", salaryMin: 12000000,
+      salaryMax: 18000000, currency: "IDR", location: "Pabrik Cikarang (Zus Textile)", targetDate: "2026-07-25",
+      headcount: 1, hiringManager: "Demo:Zus Textile HRBP", createdAt: daysAgo(35), updatedAt: daysAgo(8),
+    },
+  ];
+
+  const candidates: CandidateRecord[] = [
+    {
+      id: "C-ZUS-001", name: "Siti Aminah", email: "siti.aminah@garment-pro.id", phone: "081298765431",
+      stage: "offered", jobReqId: "REQ-ZUS-CUT01", department: "Cutting & Pattern",
+      position: "Senior Pattern Maker & CAD Grading", source: "WhatsApp Apply", notes: "Sangat terampil menggunakan Gerber CAD, efisiensi marker kain mencapai 89%.",
+      cvAnalysis: {
+        reportId: "RPT-ZUS-001", overallScore: 92, matchScore: 90, confidence: 95,
+        recommendation: "Strong Hire", summary: "6 tahun pengalaman pattern maker di pabrik apparel ekspor. Sertifikasi Optitex CAD expert.",
+        frameworkLabel: "Garment Skills", analyzedAt: daysAgo(10),
+        criteriaBreakdown: [
+          { name: "CAD Pattern Making", score: 95, weight: 40, evidence: "6 thn Optitex & Gerber CAD" },
+          { name: "Fabric Waste Reduction", score: 90, weight: 30, evidence: "Marker efficiency 89%" },
+          { name: "Garment Spec Knowledge", score: 90, weight: 30, evidence: "Paham standard fit woven & knit" }
+        ],
+        strengths: ["Keahlian tinggi di software CAD pola", "Rekam jejak minim waste kain"],
+        gaps: ["Belum pernah memimpin tim besar (>10 orang)"],
+        riskAssessment: { level: "Low", factors: ["Kandidat stabil di 2 pabrik sebelumnya"] }
+      },
+      interviewResults: [
+        {
+          id: "INT-ZUS-001", candidateId: "C-ZUS-001", jobReqId: "REQ-ZUS-CUT01", position: "Senior Pattern Maker & CAD Grading",
+          department: "Cutting & Pattern", stage: "Technical Interview", interviewer: "Siti Hartati (Head of Pattern)",
+          date: daysAgo(5), duration: 45, status: "completed", recommendation: "Strong Hire", overallRating: 4.8,
+          notes: "Tes praktek potong pola sangat cepat dan presisi.", strengths: "Akurasi millimeter", weaknesses: "None",
+          nextSteps: "Lanjutkan ke offering", questionCount: 5, ratedCount: 5,
+          kitId: "KIT-ZUS-01", avgRating: 4.8, durationSec: 2700, completedAt: daysAgo(5)
+        }
+      ],
+      createdAt: daysAgo(20), updatedAt: daysAgo(4),
+    },
+    {
+      id: "C-ZUS-002", name: "Budi Santoso", email: "budi.santoso@qc-apparel.id", phone: "081387654321",
+      stage: "interviewed", jobReqId: "REQ-ZUS-QC01", department: "Quality Control",
+      position: "Supervisor Quality Control (QC) Finishing", source: "LinkedIn Jobs", notes: "Pengalaman ketat dalam standar inspeksi AQL 2.5 buyer Amerika & Eropa.",
+      cvAnalysis: {
+        reportId: "RPT-ZUS-002", overallScore: 88, matchScore: 86, confidence: 92,
+        recommendation: "Hire", summary: "5 tahun di bidang QC finishing garment ekspor. Paham regulasi jarum patah dan compliance keamanan.",
+        frameworkLabel: "ISO 9001 Garment", analyzedAt: daysAgo(12),
+        criteriaBreakdown: [
+          { name: "AQL Inspection Standard", score: 90, weight: 50, evidence: "AQL 2.5 & 1.5 specialist" },
+          { name: "Team Supervision", score: 85, weight: 50, evidence: "Memimpin 15 inspektor QC lini" }
+        ],
+        strengths: ["Sangat teliti terhadap cacat jahitan dan noda kain"], gaps: ["Bahasa Inggris pasif"],
+        riskAssessment: { level: "Low", factors: ["Referensi dari eks-atasan sangat baik"] }
+      },
+      interviewResults: [], createdAt: daysAgo(18), updatedAt: daysAgo(6),
+    },
+    {
+      id: "C-ZUS-003", name: "Hendra Kurniawan", email: "hendra.k@mfg-leader.id", phone: "081123456789",
+      stage: "hired", jobReqId: "REQ-ZUS-PRD01", department: "Sewing Production",
+      position: "Kepala Pabrik / Plant Manager Garment", source: "Executive Headhunting", notes: "Kepemimpinan sangat matang, mampu mengelola 300+ operator jahit tanpa konflik.",
+      cvAnalysis: {
+        reportId: "RPT-ZUS-003", overallScore: 95, matchScore: 94, confidence: 98,
+        recommendation: "Strong Hire", summary: "12 tahun Plant Manager di perusahaan tekstil berskala 500+ karyawan. Ahli Lean Manufacturing & SMV balancing.",
+        frameworkLabel: "Lean Garment Pro", analyzedAt: daysAgo(30),
+        criteriaBreakdown: [
+          { name: "Plant Leadership & Output", score: 96, weight: 50, evidence: "Kapasitas produksi 50k pcs/bulan" },
+          { name: "Industrial Relations & K3", score: 94, weight: 50, evidence: "Zero strike record dalam 5 tahun terakhir" }
+        ],
+        strengths: ["Kepemimpinan kuat", "Paham teknis mesin jahit industri dan alur potong-jahit-pack"], gaps: ["Ex-salary cukup tinggi"],
+        riskAssessment: { level: "Low", factors: ["Kesiapan join segera"] }
+      },
+      interviewResults: [], createdAt: daysAgo(35), updatedAt: daysAgo(10),
+    },
+    {
+      id: "C-ZUS-004", name: "Rina Wulandari", email: "rina.wulandari@hr-ir.id", phone: "081567890123",
+      stage: "screened", jobReqId: "REQ-ZUS-HR01", department: "Human Resources",
+      position: "Manager Industrial Relations (IR) & GA Pabrik", source: "Internal Referral", notes: "Kandidat rekomendasi dari serikat pekerja pembina, negosiator yang tenang.",
+      cvAnalysis: {
+        reportId: "RPT-ZUS-004", overallScore: 85, matchScore: 84, confidence: 90,
+        recommendation: "Hire", summary: "7 tahun menangani hubungan industrial dan GA pabrik konveksi di Jawa Barat.",
+        frameworkLabel: "UU Ketenagakerjaan", analyzedAt: daysAgo(14),
+        criteriaBreakdown: [
+          { name: "Labor Law & IR Mediation", score: 88, weight: 60, evidence: "Berpengalaman mediasi di Disnaker" },
+          { name: "GA & Factory Facilities", score: 80, weight: 40, evidence: "Mengelola kantin, dormitori, & armada jemputan" }
+        ],
+        strengths: ["Komunikasi komunikatif dengan serikat buruh"], gaps: ["Belum terbiasa sistem HRIS otomatisasi cloud"],
+        riskAssessment: { level: "Low", factors: ["Stabil dan profesional"] }
+      },
+      interviewResults: [], createdAt: daysAgo(15), updatedAt: daysAgo(5),
+    },
+  ];
+
+  const garmentSkills = ["Pattern Making", "Garment Sewing", "Fabric QC", "Textile Dying", "CAD Grading", "Industrial Relations", "AQL Inspection", "Marker CAD", "Sewing Machine Repair", "Lean Manufacturing"];
+  const garmentNames = ["Agus Pranoto", "Wawan Sugiarto", "Ratna Galih", "Sri Mulyani", "Bambang Pamungkas", "Dewi Lestari", "Sugeng Raharjo", "Eko Prasetyo", "Neneng Hasanah", "Ujang Suherman", "Yuni Shara", "Iwan Fals", "Asep Sunandar", "Endang Sukamti", "Hartono Widodo"];
+  const mockTalent: TalentProfile[] = garmentNames.map((name, i) => {
+    return {
+      id: `T-ZUS-${(i+1).toString().padStart(3, '0')}`,
+      name: `${name} (${i % 2 === 0 ? "Sewing Pro" : "Textile Specialist"})`,
+      phone: `08${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+      location: i % 2 === 0 ? "Cikarang (Pabrik)" : "Bandung (Textile Center)",
+      skills: [garmentSkills[i % garmentSkills.length], garmentSkills[(i + 2) % garmentSkills.length]],
+      category: i < 10 ? "Karyawan Inti" : "Freelance",
+      capacity: i < 10 ? 0 : 30,
+      status: "Available",
+      rating: Number((Math.random() * 1.0 + 4.0).toFixed(1)),
+      source: i % 3 === 0 ? "WhatsApp Apply" : "LinkedIn Jobs",
+      createdAt: daysAgo(20 + i),
+      updatedAt: daysAgo(2 + i),
+    };
+  });
+
+  const activities: ActivityEntry[] = [
+    { id: "A-ZUS-1", action: "Hired candidate for Plant Manager", target: "Hendra Kurniawan", user: "Zus HRBP", time: daysAgo(10), type: "hired" },
+    { id: "A-ZUS-2", action: "Completed Technical Interview", target: "Siti Aminah (Pattern Maker)", user: "Siti Hartati", time: daysAgo(5), type: "interview" },
+    { id: "A-ZUS-3", action: "Created new Requisition", target: "REQ-ZUS-CUT01 (CAD Grading)", user: "Zus HRBP", time: daysAgo(25), type: "req_created" },
+  ];
+
+  writeJson("hi_jobreqs", reqs);
+  writeJson("hi_candidates", candidates);
+  writeJson("hi_talent_pool", mockTalent);
+  writeJson("hi_activity", activities);
+}
+
 export function hasDemoData(): boolean {
-  return getCandidates().some((c) => c.source === "Demo");
+  return getCandidates().some((c) => c.source === "Demo" || c.id.startsWith("C-ZUS-") || c.id.startsWith("C-DEMO-"));
 }
 
 export function clearDemoData(): void {
-  writeJson(CANDIDATES_KEY, getCandidates().filter((c) => c.source !== "Demo"));
-  writeJson(JOBREQS_KEY, getJobReqs().filter((r) => !r.hiringManager.startsWith("Demo:")));
+  writeJson("hi_activity", getActivities().filter((a) => !a.id.startsWith("A-DEMO") && !a.id.startsWith("A-ZUS-")));
+  writeJson("hi_candidates", getCandidates().filter((c) => c.source !== "Demo" && !c.id.startsWith("C-ZUS-") && !c.id.startsWith("C-DEMO-")));
+  writeJson("hi_jobreqs", getJobReqs().filter((r) => !r.hiringManager.startsWith("Demo:") && !r.id.startsWith("REQ-ZUS-")));
+  writeJson("hi_talent_pool", getTalentPool().filter((t) => t.source !== "Demo" && !t.id.startsWith("T-ZUS-")));
   if (supabase) {
     supabase.from('candidates').delete().eq('source', 'Demo').then(() => {});
     supabase.from('job_reqs').delete().like('hiring_manager', 'Demo:%').then(() => {});
@@ -596,48 +840,65 @@ export function clearDemoData(): void {
 }
 
 export function loadDemoData(): void {
+  if (typeof window !== "undefined" && (getActiveCompanyId() === "22222222-2222-4222-8222-222222222222" || getActiveCompanyId() === "zus_textile")) {
+    return loadZusTextileDemoData();
+  }
   const base = new Date("2026-05-15T08:00:00.000Z");
   const daysAgo = (d: number) => new Date(base.getTime() - d * 86400000).toISOString();
 
   const reqs: JobRequisition[] = [
     {
-      id: "REQ-DEMO-ENG01", title: "Senior Software Engineer", department: "Engineering",
-      level: "Senior", status: "active", description: "Backend-focused engineer for payments platform.",
-      requirements: "5+ yrs Go/Java, distributed systems, PostgreSQL.", salaryMin: 25000000,
-      salaryMax: 40000000, currency: "IDR", location: "Jakarta / Remote", targetDate: "2026-07-01",
-      headcount: 2, hiringManager: "Demo:Andi Prasetyo", createdAt: daysAgo(45), updatedAt: daysAgo(10),
+      id: "REQ-DEMO-ENG01", title: "Senior Broadcast IT Engineer", department: "Engineering & IT",
+      level: "Senior", status: "active", description: "Lead broadcast IT transmission, MCR automation, and satellite uplink routing systems for 24/7 news operations.",
+      requirements: "5+ yrs Broadcast IT, IP audio/video routing (SMPTE 2110), satellite transmission, and newsroom automation systems.", salaryMin: 25000000,
+      salaryMax: 40000000, currency: "IDR", location: "Jakarta (Studio VIVA)", targetDate: "2026-08-01",
+      headcount: 2, hiringManager: "Demo:Carlo Ancelotti", createdAt: daysAgo(45), updatedAt: daysAgo(10),
     },
     {
-      id: "REQ-DEMO-PRD01", title: "Product Manager", department: "Product",
-      level: "Mid-Level", status: "active", description: "PM for growth & monetization squad.",
-      requirements: "3+ yrs PM, data-driven, B2C product experience.", salaryMin: 20000000,
-      salaryMax: 32000000, currency: "IDR", location: "Jakarta", targetDate: "2026-06-15",
-      headcount: 1, hiringManager: "Demo:Santi Lestari", createdAt: daysAgo(30), updatedAt: daysAgo(5),
+      id: "REQ-DEMO-PRD01", title: "Executive Producer", department: "Production & Creative",
+      level: "Manager", status: "active", description: "Executive Producer for prime-time talk shows, breaking news special broadcasts, and investigative journalism programs.",
+      requirements: "8+ yrs broadcast production management, live studio directing, rundown optimization, and budget supervision.", salaryMin: 28000000,
+      salaryMax: 45000000, currency: "IDR", location: "Jakarta (Studio VIVA)", targetDate: "2026-07-20",
+      headcount: 1, hiringManager: "Demo:Arsène Wenger", createdAt: daysAgo(30), updatedAt: daysAgo(5),
     },
     {
-      id: "REQ-DEMO-DES01", title: "UX Designer", department: "Design",
-      level: "Mid-Level", status: "active", description: "End-to-end product designer for mobile apps.",
-      requirements: "3+ yrs UX, Figma, usability research.", salaryMin: 15000000,
-      salaryMax: 25000000, currency: "IDR", location: "Jakarta / Remote", targetDate: "2026-07-15",
-      headcount: 1, hiringManager: "Demo:Rina Susanti", createdAt: daysAgo(20), updatedAt: daysAgo(3),
+      id: "REQ-DEMO-DES01", title: "Senior News Anchor", department: "News & Editorial",
+      level: "Senior", status: "active", description: "Lead on-screen presenter for prime-time live news bulletins and political interviews.",
+      requirements: "5+ yrs live television news presentation, excellent on-camera charisma, journalistic integrity, and crisis reporting.", salaryMin: 20000000,
+      salaryMax: 35000000, currency: "IDR", location: "Jakarta (Studio VIVA)", targetDate: "2026-07-31",
+      headcount: 1, hiringManager: "Demo:Zinedine Zidane", createdAt: daysAgo(20), updatedAt: daysAgo(3),
     },
     {
-      id: "REQ-DEMO-DAT01", title: "Data Analyst", department: "Data",
-      level: "Junior", status: "active", description: "Analyst to support business intelligence team.",
-      requirements: "SQL, Python (pandas), Tableau or Looker.", salaryMin: 10000000,
-      salaryMax: 18000000, currency: "IDR", location: "Jakarta", targetDate: "2026-06-30",
-      headcount: 1, hiringManager: "Demo:Budi Hartono", createdAt: daysAgo(15), updatedAt: daysAgo(2),
+      id: "REQ-DEMO-DAT01", title: "Ad Traffic Scheduler", department: "Commercial & Traffic",
+      level: "Mid-Level", status: "active", description: "Schedule and manage commercial advertising logs, sponsor integrations, and promo placement across broadcast streams.",
+      requirements: "3+ yrs TV broadcast traffic scheduling, ad sales software, and regulatory compliance.", salaryMin: 12000000,
+      salaryMax: 20000000, currency: "IDR", location: "Jakarta (Studio VIVA)", targetDate: "2026-07-15",
+      headcount: 2, hiringManager: "Demo:Jose Mourinho", createdAt: daysAgo(15), updatedAt: daysAgo(2),
+    },
+    {
+      id: "REQ-DEMO-SPE01", title: "VIVA Journalism Fellowship 2026 (Program Khusus)", department: "News & Editorial",
+      level: "Intern", status: "active", description: "Program inkubasi dan fellowship intensif 6 bulan bagi jurnalis muda berbakat untuk liputan investigasi dan digital broadcasting tvOne.",
+      requirements: "Mahasiswa tingkat akhir atau lulusan baru semua jurusan, passion tinggi di jurnalisme broadcast, melampirkan portofolio penulisan/video liputan.", salaryMin: 6500000,
+      salaryMax: 8500000, currency: "IDR", location: "Jakarta (Studio VIVA)", targetDate: "2026-08-31",
+      headcount: 10, hiringManager: "Demo:Karni Ilyas", createdAt: daysAgo(10), updatedAt: daysAgo(1),
+    },
+    {
+      id: "REQ-DEMO-SPE02", title: "Management Trainee (MT) Broadcast Media Leaders", department: "Corporate Services",
+      level: "Entry Level", status: "active", description: "Program percepatan karir kepemimpinan untuk mencetak calon eksekutif masa depan di Visi Media Asia (tvOne & VIVA Group).",
+      requirements: "S1/S2 universitas terkemuka IPB >= 3.50, kemampuan analitis dan kepemimpinan organisasi yang kuat, bersedia rotasi di seluruh pilar transmisi & redaksi.", salaryMin: 12000000,
+      salaryMax: 15000000, currency: "IDR", location: "Jakarta (Studio VIVA)", targetDate: "2026-09-15",
+      headcount: 5, hiringManager: "Demo:Anindya Bakrie", createdAt: daysAgo(12), updatedAt: daysAgo(2),
     },
   ];
 
   const candidates: CandidateRecord[] = [
     {
-      id: "C-DEMO-001", name: "Rina Wijaya", email: "rina.wijaya@email.com", phone: "081234567890",
-      stage: "hired", jobReqId: "REQ-DEMO-ENG01", department: "Engineering",
-      position: "Senior Software Engineer", source: "Demo", notes: "Excellent cultural fit.",
+      id: "C-DEMO-001", name: "David Beckham", email: "david.beckham@email.com", phone: "081234567890",
+      stage: "hired", jobReqId: "REQ-DEMO-ENG01", department: "Engineering & IT",
+      position: "Senior Broadcast IT Engineer", source: "Executive Headhunting", notes: "Excellent cultural fit for live transmission IT.",
       cvAnalysis: {
         reportId: "RPT-DEMO-2026051501", overallScore: 91, matchScore: 88, confidence: 94,
-        recommendation: "Strong Hire", summary: "7 years Go & distributed systems. Led migration of monolith to microservices serving 8M users.",
+        recommendation: "Strong Hire", summary: "7 years Broadcast IT & satellite transmission systems. Led migration of MCR digital automation serving 24/7 news live feeds.",
         frameworkLabel: "SFIA v8", analyzedAt: daysAgo(30),
       },
       interviewResults: [{
@@ -647,12 +908,12 @@ export function loadDemoData(): void {
       createdAt: daysAgo(35), updatedAt: daysAgo(5),
     },
     {
-      id: "C-DEMO-002", name: "Budi Santoso", email: "budi.santoso@email.com", phone: "082345678901",
-      stage: "offered", jobReqId: "REQ-DEMO-PRD01", department: "Product",
-      position: "Product Manager", source: "Demo", notes: "Strong strategic thinking.",
+      id: "C-DEMO-002", name: "Ronaldinho", email: "ronaldinho@email.com", phone: "082345678901",
+      stage: "offered", jobReqId: "REQ-DEMO-PRD01", department: "Production & Creative",
+      position: "Executive Producer", source: "LinkedIn Jobs", notes: "Strong creative direction for prime-time talk shows.",
       cvAnalysis: {
         reportId: "RPT-DEMO-2026051502", overallScore: 85, matchScore: 82, confidence: 89,
-        recommendation: "Hire", summary: "4 years PM at fintech. Launched 3 products with >100K MAU each. Data-driven decision maker.",
+        recommendation: "Hire", summary: "10 years producing news talk shows & investigative documentaries. High ratings track record.",
         frameworkLabel: "Lominger / Korn Ferry", analyzedAt: daysAgo(25),
       },
       interviewResults: [{
@@ -662,12 +923,12 @@ export function loadDemoData(): void {
       createdAt: daysAgo(28), updatedAt: daysAgo(3),
     },
     {
-      id: "C-DEMO-003", name: "Sari Dewi", email: "sari.dewi@email.com", phone: "083456789012",
-      stage: "interviewed", jobReqId: "REQ-DEMO-DES01", department: "Design",
-      position: "UX Designer", source: "Demo", notes: "Portfolio very strong on mobile.",
+      id: "C-DEMO-003", name: "Thierry Henry", email: "thierry.henry@email.com", phone: "083456789012",
+      stage: "interviewed", jobReqId: "REQ-DEMO-DES01", department: "News & Editorial",
+      position: "Senior News Anchor", source: "Internal Referral", notes: "Charismatic on-screen presence, flawless diction.",
       cvAnalysis: {
         reportId: "RPT-DEMO-2026051503", overallScore: 79, matchScore: 76, confidence: 85,
-        recommendation: "Hire", summary: "3 years UX at e-commerce. Research-led design process. Figma expert.",
+        recommendation: "Hire", summary: "5 years live news broadcasting at major national TV. Exceptional crisis reporting skills.",
         frameworkLabel: "Lominger / Korn Ferry", analyzedAt: daysAgo(15),
       },
       interviewResults: [{
@@ -677,72 +938,72 @@ export function loadDemoData(): void {
       createdAt: daysAgo(18), updatedAt: daysAgo(2),
     },
     {
-      id: "C-DEMO-004", name: "Ahmad Fauzi", email: "ahmad.fauzi@email.com", phone: "084567890123",
-      stage: "interviewed", jobReqId: "REQ-DEMO-DAT01", department: "Data",
-      position: "Data Analyst", source: "Demo", notes: "Good SQL, Python needs depth.",
+      id: "C-DEMO-004", name: "Xavi Hernández", email: "xavi.hernandez@email.com", phone: "084567890123",
+      stage: "interviewed", jobReqId: "REQ-DEMO-ENG01", department: "Engineering & IT",
+      position: "Technical Director (TD)", source: "Career Site (Web)", notes: "Solid studio switching and automation expertise.",
       cvAnalysis: {
-        reportId: "RPT-DEMO-2026051504", overallScore: 72, matchScore: 69, confidence: 78,
-        recommendation: "Review", summary: "2 years data work. SQL proficient, basic Python. Tableau certified.",
-        frameworkLabel: "CGMA / CIMA", analyzedAt: daysAgo(10),
+        reportId: "RPT-DEMO-2026051504", overallScore: 81, matchScore: 79, confidence: 91,
+        recommendation: "Hire", summary: "8 years studio technical direction. Experienced in multi-camera live election broadcasts.",
+        frameworkLabel: "SFIA v8", analyzedAt: daysAgo(14),
       },
       interviewResults: [{
-        kitId: "KIT-DEMO-004", avgRating: 3.2, recommendation: "Review",
-        durationSec: 2100, completedAt: daysAgo(5), questionCount: 6, ratedCount: 5,
+        kitId: "KIT-DEMO-004", avgRating: 3.8, recommendation: "Hire",
+        durationSec: 3000, completedAt: daysAgo(6), questionCount: 8, ratedCount: 8,
       }],
-      createdAt: daysAgo(14), updatedAt: daysAgo(1),
+      createdAt: daysAgo(20), updatedAt: daysAgo(2),
     },
     {
-      id: "C-DEMO-005", name: "Lina Pratama", email: "lina.pratama@email.com", phone: "085678901234",
-      stage: "screened", jobReqId: "REQ-DEMO-ENG01", department: "Engineering",
-      position: "Senior Software Engineer", source: "Demo", notes: "Strong Java background.",
+      id: "C-DEMO-005", name: "Andrés Iniesta", email: "andres.iniesta@email.com", phone: "085678901234",
+      stage: "screened", jobReqId: "REQ-DEMO-PRD01", department: "Production & Creative",
+      position: "Program Director (PD)", source: "Jobstreet Portal", notes: "Calm under pressure in control room.",
       cvAnalysis: {
-        reportId: "RPT-DEMO-2026051505", overallScore: 83, matchScore: 80, confidence: 87,
-        recommendation: "Hire", summary: "6 years Java/Spring. Built high-throughput payment processing system.",
-        frameworkLabel: "SFIA v8", analyzedAt: daysAgo(8),
+        reportId: "RPT-DEMO-2026051505", overallScore: 74, matchScore: 71, confidence: 80,
+        recommendation: "Consider", summary: "4 years directing live sports and news bulletins. Well-organized rundown execution.",
+        frameworkLabel: "Lominger / Korn Ferry", analyzedAt: daysAgo(10),
       },
-      interviewResults: [], createdAt: daysAgo(12), updatedAt: daysAgo(1),
+      interviewResults: [], createdAt: daysAgo(14), updatedAt: daysAgo(4),
     },
     {
-      id: "C-DEMO-006", name: "Reza Kusuma", email: "reza.kusuma@email.com", phone: "086789012345",
-      stage: "screened", jobReqId: "REQ-DEMO-PRD01", department: "Product",
-      position: "Product Manager", source: "Demo", notes: "B2B background, needs B2C assessment.",
+      id: "C-DEMO-006", name: "Frank Lampard", email: "frank.lampard@email.com", phone: "086789012345",
+      stage: "screened", jobReqId: "REQ-DEMO-DES01", department: "News & Editorial",
+      position: "Investigative Journalist", source: "LinkedIn Jobs", notes: "",
       cvAnalysis: {
-        reportId: "RPT-DEMO-2026051506", overallScore: 68, matchScore: 65, confidence: 72,
-        recommendation: "Review", summary: "3 years PM in B2B SaaS. Limited consumer product experience.",
-        frameworkLabel: "Lominger / Korn Ferry", analyzedAt: daysAgo(6),
+        reportId: "RPT-DEMO-2026051506", overallScore: 68, matchScore: 65, confidence: 78,
+        recommendation: "Consider", summary: "Print journalism background transitioning to TV broadcast. Deep network of political sources.",
+        frameworkLabel: "Lominger / Korn Ferry", analyzedAt: daysAgo(8),
       },
-      interviewResults: [], createdAt: daysAgo(9), updatedAt: daysAgo(1),
+      interviewResults: [], createdAt: daysAgo(12), updatedAt: daysAgo(6),
     },
     {
-      id: "C-DEMO-007", name: "Dian Purnama", email: "dian.purnama@email.com", phone: "087890123456",
-      stage: "applied", jobReqId: "REQ-DEMO-DAT01", department: "Data",
-      position: "Data Analyst", source: "Demo", notes: "",
+      id: "C-DEMO-007", name: "Steven Gerrard", email: "steven.gerrard@email.com", phone: "087890123456",
+      stage: "applied", jobReqId: "REQ-DEMO-DAT01", department: "Commercial & Traffic",
+      position: "Ad Traffic Scheduler", source: "Career Site (Web)", notes: "",
       cvAnalysis: null, interviewResults: [], createdAt: daysAgo(5), updatedAt: daysAgo(5),
     },
     {
-      id: "C-DEMO-008", name: "Eko Susanto", email: "eko.susanto@email.com", phone: "088901234567",
-      stage: "applied", jobReqId: "REQ-DEMO-ENG01", department: "Engineering",
-      position: "Senior Software Engineer", source: "Demo", notes: "",
+      id: "C-DEMO-008", name: "Andrea Pirlo", email: "andrea.pirlo@email.com", phone: "088901234567",
+      stage: "applied", jobReqId: "REQ-DEMO-ENG01", department: "Corporate Services",
+      position: "HRBP Operations Specialist", source: "Executive Headhunting", notes: "",
       cvAnalysis: null, interviewResults: [], createdAt: daysAgo(3), updatedAt: daysAgo(3),
     },
     {
-      id: "C-DEMO-009", name: "Maya Indah", email: "maya.indah@email.com", phone: "089012345678",
-      stage: "rejected", jobReqId: "REQ-DEMO-ENG01", department: "Engineering",
-      position: "Senior Software Engineer", source: "Demo", notes: "Below technical bar.",
+      id: "C-DEMO-009", name: "Paul Scholes", email: "paul.scholes@email.com", phone: "089012345678",
+      stage: "rejected", jobReqId: "REQ-DEMO-ENG01", department: "Engineering & IT",
+      position: "MCR Operator", source: "Jobstreet Portal", notes: "Did not pass technical transmission test.",
       cvAnalysis: {
         reportId: "RPT-DEMO-2026051509", overallScore: 48, matchScore: 44, confidence: 65,
-        recommendation: "Reject", summary: "2 years experience, mostly frontend. Does not meet senior backend requirements.",
+        recommendation: "Reject", summary: "Lacks familiarity with modern IP-based broadcast routing and satellite uplink protocols.",
         frameworkLabel: "SFIA v8", analyzedAt: daysAgo(20),
       },
       interviewResults: [], createdAt: daysAgo(25), updatedAt: daysAgo(18),
     },
     {
-      id: "C-DEMO-010", name: "Kevin Tandarto", email: "kevin.tandarto@email.com", phone: "081123456789",
-      stage: "screened", jobReqId: "REQ-DEMO-PRD01", department: "Product",
-      position: "Product Manager", source: "Demo", notes: "Strong analytics, good culture add.",
+      id: "C-DEMO-010", name: "Gianluigi Buffon", email: "gianluigi.buffon@email.com", phone: "081123456789",
+      stage: "screened", jobReqId: "REQ-DEMO-PRD01", department: "Production & Creative",
+      position: "Showrunner", source: "Internal Referral", notes: "20 years industry veteran, exceptional team leadership.",
       cvAnalysis: {
         reportId: "RPT-DEMO-2026051510", overallScore: 77, matchScore: 74, confidence: 82,
-        recommendation: "Hire", summary: "3 years PM at edtech startup. Strong analytics muscle. Led 2 product launches.",
+        recommendation: "Hire", summary: "Senior broadcast producer with track record of managing large production crews and tight budgets.",
         frameworkLabel: "Lominger / Korn Ferry", analyzedAt: daysAgo(4),
       },
       interviewResults: [], createdAt: daysAgo(7), updatedAt: daysAgo(1),
@@ -750,21 +1011,60 @@ export function loadDemoData(): void {
   ];
 
   const activities: import("./store").ActivityEntry[] = [
-    { id: "A-DEMO-01", action: "Hired:", target: "Rina Wijaya — Senior Software Engineer", user: "You", time: daysAgo(5), type: "hire" },
-    { id: "A-DEMO-02", action: "Offer extended to:", target: "Budi Santoso — Product Manager", user: "You", time: daysAgo(3), type: "offer" },
-    { id: "A-DEMO-03", action: "Interview completed:", target: "Sari Dewi — Hire (3.6/5)", user: "You", time: daysAgo(8), type: "interview" },
-    { id: "A-DEMO-04", action: "CV analyzed:", target: "Kevin Tandarto — Hire (77 pts)", user: "You", time: daysAgo(4), type: "analysis" },
-    { id: "A-DEMO-05", action: "Added new candidate:", target: "Dian Purnama — Data Analyst", user: "You", time: daysAgo(5), type: "create" },
-    { id: "A-DEMO-06", action: "Moved from Applied to Screened:", target: "Lina Pratama", user: "You", time: daysAgo(11), type: "move" },
+    { id: "A-DEMO-01", action: "Hired:", target: "David Beckham — Senior Software Engineer", user: "You", time: daysAgo(5), type: "hire" },
+    { id: "A-DEMO-02", action: "Offer extended to:", target: "Ronaldinho — Product Manager", user: "You", time: daysAgo(3), type: "offer" },
+    { id: "A-DEMO-03", action: "Interview completed:", target: "Thierry Henry — Hire (3.6/5)", user: "You", time: daysAgo(8), type: "interview" },
+    { id: "A-DEMO-04", action: "CV analyzed:", target: "Gianluigi Buffon — Hire (77 pts)", user: "You", time: daysAgo(4), type: "analysis" },
+    { id: "A-DEMO-05", action: "Added new candidate:", target: "Steven Gerrard — Data Analyst", user: "You", time: daysAgo(5), type: "create" },
+    { id: "A-DEMO-06", action: "Moved from Applied to Screened:", target: "Andrea Pirlo", user: "You", time: daysAgo(11), type: "move" },
   ];
 
   const existingCandidates = getCandidates().filter((c) => c.source !== "Demo");
   const existingReqs = getJobReqs().filter((r) => !r.hiringManager.startsWith("Demo:"));
   const existingActivities = getActivities().filter((a) => !a.id.startsWith("A-DEMO"));
+  const existingTalent = getTalentPool().filter((t) => t.source !== "Demo");
+
+  // Generate 48 Talent Pool Mock Data (Broadcasting & Media Specialists)
+  const locations = ["Jakarta Pusat", "Jakarta Selatan", "Jakarta Barat", "Surabaya", "Bandung", "Yogyakarta", "Medan", "Makassar"];
+  const allSkills = ["News Anchor", "Video Editing", "Camera Operating", "Live Broadcasting", "Scriptwriting", "Audio Engineering", "Graphic Design", "Investigative Reporting", "Digital Marketing", "Studio Lighting", "MCR Operations", "Rundown Management"];
+  const mockTalent: TalentProfile[] = Array.from({ length: 48 }).map((_, i) => {
+    const loc = locations[Math.floor(Math.random() * locations.length)];
+    const numSkills = Math.floor(Math.random() * 3) + 1;
+    const skills = Array.from({ length: numSkills }).map(() => allSkills[Math.floor(Math.random() * allSkills.length)]);
+    const uniqueSkills = Array.from(new Set(skills));
+    
+    const category = Math.random() > 0.3 ? "Karyawan Inti" : "Freelance";
+    const capacity = category === "Freelance" ? Math.floor(Math.random() * 30) + 20 : 0; // 20-50 hours/week
+    
+    let status: "Available" | "Active" | "Inactive" = "Available";
+    const r = Math.random();
+    if (r > 0.6) status = "Active";
+    else if (r < 0.1) status = "Inactive";
+
+    const names = ["Lionel", "Cristiano", "Erling", "Kylian", "Kevin", "Luka", "Harry", "Son", "Virgil", "Alisson", "Ederson", "Thibaut", "Jude", "Martin", "Bruno", "Bernardo", "Rodri", "Federico", "Paulo", "Lautaro"];
+    const lastNames = ["Messi", "Ronaldo", "Haaland", "Mbappé", "De Bruyne", "Modrić", "Kane", "Heung-min", "van Dijk", "Becker", "Moraes", "Courtois", "Bellingham", "Ødegaard", "Fernandes", "Silva", "Hernández", "Valverde", "Dybala", "Martínez"];
+    const name = `${names[Math.floor(Math.random() * names.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
+
+    return {
+      id: `T-DEMO-${(i+1).toString().padStart(3, '0')}`,
+      name,
+      phone: `08${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+      location: loc,
+      skills: uniqueSkills,
+      category: category as any,
+      capacity,
+      status,
+      rating: Number((Math.random() * 1.5 + 3.5).toFixed(1)), // 3.5 - 5.0
+      source: "Demo",
+      createdAt: daysAgo(Math.floor(Math.random() * 90) + 30),
+      updatedAt: daysAgo(Math.floor(Math.random() * 20)),
+    };
+  });
 
   writeJson(CANDIDATES_KEY, [...candidates, ...existingCandidates]);
   writeJson(JOBREQS_KEY, [...reqs, ...existingReqs]);
   writeJson(ACTIVITY_KEY, [...activities, ...existingActivities].slice(0, 50));
+  writeJson(TALENT_POOL_KEY, [...mockTalent, ...existingTalent]);
   if (supabase) {
     supabase.from('candidates').upsert(candidates.map(candidateToRow)).then(() => {});
     supabase.from('job_reqs').upsert(reqs.map(reqToRow)).then(() => {});

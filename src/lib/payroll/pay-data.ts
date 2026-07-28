@@ -1,4 +1,5 @@
 import type { StatutoryConfig } from "./run-payroll";
+import { getActiveCompanyId } from "./company-profile";
 
 // Bentuk baris DB pi_* (mirror kolom di supabase/pay-module-schema.sql).
 export interface PiEmployeeRow {
@@ -12,6 +13,7 @@ export interface PiEmployeeRow {
   employment_type: string;
   risk_class: string;
   department: string | null;
+  position?: string | null;
   bank_account: string | null;
   status: string;
   hired_candidate_id?: string | null; // tautan ke candidates.id (modul Hire); null = karyawan non-rekrutmen
@@ -64,6 +66,7 @@ export interface PiPayrollLineComponents {
   bpjsWageBase?: number; // hilang pada baris tersimpan sebelum field ini ditambahkan -- tampilkan "-", jangan tebak
   overtimePay?: number;
   thrAmount?: number;
+  pieceRates?: { label: string; quantity: number; rate: number }[];
 }
 
 export interface PiPayrollLineRow {
@@ -158,4 +161,277 @@ export function aggregateDecemberContext(
   }
 
   return result;
+}
+
+function generateValorisTv754Employees() {
+  const firstNames = [
+    "Lionel", "Cristiano", "Zinedine", "Thierry", "David", "Wayne", "Steven", "Frank", "Didier", "John",
+    "Iker", "Sergio", "Gerard", "Dani", "Marcelo", "Toni", "Carlos", "Karim", "Gareth", "Mohamed",
+    "Sadio", "Virgil", "Alisson", "Kevin", "Erling", "Kylian", "Harry", "Heung-min", "Thibaut", "Leonardo",
+    "Javier", "Roberto", "Marco", "Ruud", "Francesco", "Alessandro", "Gabriel", "Hernan", "Juan", "Tevez",
+    "Angel", "Paulo", "Lautaro", "Julian", "Pedri", "Gavi", "Lamine", "Jude", "Phil", "Bukayo",
+    "Declan", "Rodri", "Vinicius", "Rodrygo", "Federico", "Eder", "Bruno", "Bernardo", "Ruben", "Joao",
+    "Pepe", "Nani", "Ricardo", "Luis", "Manuel", "Pauleta", "Eusebio", "Johan", "Ronald", "Dennis",
+    "Patrick", "Clarence", "Edgar", "Jaap", "Edwin", "Arjen", "Wesley", "Robin", "Memphis", "Frenkie",
+    "Matthijs", "Denzel", "Peter", "Christian", "Pierre", "Simon", "Michael", "Zlatan", "Henrik", "Freddie"
+  ];
+  const lastNames = [
+    "Messi", "Ronaldo", "Zidane", "Henry", "Beckham", "Rooney", "Gerrard", "Lampard", "Drogba", "Terry",
+    "Casillas", "Ramos", "Pique", "Alves", "Marcelo", "Kroos", "Casemiro", "Benzema", "Bale", "Salah",
+    "Mane", "Van Dijk", "Becker", "De Bruyne", "Haaland", "Mbappe", "Kane", "Son", "Courtois", "Bonucci",
+    "Zanetti", "Carlos", "Van Basten", "Rijkaard", "Gullit", "Baggio", "Totti", "Del Piero", "Batistuta", "Crespo",
+    "Veron", "Riquelme", "Aguero", "Di Maria", "Dybala", "Martinez", "Alvarez", "Gonzalez", "Lopez", "Hernandez",
+    "Garcia", "Fernandez", "Silva", "Santos", "Oliveira", "Pereira", "Costa", "Ferreira", "Rodrigues", "Martins",
+    "Gomes", "Lopes", "Marques", "Ribeiro", "Almeida", "Carvalho", "Soares", "Teixeira", "Moreira", "Correia",
+    "Mendes", "Nunes", "Vieira", "Monteiro", "Cardoso", "Neves", "Dias", "Cancelo", "Felix", "Pepe",
+    "Nani", "Quaresma", "Deco", "Figo", "Pauleta", "Eusebio", "Cruyff", "Neeskens", "Koeman", "Bergkamp"
+  ];
+
+  const divisions = [
+    { name: "Divisi Redaksi & Pemberitaan", count: 316, titles: [
+      "Pemimpin Redaksi / VP News", "Wakil Pemimpin Redaksi", "Redaktur Pelaksana Senior",
+      "Produser Berita Senior", "Produser Investigasi", "Koordinator Liputan (Korlip) Nasional",
+      "Presenter Utama / Senior News Anchor", "Reporter Lapangan Senior", "Reporter Berita / Journalist",
+      "News Desk & Scriptwriter", "Jurnalis Daerah / Kontributor"
+    ], salaryMin: 6000000, salaryMax: 18000000 },
+    { name: "Divisi Operasional Studio & Broadcast", count: 166, titles: [
+      "VP Production Studio", "Chief Cameraman", "Studio Technical Manager", "Chief Lighting & Audio",
+      "ENG Cameraman Senior", "ENG Cameraman", "Video Editor & Colorist",
+      "Senior Audio Mixer & Sound Engineer", "Lighting Specialist & Switcher", "Studio Prompter & CG Operator"
+    ], salaryMin: 5500000, salaryMax: 15000000 },
+    { name: "Divisi Kreatif & Program Siaran TV", count: 121, titles: [
+      "VP Entertainment & Programming", "Executive Producer Program TV", "Creative Director",
+      "Program Director (PD)", "Floor Director (FD)", "Creative Scriptwriter & Rundown Planner",
+      "Talent Coordinator & Guest Relation", "Sports Programming & Broadcast Specialist", "Acquisition & Scheduling Officer"
+    ], salaryMin: 5500000, salaryMax: 16000000 },
+    { name: "Divisi Teknik Penyiaran & IT", count: 90, titles: [
+      "VP Engineering & IT", "Chief Transmitter & Network Officer", "MCR Supervisor", "IT Infrastructure Lead",
+      "Master Control Room (MCR) Operator", "Transmisi RF & Satellite Uplink Engineer",
+      "Switching & Routing broadcast Engineer", "IT Network & Cybersecurity Specialist", "Broadcast Helpdesk & Hardware Support"
+    ], salaryMin: 6000000, salaryMax: 17000000 },
+    { name: "Divisi Human Capital & GA", count: 35, titles: [
+      "Chief Human Capital & GA Officer", "HRBP Lead (News & Production)", "Senior Recruitment & Talent Acquisition",
+      "Payroll & Compensation Specialist", "Industrial Relations & BPJS Specialist", "Organizational Development (OD) Analyst",
+      "Studio Facility & Fleet Operations Supervisor"
+    ], salaryMin: 6500000, salaryMax: 20000000 },
+    { name: "Divisi Keuangan & Anggaran", count: 26, titles: [
+      "CFO / VP Keuangan & Anggaran", "Senior Accounting & Tax Manager", "Budgeting & Financial Planning Specialist",
+      "Treasury & Cash Flow Analyst", "Supervisor Payroll & Kompensasi", "Senior Accounting Staff"
+    ], salaryMin: 6500000, salaryMax: 22000000 }
+  ];
+
+  const ptkpList = ["TK/0", "TK/1", "K/0", "K/1", "K/2", "K/3"];
+  const banks = ["Bank Mandiri", "Bank BCA", "Bank BNI", "Bank BRI"];
+
+  const emps: any[] = [];
+  let idCounter = 1;
+
+  for (const div of divisions) {
+    for (let j = 0; j < div.count; j++) {
+      const hexId = idCounter.toString(16).padStart(12, "0");
+      const id = `e1000000-0000-4000-8000-${hexId}`;
+      
+      const fName = firstNames[(idCounter * 7 + 3) % firstNames.length];
+      const lName = lastNames[(idCounter * 13 + 5) % lastNames.length];
+      const middleInitial = idCounter > 200 ? ` ${String.fromCharCode(65 + (idCounter % 26))}.` : "";
+      const fullName = `${fName}${middleInitial} ${lName}`;
+
+      const titleIdx = j === 0 ? 0 : Math.min(div.titles.length - 1, 1 + ((j - 1) % (div.titles.length - 1)));
+      const position = div.titles[titleIdx];
+
+      const employment_type = idCounter <= 654 ? "PKWTT (Tetap)" : "PKWT (Kontrak)";
+      
+      let salary = Math.round((div.salaryMin + ((idCounter * 123457) % (div.salaryMax - div.salaryMin))) / 500000) * 500000;
+      if (j === 0) salary = Math.max(salary, 25000000);
+
+      const ptkp = ptkpList[idCounter % ptkpList.length];
+      const bank = `${banks[idCounter % banks.length]} — ${1000000000 + idCounter}`;
+      const nik = `317101${(10 + (idCounter % 20)).toString().padStart(2, "0")}08${(70 + (idCounter % 25)).toString().padStart(2, "0")}${idCounter.toString().padStart(4, "0")}`;
+      const npwp = `09.${100 + (idCounter % 899)}.${200 + (idCounter % 799)}.${idCounter % 9}-${(idCounter % 90).toString().padStart(3, "0")}.000`;
+
+      emps.push({
+        id,
+        full_name: fullName,
+        nik,
+        npwp,
+        ptkp_status: ptkp,
+        employment_type,
+        department: div.name,
+        position,
+        bank_account: bank,
+        upah_pokok: salary
+      });
+
+      idCounter++;
+    }
+  }
+
+  return emps;
+}
+
+export const DEMO_VALORIS_TV_EMPLOYEES = generateValorisTv754Employees();
+
+function generateZusTextile245Employees() {
+  const firstNames = [
+    "Wulan", "Bayu", "Fajar", "Budi", "Siti", "Andi", "Dewi", "Eko", "Rina", "Agus",
+    "Hendra", "Rizki", "Rahmat", "Ulan", "Kartika", "Sari", "Lestari", "Wahyu", "Surya", "Dedi",
+    "Nurul", "Yuni", "Putri", "Ahmad", "Asep", "Joko", "Sri", "Indah", "Ratna", "Hadi",
+    "Gunawan", "Bambang", "Wawan", "Cahyo", "Dwi", "Tri", "Kurniawan", "Saputra", "Pratama", "Hartono",
+    "Lukman", "Firman", "Yusuf", "Maulana", "Irwan", "Anwar", "Rudi", "Haryanto", "Susanto", "Setiawan",
+    "Tari", "Fitri", "Nisa", "Maya", "Lina", "Desi", "Amalia", "Anisa", "Wanda", "Devi"
+  ];
+  const lastNames = [
+    "Sari", "Kurnia", "Saputra", "Hidayat", "Pratama", "Widodo", "Santoso", "Lestari", "Wibowo", "Anggraini",
+    "Nugroho", "Purnama", "Kusuma", "Ramadhan", "Susanti", "Handayani", "Mulyani", "Utami", "Melati", "Rahayu",
+    "Wijaya", "Halim", "Yulianti", "Setiawan", "Hasanah", "Maryati", "Wulandari", "Supriyanti", "Sugiarto", "Muryani",
+    "Sutrisno", "Irawan", "Permadi", "Pambudi", "Hakim", "Rochman", "Suryadi", "Purwanto", "Widyastuti", "Retno"
+  ];
+
+  const divisions = [
+    { name: "Cutting & Pattern Making", count: 45, titles: [
+      "Supervisor Potong / Cutting Lead", "Senior Pattern Maker & Grading", "Master Sample Maker",
+      "Operator Mesin Potong (Cutting)", "Staff CAD Marker & Layout", "QC Fabric Inspection"
+    ], salaryMin: 3500000, salaryMax: 8000000 },
+    { name: "Sewing & Assembly Production", count: 125, titles: [
+      "Line Supervisor Jahit (Sewing)", "Chief Mechanic Mesin Jahit", "Operator Mesin Jahit High-Speed",
+      "Operator Mesin Obras & Overlock", "Operator Jahit Borongan", "Staff Admin Produksi Line"
+    ], salaryMin: 3500000, salaryMax: 7500000 },
+    { name: "Quality Control & Finishing", count: 40, titles: [
+      "Supervisor QC Finishing", "QC Inline Inspector", "QC Final & Buyer Assurance",
+      "Operator Setrika & Steam Uap", "Staff Packing & Folding", "Operator Stain Removal"
+    ], salaryMin: 3500000, salaryMax: 7000000 },
+    { name: "Warehouse & Logistics", count: 20, titles: [
+      "Warehouse & Inventory Lead", "Staff Gudang Kain & Aksesoris (Trim)", "Staff Gudang Barang Jadi (FG)",
+      "Operator Forklift & Material Handler", "Staff Expedisi & Bea Cukai Export"
+    ], salaryMin: 3800000, salaryMax: 8500000 },
+    { name: "Factory HR & Administration", count: 15, titles: [
+      "Plant GA & IR Manager", "Supervisor HR & Payroll Pabrik", "Staff Compliance & Audit Buyer",
+      "Staff K3 & Kesehatan Kerja", "Staff Rekrutmen Operator Pabrik", "Komandan Regu Security Pabrik"
+    ], salaryMin: 4500000, salaryMax: 14000000 }
+  ];
+
+  const ptkpList = ["TK/0", "TK/0", "TK/0", "K/0", "K/1", "K/2", "K/3"];
+  const empTypes = ["Karyawan Tetap (PKWTT)", "Karyawan Tetap (PKWTT)", "Kontrak (PKWT)", "Kontrak Borongan (PKWT)"];
+  const emps = [];
+  let idCounter = 1;
+
+  for (const div of divisions) {
+    for (let i = 0; i < div.count; i++) {
+      const fn = firstNames[(idCounter - 1) % firstNames.length];
+      const ln = lastNames[Math.floor((idCounter - 1) / firstNames.length) % lastNames.length];
+      const fullName = `${fn} ${ln}`;
+      const id = `ZUS-${String(idCounter).padStart(3, "0")}`;
+      const nik = `360401${String(100000 + idCounter)}`;
+      const npwp = `85.${String(100 + idCounter).slice(0, 3)}.${String(idCounter).padStart(3, "0")}.8-402.000`;
+      const ptkp = ptkpList[idCounter % ptkpList.length];
+      const employment_type = empTypes[idCounter % empTypes.length];
+      const position = div.titles[i % div.titles.length];
+      const bank = `BCA 8830${String(100000 + idCounter)}`;
+      
+      const ratio = div.count > 1 ? i / (div.count - 1) : 0;
+      const salary = Math.round((div.salaryMax - (div.salaryMax - div.salaryMin) * ratio) / 100000) * 100000;
+
+      emps.push({
+        id,
+        full_name: fullName,
+        nik,
+        npwp,
+        ptkp_status: ptkp,
+        employment_type,
+        department: div.name,
+        position,
+        bank_account: bank,
+        upah_pokok: salary
+      });
+
+      idCounter++;
+    }
+  }
+
+  return emps;
+}
+
+export const DEMO_ZUS_TEXTILE_EMPLOYEES = generateZusTextile245Employees();
+
+export function getActiveCompanyEmployees(): any[] {
+  const compId = getActiveCompanyId();
+  if (compId === "22222222-2222-4222-8222-222222222222" || compId === "zus_textile") {
+    return DEMO_ZUS_TEXTILE_EMPLOYEES;
+  }
+  return DEMO_VALORIS_TV_EMPLOYEES;
+}
+
+// Auto-seed data demo untuk database (Valora TV & Zus Textile)
+export async function ensureDemoEmployeesExist(supabase: any): Promise<void> {
+  if (!supabase) return;
+  try {
+    const valoraEmps = DEMO_VALORIS_TV_EMPLOYEES.map(e => ({ ...e, tenant_id: "11111111-1111-4111-8111-111111111111" }));
+    const zusEmps = DEMO_ZUS_TEXTILE_EMPLOYEES.map(e => ({ ...e, tenant_id: "22222222-2222-4222-8222-222222222222" }));
+    const allDemoEmployees = [...valoraEmps, ...zusEmps];
+
+    const employeeRows = allDemoEmployees.map((item: any) => ({
+      id: item.id,
+      tenant_id: item.tenant_id,
+      full_name: item.full_name,
+      nik: item.nik,
+      npwp: item.npwp,
+      ptkp_status: item.ptkp_status,
+      join_date: "2023-01-01",
+      employment_type: item.employment_type,
+      risk_class: "I",
+      department: item.department,
+      position: item.position || item.department,
+      bank_account: item.bank_account,
+      status: "active"
+    }));
+
+    const compRows = allDemoEmployees.map(item => ({
+      employee_id: item.id,
+      upah_pokok: item.upah_pokok,
+      tunjangan_tetap: [],
+      tunjangan_tidak_tetap: [],
+      effective_date: "2026-01-01"
+    }));
+
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < employeeRows.length; i += BATCH_SIZE) {
+      await supabase.from("pi_employees").upsert(employeeRows.slice(i, i + BATCH_SIZE), { onConflict: "id" });
+    }
+    for (let i = 0; i < compRows.length; i += BATCH_SIZE) {
+      await supabase.from("pi_compensation").upsert(compRows.slice(i, i + BATCH_SIZE), { onConflict: "employee_id,effective_date" });
+    }
+  } catch (e) {
+    console.error("Gagal auto-seed demo employees:", e);
+  }
+}
+
+export const ensureRahmatSuradiExists = ensureDemoEmployeesExist;
+
+const STATUTORY_TOGGLES_KEY = "pi_statutory_toggles_v1";
+
+export function getStatutoryToggles(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(STATUTORY_TOGGLES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function setStatutoryToggle(employeeIdOrName: string, enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    const toggles = getStatutoryToggles();
+    toggles[employeeIdOrName] = enabled;
+    localStorage.setItem(STATUTORY_TOGGLES_KEY, JSON.stringify(toggles));
+    window.dispatchEvent(new Event("statutory_toggles_changed"));
+  } catch {}
+}
+
+export function isStatutoryEnabled(employeeId: string, employeeName: string): boolean {
+  const toggles = getStatutoryToggles();
+  if (toggles[employeeId] !== undefined) return toggles[employeeId];
+  if (toggles[employeeName] !== undefined) return toggles[employeeName];
+  return true;
 }
