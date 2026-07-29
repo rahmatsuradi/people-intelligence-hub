@@ -553,7 +553,7 @@ export default function CvAnalyzerPage() {
   ` : ""}
 
   <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:8pt;color:#94a3b8">
-    <span>People Intelligence · hire-intelligence-system.vercel.app</span>
+    <span>People Intelligence · people-intelligence-hub.vercel.app</span>
     <span>Generated: ${report.generatedAt} · Groq Llama 3.3 70B · No PII stored</span>
   </div>
 </body>
