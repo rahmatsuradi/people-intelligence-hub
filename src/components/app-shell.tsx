@@ -98,7 +98,7 @@ const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 1. Dashboard
   dashboard: "dashboard", analytics: "chart", "report-gen": "document",
   // 2. Employer Branding
-  "ai-trends": "sparkles", "editorial-plan": "calendarDays", engagement: "users",
+  "employer-branding": "sparkles", "ai-trends": "sparkles", "editorial-plan": "calendarDays", engagement: "users",
   // 3. Talent Acquisition
   mpp: "chart", roles: "briefcase", "talent-pool": "users", candidates: "users", "cv-analyzer": "scan", interviews: "calendar", "hiring-report": "report", "hiring-analytics": "chart",
   // 4. Core HR
@@ -246,6 +246,7 @@ export function AppShell({
     {
       label: "Employer Branding & Culture",
       items: [
+        { id: "employer-branding", label: "AI Content Generator", href: "/employer-branding" },
         { id: "ai-trends", label: "Trend & Ide Konten", href: "/employer-branding/ai-trends" },
         { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial", soon: true },
         { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement", soon: true },
