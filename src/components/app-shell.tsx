@@ -108,7 +108,7 @@ const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 6. Learning & Development
   courses: "book", competency: "star",
   // 7. Payroll & Rewards
-  payroll: "report", laporan: "chart",
+  payroll: "report", laporan: "chart", "form-1721-a1": "document",
   // 8. Settings & Integrations
   "job-portal": "plug", "social-media": "plug",
 };
@@ -292,6 +292,7 @@ export function AppShell({
       items: [
         { id: "payroll", label: "Payroll Run", href: "/pay/payroll" },
         { id: "laporan", label: "Laporan Pajak & BPJS", href: "/pay/laporan" },
+        { id: "form-1721-a1", label: "Formulir 1721-A1", href: "/pay/laporan/1721-a1" },
       ],
     },
     {
