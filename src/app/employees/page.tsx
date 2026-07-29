@@ -603,7 +603,7 @@ export default function CoreEmployeesPage() {
                   <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
                   Integrasi Modul HR (Pilih untuk melihat data individu)
                 </span>
-                <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded">100% Tersinkron</span>
+                <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Tautan Cepat</span>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 <button

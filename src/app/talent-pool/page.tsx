@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, Card, Icon, SvgPath, cn, inputClass, Button } from "@/components/app-shell";
 import { getTalentPool, loadDemoData, type TalentProfile } from "@/lib/store";
 
+function maskPhone(phone: string | null | undefined): string {
+  if (!phone) return "—";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 6) return "***";
+  return `${digits.slice(0, 4)}${"*".repeat(digits.length - 6)}${digits.slice(-2)}`;
+}
+
 export default function TalentPoolPage() {
   const [talents, setTalents] = useState<TalentProfile[]>([]);
   const [filterLoc, setFilterLoc] = useState<string>("All");
@@ -151,7 +158,7 @@ export default function TalentPoolPage() {
                     <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-900 dark:text-white">{t.name}</div>
-                        <div className="text-xs text-slate-500">{t.phone}</div>
+                        <div className="text-xs text-slate-500">{maskPhone(t.phone)}</div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={cn(

@@ -129,6 +129,17 @@ function rubricFor(id: string): RubricLevel[] {
   return COMPETENCY_BY_ID[id]?.rubric ?? [];
 }
 
+/** Client-side JSON export — no server round-trip, no fake "processing" delay. */
+function downloadJSON(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Pillar for a question's competency, read from the framework rather than guessed
  *  from the id prefix (the old `startsWith("skkni") ? "skkni" : "ulrich"` test
  *  labelled every SFIA/Lominger/CGMA question as "Ulrich"). */
@@ -951,7 +962,19 @@ function ScoringResultsPanel({
           Back to Kit
         </Button>
         <div className="flex gap-2">
-          <Button variant="secondary" size="md">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => downloadJSON(`interview-result-${candidateName.replace(/\s+/g, "-").toLowerCase()}-${pack.packId}.json`, {
+              candidateName,
+              position: pack.position,
+              avgRating,
+              recommendation,
+              durationSec: elapsedSeconds,
+              byType,
+              answers: pack.questions.map((q) => ({ question: q.question, type: q.type, rating: scores[q.id]?.rating ?? null, notes: scores[q.id]?.notes ?? "" })),
+            })}
+          >
             <Icon className="h-4 w-4"><SvgPath name="download" /></Icon>
             Export Results
           </Button>
@@ -1116,7 +1139,11 @@ function ResultsPanel({ pack, onStartInterview }: { pack: QuestionPack; onStartI
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="md">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => downloadJSON(`interview-kit-${pack.packId}.json`, pack)}
+          >
             <Icon className="h-4 w-4">
               <SvgPath name="download" />
             </Icon>
