@@ -437,9 +437,9 @@ export default function PayrollPage() {
     const pr = pieceRatesByEmployee[line.employee.id] ?? [];
     const slip = buildPayslip(line.employee, line.compensation, line.result, period, company, deductions, pr);
     const html = renderPayslipHTML(slip);
-    // Mock phone number if none provided in db
-    const phone = "6281234567890";
-    setPayslipModal({ html, employeeName: line.employee.full_name, employeePhone: phone });
+    // pi_employees belum punya kolom nomor telepon — tombol WA disembunyikan
+    // (bukan diisi angka palsu) sampai data itu benar-benar tersedia.
+    setPayslipModal({ html, employeeName: line.employee.full_name, employeePhone: undefined });
   }, [period, otherDeductions, pieceRatesByEmployee]);
 
   const saveRun = useCallback(async () => {
