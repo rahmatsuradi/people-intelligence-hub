@@ -8,11 +8,12 @@ import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { getActiveCompanyId } from "@/lib/payroll/company-profile";
 import { saveAttendance } from "@/lib/attendance/store";
 import type { AttendanceRecord } from "@/lib/attendance/types";
-import { toast } from "@/components/toast";
 
 export default function KioskPage() {
   const [time, setTime] = useState<Date>(new Date());
   const [employees, setEmployees] = useState<PiEmployeeRow[]>([]);
+  const [query, setQuery] = useState("");
+  const [selectedEmployee, setSelectedEmployee] = useState<PiEmployeeRow | null>(null);
   const [scanning, setScanning] = useState<"face" | "fingerprint" | null>(null);
   const [scanResult, setScanResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -37,40 +38,45 @@ export default function KioskPage() {
     }
   }, []);
 
-  const simulateScan = (type: "face" | "fingerprint") => {
-    if (employees.length === 0) {
-      toast("Data karyawan tidak tersedia", "error");
-      return;
-    }
-    
+  const matches = query.trim().length > 0
+    ? employees.filter(e => e.full_name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6)
+    : [];
+
+  const confirmScan = (type: "face" | "fingerprint") => {
+    if (!selectedEmployee) return;
+
     setScanning(type);
     setScanResult(null);
 
-    // Simulate scanning delay
+    // Simulate scanning delay (visual confirmation only — identity was already
+    // established by search selection, not by this animation)
     setTimeout(() => {
       setScanning(null);
-      // Pick random employee for demo
-      const randomEmp = employees[Math.floor(Math.random() * employees.length)];
+      const emp = selectedEmployee;
       const today = new Date().toISOString().split("T")[0];
       const checkInTime = new Date().toTimeString().slice(0,5);
 
       const newRecord: AttendanceRecord = {
         id: crypto.randomUUID(),
-        employeeId: randomEmp.id,
+        employeeId: emp.id,
         date: today,
         status: "present",
         checkIn: checkInTime,
         overtimeHours: 0,
       };
-      
+
       saveAttendance(newRecord);
       setScanResult({
         type: "success",
-        message: `Berhasil Check-In!\n${randomEmp.full_name} (${checkInTime})`
+        message: `Berhasil Check-In!\n${emp.full_name} (${checkInTime})`
       });
 
-      // Clear result after 3 seconds
-      setTimeout(() => setScanResult(null), 3000);
+      // Clear result and reset for the next employee after 3 seconds
+      setTimeout(() => {
+        setScanResult(null);
+        setSelectedEmployee(null);
+        setQuery("");
+      }, 3000);
     }, 2000);
   };
 
@@ -133,12 +139,62 @@ export default function KioskPage() {
           </div>
         )}
 
-        {!scanning && !scanResult && (
+        {!scanning && !scanResult && !selectedEmployee && (
           <>
-            <h2 className="text-2xl font-semibold text-white mb-8">Pilih Metode Presensi</h2>
+            <h2 className="text-2xl font-semibold text-white mb-2">Siapa Anda?</h2>
+            <p className="text-sm text-slate-400 mb-6">Ketik nama Anda untuk memulai presensi</p>
+            {employees.length === 0 && (
+              <p className="mb-4 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                Data karyawan belum tersedia untuk perusahaan ini.
+              </p>
+            )}
+            <div className="relative">
+              <Icon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500"><SvgPath name="search" /></Icon>
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Cari nama Anda..."
+                className="w-full rounded-2xl border-2 border-slate-800 bg-slate-800/50 py-4 pl-12 pr-4 text-lg text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            {query.trim().length > 0 && (
+              <div className="mt-4 max-h-72 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-800/30 text-left">
+                {matches.length > 0 ? matches.map(emp => (
+                  <button
+                    key={emp.id}
+                    onClick={() => { setSelectedEmployee(emp); setQuery(""); }}
+                    className="flex w-full items-center justify-between gap-4 border-b border-slate-800/80 px-5 py-4 text-left transition-colors last:border-b-0 hover:bg-slate-700/40"
+                  >
+                    <div>
+                      <p className="font-semibold text-white">{emp.full_name}</p>
+                      <p className="text-sm text-slate-400">{emp.position || emp.department || "-"}</p>
+                    </div>
+                    <Icon className="h-5 w-5 text-slate-500"><SvgPath name="arrowRight" /></Icon>
+                  </button>
+                )) : (
+                  <p className="px-5 py-4 text-sm text-slate-500">Tidak ada karyawan dengan nama tersebut</p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {!scanning && !scanResult && selectedEmployee && (
+          <>
+            <div className="mb-8">
+              <p className="text-sm text-slate-400">Konfirmasi presensi untuk</p>
+              <h2 className="text-3xl font-bold text-white mt-1">{selectedEmployee.full_name}</h2>
+              <button
+                onClick={() => setSelectedEmployee(null)}
+                className="mt-2 text-sm font-medium text-blue-400 hover:text-blue-300"
+              >
+                Bukan Anda? Ganti
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-6">
-              <button 
-                onClick={() => simulateScan("face")}
+              <button
+                onClick={() => confirmScan("face")}
                 className="group flex flex-col items-center gap-4 rounded-2xl border-2 border-slate-800 bg-slate-800/50 p-8 transition-all hover:border-blue-500 hover:bg-blue-900/20"
               >
                 <div className="rounded-full bg-blue-500/10 p-6 text-blue-400 transition-transform group-hover:scale-110 group-hover:text-blue-300">
@@ -150,8 +206,8 @@ export default function KioskPage() {
                 </div>
               </button>
 
-              <button 
-                onClick={() => simulateScan("fingerprint")}
+              <button
+                onClick={() => confirmScan("fingerprint")}
                 className="group flex flex-col items-center gap-4 rounded-2xl border-2 border-slate-800 bg-slate-800/50 p-8 transition-all hover:border-emerald-500 hover:bg-emerald-900/20"
               >
                 <div className="rounded-full bg-emerald-500/10 p-6 text-emerald-400 transition-transform group-hover:scale-110 group-hover:text-emerald-300">
