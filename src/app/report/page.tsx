@@ -5,7 +5,7 @@ import {
   CompetencyReportTable,
   EvidenceValidityPanel,
 } from "@/components/competency-framework-ui";
-import { AppShell, Icon, SvgPath, ICON_PATHS, Card, Button, Label, cn } from "@/components/app-shell";
+import { AppShell, Icon, SvgPath, Card, Button, Label, cn } from "@/components/app-shell";
 import {
   buildReportCompetencyRows,
   blendScore,

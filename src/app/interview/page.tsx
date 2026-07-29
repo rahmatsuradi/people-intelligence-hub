@@ -21,7 +21,7 @@ import {
   findCandidateByName, createCandidate, saveInterviewResult, getCandidate,
   type InterviewResultSnapshot,
 } from "@/lib/store";
-import { AppShell, Icon, SvgPath, ICON_PATHS, Card, Button, Label, inputClass, cn } from "@/components/app-shell";
+import { AppShell, Icon, SvgPath, Card, Button, Label, inputClass, cn } from "@/components/app-shell";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 

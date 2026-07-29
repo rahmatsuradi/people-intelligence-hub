@@ -4,8 +4,11 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── Candidates ───
+-- Primary key is composite (user_id, id): each row is owned by a user, and the
+-- client-generated id only needs to be unique within that user's data.
 create table if not exists public.candidates (
-  id                text primary key,
+  id                text not null,
+  user_id           uuid not null default auth.uid(),
   name              text not null,
   email             text default '',
   phone             text default '',
@@ -18,12 +21,14 @@ create table if not exists public.candidates (
   cv_analysis       jsonb,
   interview_results jsonb default '[]'::jsonb,
   created_at        timestamptz default now(),
-  updated_at        timestamptz default now()
+  updated_at        timestamptz default now(),
+  primary key (user_id, id)
 );
 
 -- ─── Job Requisitions ───
 create table if not exists public.job_reqs (
-  id             text primary key,
+  id             text not null,
+  user_id        uuid not null default auth.uid(),
   title          text not null,
   department     text default '',
   level          text default '',
@@ -38,54 +43,50 @@ create table if not exists public.job_reqs (
   headcount      int default 1,
   hiring_manager text default '',
   created_at     timestamptz default now(),
-  updated_at     timestamptz default now()
+  updated_at     timestamptz default now(),
+  primary key (user_id, id)
 );
 
 -- ─── Activity Feed ───
 create table if not exists public.activities (
-  id        text primary key,
+  id        text not null,
+  user_id   uuid not null default auth.uid(),
   action    text not null,
   target    text default '',
   "user"    text default 'You',
   "time"    timestamptz default now(),
-  "type"    text not null
+  "type"    text not null,
+  primary key (user_id, id)
 );
 
--- Helpful index for sorting the activity feed
+-- Helpful indexes
 create index if not exists activities_time_idx on public.activities ("time" desc);
+create index if not exists candidates_user_idx on public.candidates (user_id);
+create index if not exists job_reqs_user_idx   on public.job_reqs (user_id);
+create index if not exists activities_user_idx on public.activities (user_id);
 
 -- ═══════════════════════════════════════════════════════════════════════════
---  Row Level Security (RLS) — authenticated users only
---
---  The anon/publishable key is PUBLIC: it ships inside client JS and anyone can
---  read it from the browser. It must never be able to read or write candidate
---  PII (name, email, phone, CV analysis). Policies below are therefore scoped
---  `to authenticated` — a policy with no `to` clause defaults to PUBLIC, which
---  includes anon, and that is what leaked in earlier versions of this file.
---
---  SAFE TO RE-RUN: drops the legacy permissive "anon all *" policies first, so
---  re-running this file TIGHTENS access. It can never reopen public access.
---  (Earlier versions recreated the anon policies here, meaning a re-run
---  silently reopened the whole candidates table to the internet.)
---
---  The public apply flow (/apply) is unaffected: it runs server-side with the
---  service-role key (src/lib/supabase-admin.ts), which bypasses RLS entirely.
+--  Row Level Security (RLS) — per-user isolation
+--  Each row is owned by the user who created it (user_id defaults to auth.uid()).
+--  Policies scope every operation to the authenticated owner, so one user can
+--  never read or write another user's candidates. Requires login (the anon key
+--  alone has a null auth.uid() and therefore sees nothing).
 -- ═══════════════════════════════════════════════════════════════════════════
 alter table public.candidates enable row level security;
 alter table public.job_reqs   enable row level security;
 alter table public.activities enable row level security;
 
--- Legacy public-access policies — present if an older schema.sql was ever run.
+-- Drop any legacy permissive policies from earlier versions.
 drop policy if exists "anon all candidates" on public.candidates;
 drop policy if exists "anon all job_reqs"   on public.job_reqs;
 drop policy if exists "anon all activities" on public.activities;
+drop policy if exists "own candidates" on public.candidates;
+drop policy if exists "own job_reqs"   on public.job_reqs;
+drop policy if exists "own activities" on public.activities;
 
--- Dropped then recreated so this block is idempotent; a momentary gap fails
--- CLOSED (no policy = no access), never open.
-drop policy if exists "auth all candidates" on public.candidates;
-drop policy if exists "auth all job_reqs"   on public.job_reqs;
-drop policy if exists "auth all activities" on public.activities;
-
-create policy "auth all candidates" on public.candidates for all to authenticated using (true) with check (true);
-create policy "auth all job_reqs"   on public.job_reqs   for all to authenticated using (true) with check (true);
-create policy "auth all activities" on public.activities for all to authenticated using (true) with check (true);
+create policy "own candidates" on public.candidates
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "own job_reqs" on public.job_reqs
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "own activities" on public.activities
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());

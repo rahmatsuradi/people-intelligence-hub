@@ -10,6 +10,30 @@ import { supabase } from './supabase';
 import { getActiveCompanyId } from './payroll/company-profile';
 import type { CompetencyCluster, AiCompetencyScore, AiRiskFlag, AiInterviewQuestion } from './cv-analyzer-ai';
 
+/* ─── Cloud sync error reporting ───
+   Supabase writes are fire-and-forget (localStorage is the source of truth for
+   the UI), but we must not swallow failures silently. Log them so a broken sync
+   is diagnosable instead of invisible. */
+type SyncResult = { error: { message?: string } | null } | null | undefined;
+function logSync(op: string, res: SyncResult): void {
+  if (res?.error) console.warn(`[store] ${op} sync failed:`, res.error.message ?? res.error);
+}
+
+/* ─── Current user id ───
+   Rows are owned per-user (composite primary key (user_id, id)). We cache the
+   logged-in user's id so writes can stamp user_id explicitly, making upserts
+   deterministic against the composite key. When it's unknown (not yet loaded
+   or localStorage-only mode) we omit it and let the DB default (auth.uid())
+   fill it on insert. */
+let currentUserId: string | null = null;
+if (supabase) {
+  supabase.auth.getSession().then(({ data }) => { currentUserId = data.session?.user.id ?? null; });
+  supabase.auth.onAuthStateChange((_event, session) => { currentUserId = session?.user.id ?? null; });
+}
+function ownerFields(): { user_id?: string } {
+  return currentUserId ? { user_id: currentUserId } : {};
+}
+
 export type PipelineStage = "applied" | "screened" | "work_sample" | "interviewed" | "offered" | "hired" | "rejected";
 export type ReqStatus = "draft" | "active" | "paused" | "closed";
 
@@ -157,6 +181,7 @@ export function generateId(prefix: string): string {
 
 function candidateToRow(c: CandidateRecord) {
   return {
+    ...ownerFields(),
     id: c.id, name: c.name, email: c.email, phone: c.phone, stage: c.stage,
     job_req_id: c.jobReqId, department: c.department, position: c.position,
     source: c.source, notes: c.notes, cv_analysis: c.cvAnalysis,
@@ -182,6 +207,7 @@ function rowToCandidate(r: Record<string, unknown>): CandidateRecord {
 
 function reqToRow(r: JobRequisition) {
   return {
+    ...ownerFields(),
     id: r.id, title: r.title, department: r.department, level: r.level, status: r.status,
     description: r.description, requirements: r.requirements,
     salary_min: r.salaryMin, salary_max: r.salaryMax, currency: r.currency,
@@ -210,7 +236,7 @@ function rowToReq(r: Record<string, unknown>): JobRequisition {
 }
 
 function activityToRow(a: ActivityEntry) {
-  return { id: a.id, action: a.action, target: a.target, user: a.user, time: a.time, type: a.type };
+  return { ...ownerFields(), id: a.id, action: a.action, target: a.target, user: a.user, time: a.time, type: a.type };
 }
 
 function rowToActivity(r: Record<string, unknown>): ActivityEntry {
@@ -270,12 +296,12 @@ export function saveCandidate(candidate: CandidateRecord): void {
   if (idx >= 0) all[idx] = candidate;
   else all.unshift(candidate);
   writeJson(CANDIDATES_KEY, all);
-  supabase?.from('candidates').upsert(candidateToRow(candidate)).then(() => {});
+  supabase?.from('candidates').upsert(candidateToRow(candidate), { onConflict: 'user_id,id' }).then((r) => logSync('candidate upsert', r));
 }
 
 export function deleteCandidate(id: string): void {
   writeJson(CANDIDATES_KEY, getCandidates().filter((c) => c.id !== id));
-  supabase?.from('candidates').delete().eq('id', id).then(() => {});
+  supabase?.from('candidates').delete().eq('id', id).then((r) => logSync('candidate delete', r));
 }
 
 /* ─── Talent Pool ─── */
@@ -417,7 +443,7 @@ export function importCandidates(rows: ImportRow[]): number {
       target: `${added} candidate${added === 1 ? "" : "s"} via CSV`,
       type: "create",
     });
-    supabase?.from('candidates').upsert(all.slice(0, added).map(candidateToRow)).then(() => {});
+    supabase?.from('candidates').upsert(all.slice(0, added).map(candidateToRow), { onConflict: 'user_id,id' }).then((r) => logSync('candidates import', r));
   }
   return added;
 }
@@ -528,12 +554,12 @@ export function saveJobReq(req: JobRequisition): void {
   if (idx >= 0) all[idx] = req;
   else all.unshift(req);
   writeJson(JOBREQS_KEY, all);
-  supabase?.from('job_reqs').upsert(reqToRow(req)).then(() => {});
+  supabase?.from('job_reqs').upsert(reqToRow(req), { onConflict: 'user_id,id' }).then((r) => logSync('job_req upsert', r));
 }
 
 export function deleteJobReq(id: string): void {
   writeJson(JOBREQS_KEY, getJobReqs().filter((r) => r.id !== id));
-  supabase?.from('job_reqs').delete().eq('id', id).then(() => {});
+  supabase?.from('job_reqs').delete().eq('id', id).then((r) => logSync('job_req delete', r));
 }
 
 export function createJobReq(data: {
@@ -601,7 +627,7 @@ export function addActivity(data: {
   };
   all.unshift(entry);
   writeJson(ACTIVITY_KEY, all.slice(0, 50));
-  supabase?.from('activities').insert(activityToRow(entry)).then(() => {});
+  supabase?.from('activities').insert(activityToRow(entry)).then((r) => logSync('activity insert', r));
 }
 
 /* ─── Dashboard Stats ─── */
@@ -834,9 +860,31 @@ export function clearDemoData(): void {
   writeJson("hi_jobreqs", getJobReqs().filter((r) => !r.hiringManager.startsWith("Demo:") && !r.id.startsWith("REQ-ZUS-")));
   writeJson("hi_talent_pool", getTalentPool().filter((t) => t.source !== "Demo" && !t.id.startsWith("T-ZUS-")));
   if (supabase) {
-    supabase.from('candidates').delete().eq('source', 'Demo').then(() => {});
-    supabase.from('job_reqs').delete().like('hiring_manager', 'Demo:%').then(() => {});
+    supabase.from('candidates').delete().eq('source', 'Demo').then((r) => logSync('demo candidates delete', r));
+    supabase.from('job_reqs').delete().like('hiring_manager', 'Demo:%').then((r) => logSync('demo job_reqs delete', r));
   }
+}
+
+/** Permanently delete ALL of the user's data — localStorage AND the cloud copy.
+ *  Awaits the cloud deletes so callers can safely navigate away afterwards.
+ *  Under per-user RLS, the unfiltered deletes only affect the caller's own rows. */
+export async function clearAllData(): Promise<void> {
+  writeJson(CANDIDATES_KEY, []);
+  writeJson(JOBREQS_KEY, []);
+  writeJson(ACTIVITY_KEY, []);
+  if (typeof window !== "undefined") {
+    [CANDIDATES_KEY, JOBREQS_KEY, ACTIVITY_KEY].forEach((k) => localStorage.removeItem(k));
+  }
+  if (!supabase) return;
+  // PostgREST requires a filter on delete; `id <> ''` matches every row (all ids
+  // are non-empty), scoped to the current user by RLS.
+  const results = await Promise.all([
+    supabase.from('candidates').delete().neq('id', ''),
+    supabase.from('job_reqs').delete().neq('id', ''),
+    supabase.from('activities').delete().neq('id', ''),
+  ]);
+  const labels = ['candidates clear', 'job_reqs clear', 'activities clear'];
+  results.forEach((r, i) => logSync(labels[i], r));
 }
 
 export function loadDemoData(): void {
@@ -1066,9 +1114,9 @@ export function loadDemoData(): void {
   writeJson(ACTIVITY_KEY, [...activities, ...existingActivities].slice(0, 50));
   writeJson(TALENT_POOL_KEY, [...mockTalent, ...existingTalent]);
   if (supabase) {
-    supabase.from('candidates').upsert(candidates.map(candidateToRow)).then(() => {});
-    supabase.from('job_reqs').upsert(reqs.map(reqToRow)).then(() => {});
-    supabase.from('activities').upsert(activities.map(activityToRow)).then(() => {});
+    supabase.from('candidates').upsert(candidates.map(candidateToRow), { onConflict: 'user_id,id' }).then((r) => logSync('demo candidates upsert', r));
+    supabase.from('job_reqs').upsert(reqs.map(reqToRow), { onConflict: 'user_id,id' }).then((r) => logSync('demo job_reqs upsert', r));
+    supabase.from('activities').upsert(activities.map(activityToRow), { onConflict: 'user_id,id' }).then((r) => logSync('demo activities upsert', r));
   }
 }
 
@@ -1087,7 +1135,7 @@ export async function syncFromSupabase(): Promise<void> {
     writeJson(CANDIDATES_KEY, candidatesRes.data.map(rowToCandidate));
   } else {
     const local = getCandidates();
-    if (local.length) await supabase.from('candidates').upsert(local.map(candidateToRow));
+    if (local.length) await supabase.from('candidates').upsert(local.map(candidateToRow), { onConflict: 'user_id,id' });
   }
 
   // Job reqs
@@ -1095,7 +1143,7 @@ export async function syncFromSupabase(): Promise<void> {
     writeJson(JOBREQS_KEY, reqsRes.data.map(rowToReq));
   } else {
     const local = getJobReqs();
-    if (local.length) await supabase.from('job_reqs').upsert(local.map(reqToRow));
+    if (local.length) await supabase.from('job_reqs').upsert(local.map(reqToRow), { onConflict: 'user_id,id' });
   }
 
   // Activities
@@ -1103,6 +1151,6 @@ export async function syncFromSupabase(): Promise<void> {
     writeJson(ACTIVITY_KEY, activitiesRes.data.map(rowToActivity));
   } else {
     const local = getActivities();
-    if (local.length) await supabase.from('activities').upsert(local.map(activityToRow));
+    if (local.length) await supabase.from('activities').upsert(local.map(activityToRow), { onConflict: 'user_id,id' });
   }
 }

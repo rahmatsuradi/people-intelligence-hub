@@ -262,7 +262,7 @@ export default function BulkCvAnalyzerPage() {
       `Selesai — ${success} berhasil${failed ? `, ${failed} gagal (pakai "Retry failed")` : ""}`,
       failed && !success ? "error" : "success",
     );
-  }, [position, department, analyzeAndSave]);
+  }, [position, department, analyzeAndSave, updateItem]);
 
   const runBulk = useCallback(() => {
     processList(items.map((i) => ({ id: i.id, file: i.file, fileName: i.fileName })));

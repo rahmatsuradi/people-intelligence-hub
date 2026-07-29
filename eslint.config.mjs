@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // These client pages intentionally hydrate state from localStorage /
+      // sessionStorage / URL params inside a mount effect — doing it in a lazy
+      // useState initializer would run during SSR and cause hydration
+      // mismatches. Keep the rule as a warning (not an error) rather than
+      // refactor every page to useSyncExternalStore.
+      "react-hooks/set-state-in-effect": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;

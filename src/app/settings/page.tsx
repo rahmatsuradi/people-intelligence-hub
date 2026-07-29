@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell, Button, Card, Label, inputClass } from "@/components/app-shell";
 import { setCompanyName, setCompanyEmail } from "@/lib/email-templates";
+import { clearAllData } from "@/lib/store";
+import { toast } from "@/components/toast";
 
 export default function SettingsPage() {
   const [userName, setUserName] = useState("");
@@ -24,10 +26,18 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2500);
   }, [userName, company, companyEmail]);
 
-  const handleClearAll = useCallback(() => {
-    if (!window.confirm("This will delete ALL candidates, roles, and activity history. Are you sure?")) return;
-    ["hi_candidates", "hi_jobreqs", "hi_activity"].forEach((k) => localStorage.removeItem(k));
-    window.location.href = "/";
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearAll = useCallback(async () => {
+    if (!window.confirm("This will permanently delete ALL candidates, roles, and activity history — both in this browser and in the cloud. Are you sure?")) return;
+    setClearing(true);
+    try {
+      await clearAllData();
+      window.location.href = "/";
+    } catch {
+      toast("Failed to clear cloud data. Try again.", "error");
+      setClearing(false);
+    }
   }, []);
 
   return (
@@ -88,9 +98,9 @@ export default function SettingsPage() {
 
         <Card>
           <h2 className="text-base font-semibold text-red-700 dark:text-red-400">Danger zone</h2>
-          <p className="mt-1 text-sm text-slate-500">Permanently deletes all data stored locally in this browser.</p>
-          <Button variant="danger" size="md" className="mt-4" onClick={handleClearAll}>
-            Clear all data
+          <p className="mt-1 text-sm text-slate-500">Permanently deletes all your data — in this browser and in the cloud database.</p>
+          <Button variant="danger" size="md" className="mt-4" onClick={handleClearAll} disabled={clearing}>
+            {clearing ? "Clearing…" : "Clear all data"}
           </Button>
         </Card>
       </div>
