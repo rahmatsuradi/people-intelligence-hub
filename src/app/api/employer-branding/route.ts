@@ -46,9 +46,12 @@ function truncate(text: string, max: number): string {
 // (finish_reason "length", cut off mid-JSON). Each step shrinks both the
 // prompt (fewer format citations aren't affected, but less avoidTitles/
 // context repetition risk) and, more importantly, the max_tokens budget.
+// Started lower than before (4-5, not 5-6) — each idea now requires a
+// fuller 5-8 beat breakdown (see instruction #4 in the prompt), which
+// eats more of the 12k token budget per idea than the old 4-6 beats did.
 const IDEA_COUNT_STEPS = [
-  { min: 5, max: 6 },
-  { min: 3, max: 4 },
+  { min: 4, max: 5 },
+  { min: 3, max: 3 },
   { min: 2, max: 2 },
 ] as const;
 

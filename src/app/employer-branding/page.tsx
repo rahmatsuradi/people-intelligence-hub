@@ -10,6 +10,7 @@ import {
   type Platform,
   type ContentFormat,
   type EditorialWeek,
+  type EditorialPost,
   PILLAR_LABELS,
   PLATFORM_LABELS,
   FORMAT_LABELS,
@@ -31,6 +32,8 @@ import {
   type SavedContentIdea,
   type EbHistoryItem,
 } from "@/lib/employer-branding-store";
+import { addCalendarEntry, type NewCalendarEntry } from "@/lib/content-calendar-store";
+import CalendarEntryModal from "./editorial/calendar-entry-modal";
 import { useCallback, useState, type ChangeEvent } from "react";
 
 /* ─── Platform badge colors ─── */
@@ -97,6 +100,7 @@ export default function EmployerBrandingPage() {
   const [history, setHistory] = useState<EbHistoryItem[]>(() => getEbHistory());
   const [activeTab, setActiveTab] = useState<"results" | "saved" | "history">("results");
   const [showPlaybook, setShowPlaybook] = useState(false);
+  const [calendarPrefill, setCalendarPrefill] = useState<Partial<NewCalendarEntry> | null>(null);
 
   const canGenerate = companyName.trim() && industry && pillars.length > 0 && platforms.length > 0;
 
@@ -211,6 +215,36 @@ export default function EmployerBrandingPage() {
     setSavedIdeas((prev) => [entry, ...prev].slice(0, 50));
     toast("Ide disimpan!", "success");
   }, [companyName]);
+
+  const handleAddIdeaToCalendar = useCallback((idea: ContentIdea) => {
+    setCalendarPrefill({
+      platform: idea.platform,
+      title: idea.title,
+      notes: idea.description,
+      status: "draft",
+      pillar: idea.pillar,
+      contentType: idea.contentType,
+      ideaTitle: idea.title,
+    });
+  }, []);
+
+  const handleAddPostToCalendar = useCallback((post: EditorialPost, linkedIdea?: ContentIdea) => {
+    setCalendarPrefill({
+      platform: post.platform,
+      title: linkedIdea?.title ?? `Konten ${PLATFORM_LABELS[post.platform]}`,
+      notes: post.caption,
+      status: "draft",
+      pillar: linkedIdea?.pillar ?? "",
+      contentType: linkedIdea?.contentType ?? "",
+      ideaTitle: linkedIdea?.title ?? "",
+    });
+  }, []);
+
+  const handleSaveCalendarPrefill = useCallback((data: NewCalendarEntry) => {
+    addCalendarEntry(data);
+    toast("Ditambahkan ke plan konten. Cek di halaman Editorial Plan.", "success");
+    setCalendarPrefill(null);
+  }, []);
 
   const handleDeleteSaved = useCallback((id: string) => {
     deleteIdea(id);
@@ -622,6 +656,7 @@ export default function EmployerBrandingPage() {
                       saved={isIdeaSaved(idea.id)}
                       onToggle={() => toggleExpanded(idea.id)}
                       onSave={() => handleSaveIdea(idea)}
+                      onAddToCalendar={() => handleAddIdeaToCalendar(idea)}
                     />
                   ))}
                 </div>
@@ -629,24 +664,33 @@ export default function EmployerBrandingPage() {
 
               {/* Editorial Plan */}
               {result.editorialPlan.length > 0 && (
-                <EditorialPlanSection weeks={result.editorialPlan} ideas={result.ideas} />
+                <EditorialPlanSection weeks={result.editorialPlan} ideas={result.ideas} onAddToCalendar={handleAddPostToCalendar} />
               )}
             </>
           )}
         </div>
       </div>
+
+      {calendarPrefill && (
+        <CalendarEntryModal
+          prefill={calendarPrefill}
+          onSave={handleSaveCalendarPrefill}
+          onClose={() => setCalendarPrefill(null)}
+        />
+      )}
     </AppShell>
   );
 }
 
 /* ═══ Idea Card Component ═══ */
 
-function IdeaCard({ idea, expanded, saved, onToggle, onSave }: {
+function IdeaCard({ idea, expanded, saved, onToggle, onSave, onAddToCalendar }: {
   idea: ContentIdea;
   expanded: boolean;
   saved: boolean;
   onToggle: () => void;
   onSave: () => void;
+  onAddToCalendar: () => void;
 }) {
   return (
     <Card padding={false}>
@@ -822,10 +866,16 @@ function IdeaCard({ idea, expanded, saved, onToggle, onSave }: {
               <Icon className="h-3.5 w-3.5"><SvgPath name="calendarDays" /></Icon>
               {idea.calendarSuggestion}
             </div>
-            <Button size="sm" variant={saved ? "secondary" : "ghost"} onClick={onSave} disabled={saved}>
-              <Icon className="h-3.5 w-3.5"><SvgPath name="star" /></Icon>
-              {saved ? "Tersimpan" : "Simpan"}
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={onAddToCalendar}>
+                <Icon className="h-3.5 w-3.5"><SvgPath name="plus" /></Icon>
+                Plan Konten
+              </Button>
+              <Button size="sm" variant={saved ? "secondary" : "ghost"} onClick={onSave} disabled={saved}>
+                <Icon className="h-3.5 w-3.5"><SvgPath name="star" /></Icon>
+                {saved ? "Tersimpan" : "Simpan"}
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -835,7 +885,11 @@ function IdeaCard({ idea, expanded, saved, onToggle, onSave }: {
 
 /* ═══ Editorial Plan Section ═══ */
 
-function EditorialPlanSection({ weeks, ideas }: { weeks: EditorialWeek[]; ideas: ContentIdea[] }) {
+function EditorialPlanSection({ weeks, ideas, onAddToCalendar }: {
+  weeks: EditorialWeek[];
+  ideas: ContentIdea[];
+  onAddToCalendar: (post: EditorialPost, linkedIdea?: ContentIdea) => void;
+}) {
   const [openWeek, setOpenWeek] = useState<number | null>(1);
 
   return (
@@ -868,7 +922,8 @@ function EditorialPlanSection({ weeks, ideas }: { weeks: EditorialWeek[]; ideas:
                         <th className="pb-2 pr-4 font-medium">Hari</th>
                         <th className="pb-2 pr-4 font-medium">Jam</th>
                         <th className="pb-2 pr-4 font-medium">Platform</th>
-                        <th className="pb-2 font-medium">Caption</th>
+                        <th className="pb-2 pr-4 font-medium">Caption</th>
+                        <th className="pb-2 font-medium" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -883,11 +938,17 @@ function EditorialPlanSection({ weeks, ideas }: { weeks: EditorialWeek[]; ideas:
                                 {PLATFORM_LABELS[post.platform] ?? post.platform}
                               </span>
                             </td>
-                            <td className="py-2">
+                            <td className="py-2 pr-4">
                               <p className="text-slate-600 dark:text-slate-400">{post.caption}</p>
                               {linkedIdea && (
                                 <p className="mt-0.5 text-[10px] text-slate-400">Ref: {linkedIdea.title}</p>
                               )}
+                            </td>
+                            <td className="py-2 text-right">
+                              <Button size="sm" variant="ghost" onClick={() => onAddToCalendar(post, linkedIdea)}>
+                                <Icon className="h-3.5 w-3.5"><SvgPath name="plus" /></Icon>
+                                Plan
+                              </Button>
                             </td>
                           </tr>
                         );

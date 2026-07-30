@@ -248,7 +248,7 @@ export function AppShell({
       items: [
         { id: "employer-branding", label: "AI Content Generator", href: "/employer-branding" },
         { id: "ai-trends", label: "Trend & Ide Konten", href: "/employer-branding/ai-trends" },
-        { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial", soon: true },
+        { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial" },
         { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement", soon: true },
       ],
     },
