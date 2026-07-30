@@ -15,6 +15,7 @@ import {
   buildBrandingPrompt,
   buildFallbackResult,
   callGroqBranding,
+  fetchCompanyContext,
   fetchTrendData,
   parseBrandingResponse,
 } from "@/lib/employer-branding-ai";
@@ -80,11 +81,22 @@ export async function POST(request: NextRequest) {
         .slice(0, 20),
     };
 
-    const trendData = await fetchTrendData(industry, platforms, input.manualTrends);
-    const knownTrendUrls = trendData.map((t) => t.url).filter(Boolean);
+    // Run trend research and company research in parallel — this is what
+    // makes the AI actually understand the company from its name alone
+    // (recent real news, if any exist) instead of reasoning from a bare
+    // label. Demo/fictional company names simply return no news, which is
+    // fine — the prompt falls back to the user-entered profile fields.
+    const [trendData, companyNewsData] = await Promise.all([
+      fetchTrendData(industry, platforms, input.manualTrends),
+      fetchCompanyContext(companyName),
+    ]);
+    const knownTrendUrls = [
+      ...trendData.map((t) => t.url),
+      ...companyNewsData.map((t) => t.url),
+    ].filter(Boolean);
 
     let ideaCount = { min: 6, max: 8 };
-    let prompt = buildBrandingPrompt(input, trendData, ideaCount);
+    let prompt = buildBrandingPrompt(input, trendData, companyNewsData, ideaCount);
     let groq = await callGroqBranding(prompt);
     groqFinishReason = groq.finishReason;
 
@@ -95,7 +107,7 @@ export async function POST(request: NextRequest) {
     if (groq.finishReason === "length") {
       console.warn("[employer-branding] Response truncated at max_tokens — retrying with fewer ideas");
       ideaCount = { min: 4, max: 5 };
-      prompt = buildBrandingPrompt(input, trendData, ideaCount);
+      prompt = buildBrandingPrompt(input, trendData, companyNewsData, ideaCount);
       groq = await callGroqBranding(prompt);
       groqFinishReason = groq.finishReason;
     }
@@ -108,6 +120,7 @@ export async function POST(request: NextRequest) {
       meta: {
         model: GROQ_MODEL,
         trendsFetched: trendData.length,
+        companyNewsFetched: companyNewsData.length,
         remainingTokens: groq.remainingTokens,
         resetSeconds: groq.resetSeconds,
       },

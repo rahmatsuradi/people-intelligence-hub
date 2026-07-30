@@ -114,6 +114,9 @@ export interface EditorialWeek {
 }
 
 export interface BrandingIdeasResult {
+  /** AI's own stated understanding of the company (industry, situation, recent activity) — lets the user
+   *  immediately catch it if the AI misread the context, instead of finding out from generic ideas later. */
+  companyContext: string;
   trendAnalysis: string;
   strategyNote: string;
   ideas: ContentIdea[];
@@ -287,6 +290,40 @@ export const TARGET_AUDIENCES = [
 
 /* ─── Trend Fetching (Google News RSS) ─── */
 
+async function fetchGoogleNewsQuery(
+  query: string,
+  signal: AbortSignal,
+  limit: number,
+): Promise<TrendItem[]> {
+  const items: TrendItem[] = [];
+  try {
+    const url = `https://news.google.com/rss/search?q=${query}&hl=id&gl=ID&ceid=ID:id`;
+    const res = await fetch(url, { signal });
+    if (!res.ok) return items;
+    const xml = await res.text();
+
+    const titleMatches = xml.match(/<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<source[^>]*>(.*?)<\/source>[\s\S]*?<\/item>/g);
+    if (!titleMatches) return items;
+
+    for (const match of titleMatches.slice(0, limit)) {
+      const t = match.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/);
+      const l = match.match(/<link>(.*?)<\/link>/);
+      const s = match.match(/<source[^>]*>(.*?)<\/source>/);
+      if (t?.[1]) {
+        items.push({
+          title: t[1],
+          snippet: t[1],
+          source: s?.[1] ?? "Google News",
+          url: l?.[1]?.trim() ?? "",
+        });
+      }
+    }
+  } catch {
+    // Network/abort failure — caller treats an empty list as "nothing found".
+  }
+  return items;
+}
+
 export async function fetchTrendData(
   industry: string,
   platforms: Platform[],
@@ -316,31 +353,7 @@ export async function fetchTrendData(
 
   try {
     for (const q of queries.slice(0, 3)) {
-      try {
-        const url = `https://news.google.com/rss/search?q=${q}&hl=id&gl=ID&ceid=ID:id`;
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) continue;
-        const xml = await res.text();
-
-        const titleMatches = xml.match(/<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<source[^>]*>(.*?)<\/source>[\s\S]*?<\/item>/g);
-        if (!titleMatches) continue;
-
-        for (const match of titleMatches.slice(0, 5)) {
-          const t = match.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/);
-          const l = match.match(/<link>(.*?)<\/link>/);
-          const s = match.match(/<source[^>]*>(.*?)<\/source>/);
-          if (t?.[1]) {
-            items.push({
-              title: t[1],
-              snippet: t[1],
-              source: s?.[1] ?? "Google News",
-              url: l?.[1]?.trim() ?? "",
-            });
-          }
-        }
-      } catch {
-        continue;
-      }
+      items.push(...(await fetchGoogleNewsQuery(q, controller.signal, 5)));
     }
   } finally {
     clearTimeout(timeout);
@@ -348,6 +361,30 @@ export async function fetchTrendData(
 
   console.log(`[eb-ai] Fetched ${items.length} trend items`);
   return items.slice(0, 12);
+}
+
+/** Real, current news about the company itself — grounds the AI in who this
+ *  company actually is (recent activity, reputation, industry moves) as soon
+ *  as a name is entered, instead of only reasoning from a bare name string.
+ *  Demo/fictional company names will simply return nothing, which is fine —
+ *  the prompt falls back to the user-provided profile fields in that case. */
+export async function fetchCompanyContext(
+  companyName: string,
+): Promise<TrendItem[]> {
+  const name = companyName.trim();
+  if (!name) return [];
+
+  const query = encodeURIComponent(name.slice(0, 80)).replace(/%20/g, "+");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const items = await fetchGoogleNewsQuery(query, controller.signal, 6);
+    console.log(`[eb-ai] Fetched ${items.length} company-context items for "${name}"`);
+    return items;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /* ─── Groq API call (branding-specific, creative temperature) ─── */
@@ -489,9 +526,17 @@ export async function callGroqBranding(
 export function buildBrandingPrompt(
   input: BrandingInput,
   trendData: TrendItem[],
+  companyNewsData: TrendItem[] = [],
   ideaCount: { min: number; max: number } = { min: 6, max: 8 },
 ): string {
   const ideaCountLabel = `${ideaCount.min}-${ideaCount.max}`;
+
+  const companyContextSection =
+    companyNewsData.length > 0
+      ? companyNewsData
+          .map((t, i) => `${i + 1}. "${t.title}" (sumber: ${t.source}${t.url ? `, URL: ${t.url}` : ""})`)
+          .join("\n")
+      : "Tidak ditemukan berita spesifik tentang perusahaan ini (wajar untuk perusahaan kecil/lokal/baru, atau nama demo/fiktif) — pahami perusahaan HANYA dari PROFIL PERUSAHAAN di bawah (industri, budaya, nilai, konteks tambahan). JANGAN mengarang aktivitas/berita/pencapaian yang tidak disebutkan user.";
   const pillarLabels = input.pillars
     .map((p) => PILLAR_LABELS[p])
     .join(", ");
@@ -555,6 +600,9 @@ export function buildBrandingPrompt(
 
   return `Buat strategi konten employer branding untuk perusahaan berikut.
 
+KONTEKS PERUSAHAAN DARI BERITA TERKINI (riset otomatis berdasarkan nama perusahaan):
+${companyContextSection}
+
 PROFIL PERUSAHAAN:
 - Nama: ${input.companyName}
 - Industri: ${input.industry}
@@ -594,8 +642,9 @@ Ide: tanya satu per satu ke beberapa karyawan "Sudah berapa lama kerja di sini?"
 Itulah level kekonkretan yang diharapkan: nama efek/teknik visual PERSIS, dialog PERSIS, dan twist konsep yang benar-benar baru — bukan template korporat generik ("video budaya kerja", "hari dalam kehidupan karyawan" tanpa modifikasi kreatif).
 
 INSTRUKSI:
+0. WAJIB tulis "companyContext" LEBIH DULU sebelum membuat ide apa pun: 1 paragraf yang membuktikan kamu benar-benar paham perusahaan ini — sebutkan industrinya, situasi/aktivitas terkininya (dari KONTEKS PERUSAHAAN DARI BERITA TERKINI kalau ada, atau dari PROFIL PERUSAHAAN kalau tidak ada berita), dan apa artinya itu untuk strategi employer branding-nya. Kalau tidak ada berita ditemukan, katakan itu terus terang dan gunakan profil yang diberikan — JANGAN mengarang seolah-olah kamu tahu aktivitas/berita yang sebenarnya tidak ada di data.
 1. TREN VIRAL & TRENDING OTOMATIS adalah riset default. TAPI kalau TREN TAMBAHAN DARI USER terisi (nama orang, meme, momen viral spesifik, dll), itu WAJIB jadi anchor konkret untuk MINIMAL 2 ide — sebut entitasnya secara eksplisit di title & description (bukan cuma disinggung sepintas di trendReference), dan jelaskan persis bagaimana entitas/momen itu dihubungkan ke pesan employer branding di contentBreakdown. Kalau kosong, itu normal, pakai TREN OTOMATIS sepenuhnya.
-2. Buat ${ideaCountLabel} ide konten dengan tingkat kekonkretan seperti CONTOH STANDAR KUALITAS di atas. Setiap ide WAJIB memakai format berbeda dari daftar FORMAT VIRAL (boleh dimodifikasi, sebutkan nama format aslinya + platform di "formatUsed")
+2. Buat ${ideaCountLabel} ide konten dengan tingkat kekonkretan seperti CONTOH STANDAR KUALITAS di atas. Setiap ide WAJIB relevan dengan companyContext yang sudah kamu tulis (industri & situasi nyata perusahaan ini, bukan generik untuk industri manapun), dan WAJIB memakai format berbeda dari daftar FORMAT VIRAL (boleh dimodifikasi, sebutkan nama format aslinya + platform di "formatUsed")
 3. Untuk SETIAP ide, buat "contentBreakdown": array 4-6 beat. Setiap beat WAJIB memuat: (a) label waktu/slide, (b) nama beat singkat, (c) description berisi CONTOH DIALOG/TEKS-DI-LAYAR PERSIS yang muncul DAN nama teknik visual/transisi spesifik (mis. jump cut, morph/aging filter, split-screen, freeze-frame, whip pan, voice-over reveal). DILARANG deskripsi abstrak seperti "buka dengan hook menarik" tanpa isi konkret — description minimal 15 kata dan harus terbaca seperti instruksi shot-list yang bisa langsung dieksekusi kru produksi
 4. Minimal 2 dari ${ideaCountLabel} ide WAJIB menggabungkan SATU data/fakta spesifik perusahaan (masa kerja karyawan, jabatan, pencapaian) dengan SATU mekanik/efek visual yang sedang tren (age filter, freeze-frame reveal, split-screen before-after, morph cut, voice reveal, dll) — bukan sekadar format wawancara/testimoni polos
 5. visualDirection, copyGuideline, productionNotes, dan contentBreakdown WAJIB berbeda-beda kalimatnya di setiap ide sesuai konten spesifiknya — DILARANG KERAS memakai kalimat yang sama persis di lebih dari satu ide
@@ -612,6 +661,7 @@ INSTRUKSI:
 
 FORMAT OUTPUT JSON:
 {
+  "companyContext": "<paragraf pemahamanmu tentang perusahaan ini: industri, situasi/aktivitas terkini (dari berita jika ada), dan implikasinya untuk employer branding — tulis ini PALING AWAL, sebelum ideas>",
   "trendAnalysis": "<paragraf rangkuman tren employer branding terkini yang relevan>",
   "strategyNote": "<paragraf rekomendasi strategi employer branding keseluruhan untuk perusahaan ini>",
   "ideas": [
@@ -775,6 +825,7 @@ export function parseBrandingResponse(
   );
 
   return {
+    companyContext: String(data.companyContext ?? ""),
     trendAnalysis: String(data.trendAnalysis ?? ""),
     strategyNote: String(data.strategyNote ?? ""),
     ideas,
@@ -789,6 +840,7 @@ export function parseBrandingResponse(
 
 export function buildFallbackResult(message: string): BrandingIdeasResult {
   return {
+    companyContext: "",
     trendAnalysis: message,
     strategyNote: "",
     ideas: [],

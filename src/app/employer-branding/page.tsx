@@ -253,6 +253,7 @@ export default function EmployerBrandingPage() {
               <div>
                 <Label htmlFor="companyName">Nama perusahaan *</Label>
                 <input id="companyName" className={inputClass} placeholder="PT. Contoh Indonesia" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                <p className="mt-1 text-[11px] text-slate-400">Saat generate, AI otomatis mencari berita terkini tentang nama ini (kalau ada) supaya idenya nyambung ke situasi nyata perusahaan — bukan cuma nebak dari nama.</p>
               </div>
               <div>
                 <Label htmlFor="industry">Industri *</Label>
@@ -556,6 +557,20 @@ export default function EmployerBrandingPage() {
               limited regenerate never wipes out previously built ideas. */}
           {result && (
             <>
+              {/* Company Context — AI's own stated understanding of the company,
+                  shown first so it's obvious right away if it misread who this
+                  company is, before scrolling into the generated ideas. */}
+              {result.companyContext && (
+                <Card className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-900/10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon className="h-5 w-5 text-emerald-600 dark:text-emerald-400"><SvgPath name="briefcase" /></Icon>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Pemahaman AI Tentang Perusahaan Anda</h3>
+                  </div>
+                  <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">{result.companyContext}</p>
+                  <p className="mt-2 text-[11px] text-slate-400">Kalau ini kurang tepat, perbaiki di &quot;Budaya &amp; nilai perusahaan&quot; atau &quot;Konteks tambahan&quot; lalu generate ulang.</p>
+                </Card>
+              )}
+
               {/* Trend Analysis */}
               {result.trendAnalysis && (
                 <Card>
