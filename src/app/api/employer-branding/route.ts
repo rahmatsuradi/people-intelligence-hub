@@ -68,6 +68,10 @@ export async function POST(request: NextRequest) {
       referenceContentUrl: String(body.referenceContentUrl ?? ""),
       referenceContentNotes: String(body.referenceContentNotes ?? ""),
       referenceVideoMeta: String(body.referenceVideoMeta ?? ""),
+      avoidTitles: (Array.isArray(body.avoidTitles) ? body.avoidTitles : [])
+        .map((t) => String(t))
+        .filter(Boolean)
+        .slice(0, 20),
     };
 
     const trendData = await fetchTrendData(industry, platforms);

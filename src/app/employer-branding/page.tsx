@@ -160,6 +160,17 @@ export default function EmployerBrandingPage() {
     // visible instead of vanishing.
 
     try {
+      // Avoid repeating ideas already generated for this company — pulled
+      // from local history (and the currently displayed result, if any) so
+      // regenerating doesn't just reproduce the same handful of concepts.
+      const priorTitles = [
+        ...(result?.ideas.map((i) => i.title) ?? []),
+        ...history
+          .filter((h) => h.companyName.trim().toLowerCase() === companyName.trim().toLowerCase())
+          .flatMap((h) => h.result.ideas.map((i) => i.title)),
+      ];
+      const avoidTitles = Array.from(new Set(priorTitles)).slice(0, 20);
+
       const res = await fetch("/api/employer-branding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -168,6 +179,7 @@ export default function EmployerBrandingPage() {
           openRoles, targetAudience, pillars, platforms,
           additionalContext, manualTrends, campaignGoal,
           referenceContentUrl, referenceContentNotes, referenceVideoMeta,
+          avoidTitles,
         }),
       });
 
@@ -192,7 +204,7 @@ export default function EmployerBrandingPage() {
     } finally {
       setLoading(false);
     }
-  }, [canGenerate, companyName, industry, employeeCount, companyValues, openRoles, targetAudience, pillars, platforms, additionalContext, manualTrends, campaignGoal, referenceContentUrl, referenceContentNotes, referenceVideoMeta]);
+  }, [canGenerate, companyName, industry, employeeCount, companyValues, openRoles, targetAudience, pillars, platforms, additionalContext, manualTrends, campaignGoal, referenceContentUrl, referenceContentNotes, referenceVideoMeta, result, history]);
 
   const handleSaveIdea = useCallback((idea: ContentIdea) => {
     const entry = saveIdea(idea, companyName);
@@ -644,6 +656,9 @@ function IdeaCard({ idea, expanded, saved, onToggle, onSave }: {
           {idea.trendReference && (
             <p className="mt-1.5 text-xs text-blue-600 dark:text-blue-400">Terinspirasi: {idea.trendReference}</p>
           )}
+          {idea.formatUsed && (
+            <p className="mt-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">Format: {idea.formatUsed}</p>
+          )}
         </div>
         <Icon className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", expanded && "rotate-180")}>
           <SvgPath name="chevronDown" />
@@ -668,6 +683,25 @@ function IdeaCard({ idea, expanded, saved, onToggle, onSave }: {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Content Breakdown — beat-by-beat timeline / slide-by-slide */}
+          {idea.contentBreakdown.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Alur Konten (Beat-per-Beat)</p>
+              <ol className="space-y-2.5 border-l-2 border-amber-200 pl-3.5 dark:border-amber-900/50">
+                {idea.contentBreakdown.map((beat, i) => (
+                  <li key={i} className="relative">
+                    <span className="absolute -left-[19px] top-1 h-2 w-2 rounded-full bg-amber-400" />
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400">{beat.label}</span>
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{beat.beat}</span>
+                    </div>
+                    <p className="mt-0.5 text-sm text-slate-700 dark:text-slate-300">{beat.description}</p>
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
 

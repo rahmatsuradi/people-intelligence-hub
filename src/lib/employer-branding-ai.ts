@@ -57,6 +57,17 @@ export interface BrandingInput {
   referenceContentNotes?: string;
   /** Optional — client-extracted metadata (filename + duration) of an uploaded reference video. */
   referenceVideoMeta?: string;
+  /** Optional — titles from recent generations (this session's history), so the AI avoids repeating itself. */
+  avoidTitles?: string[];
+}
+
+export interface ContentBeat {
+  /** Timestamp range for video-like formats ("0:00-0:03"), or slide/section label for static formats ("Slide 1"). */
+  label: string;
+  /** Short beat name, e.g. "Hook", "Build-up", "Klimaks/Insight", "CTA". */
+  beat: string;
+  /** Concrete visual + dialog/caption/on-screen text for this beat — specific, not generic. */
+  description: string;
 }
 
 export interface ContentIdea {
@@ -80,6 +91,10 @@ export interface ContentIdea {
   performancePattern: string;
   /** 2-3 alternate execution angles for the same core idea, so the user isn't stuck with one take. */
   variations: string[];
+  /** Named format this idea is modeled after (from VIRAL_FORMAT_LIBRARY or a modification of it) + platform. */
+  formatUsed: string;
+  /** Beat-by-beat breakdown — timestamps for video/reel/story, slides for carousel/static formats. */
+  contentBreakdown: ContentBeat[];
 }
 
 export interface EditorialPost {
@@ -213,6 +228,46 @@ export const VIRALITY_PRINCIPLES: ViralityPrinciple[] = [
   },
 ];
 
+/* ─── Viral Format Library ───
+   Named, evergreen social content formats with generic beat skeletons.
+   Grounds each idea in a real, recognizable structure instead of a vague
+   "make something creative" instruction — and a random subset is offered
+   per generation so ideas don't converge on the same 2-3 patterns every time. */
+
+export interface ViralFormat {
+  name: string;
+  platform: string;
+  structure: string;
+}
+
+export const VIRAL_FORMAT_LIBRARY: ViralFormat[] = [
+  { name: "POV (Point of View)", platform: "TikTok/Reels", structure: "0-3d: teks 'POV: kamu...' + visual sudut pandang orang pertama (hook rasa penasaran) → 3-20d: adegan berjalan dari sudut pandang itu → 20-25d: twist/insight → 25-30d: CTA/teks penutup." },
+  { name: "Get Ready With Me (GRWM)", platform: "TikTok/Reels/YouTube Shorts", structure: "0-3d: hook ('GRWM buat...') sambil mulai rutinitas → 3-40d: proses berjalan sambil ngobrol santai/cerita relevan → 40-55d: insight/reveal utama → 55-60d: CTA." },
+  { name: "Day in the Life", platform: "TikTok/Reels/YouTube Shorts", structure: "0-3d: hook waktu/jam mulai ('6 pagi di...') → 3-45d: montase aktivitas kronologis dengan teks jam berjalan → 45-55d: momen paling menarik/highlight → 55-60d: CTA." },
+  { name: "Before vs After / Transformasi", platform: "Instagram Reels/TikTok", structure: "0-2d: tampilkan 'before' singkat → 2-4d: transisi cepat (jump cut/whip pan) → 4-20d: proses/alasan perubahan → 20-25d: reveal 'after' → 25-30d: CTA." },
+  { name: "Text Overlay Storytime", platform: "TikTok/Reels", structure: "0-3d: hook tulisan besar di layar ('Cerita waktu aku...') → 3-40d: cerita berlanjut lewat teks + visual pendukung, pacing cepat → 40-50d: klimaks/pelajaran → 50-55d: CTA." },
+  { name: "Green Screen React/Explain", platform: "TikTok", structure: "0-3d: reaksi/ekspresi ke sumber di background (hook visual) → 3-30d: jelaskan/react ke poin-poin sumber tsb → 30-40d: kesimpulan → 40-45d: CTA." },
+  { name: "Rank/Tier List", platform: "TikTok/Reels/YouTube Shorts", structure: "0-3d: hook ('5 hal ter... di perusahaan ini') → 3-45d: tiap item cepat dengan teks angka & alasan singkat → 45-55d: rangkuman/pilihan favorit → 55-60d: CTA." },
+  { name: "Q&A Rapid Fire", platform: "Instagram Reels/TikTok", structure: "0-3d: hook ('Jawab pertanyaan tercepat!') → 3-40d: rentetan pertanyaan-jawaban cepat, potongan jumpcut → 40-50d: pertanyaan paling seru → 50-55d: CTA." },
+  { name: "Ekspektasi vs Realita", platform: "TikTok/Reels", structure: "0-2d: 'Ekspektasi' (visual ideal/lucu) → 2-4d: transisi → 4-20d: 'Realita' (jujur, relatable) → 20-25d: insight/pesan → 25-30d: CTA." },
+  { name: "Vox Pop Kantor (interview jalanan versi kantor)", platform: "TikTok/Reels/LinkedIn", structure: "0-3d: hook pertanyaan ke kamera ('Kalau ditanya kenapa betah kerja di sini...') → 3-40d: potongan jawaban beberapa karyawan bergantian → 40-50d: benang merah jawaban → 50-55d: CTA." },
+  { name: "Myth vs Fact", platform: "LinkedIn/Instagram/TikTok", structure: "0-3d: hook mitos yang provokatif → 3-15d: bantah dengan fakta+bukti → 15-25d: mitos kedua → 25-40d: fakta → 40-45d: CTA." },
+  { name: "Silent Vlog Sinematik", platform: "Instagram Reels/YouTube Shorts", structure: "0-5d: visual sinematik tanpa narasi, hanya musik + teks kecil → 5-40d: montase visual dengan caption minimal → 40-50d: teks pesan utama → 50-55d: CTA halus (link di bio)." },
+  { name: "Countdown/Listicle", platform: "TikTok/Reels/LinkedIn Carousel", structure: "0-3d: hook angka ('3 alasan...') → 3-45d: tiap poin dengan visual+teks angka besar → 45-55d: poin terkuat di akhir (climax terbalik) → 55-60d: CTA." },
+  { name: "Balas Komentar/DM (Stitch/Reply)", platform: "TikTok/Instagram", structure: "0-3d: tampilkan komentar/pertanyaan asli sbg hook → 3-35d: jawab dengan cerita/data → 35-45d: kesimpulan → 45-50d: CTA (ajak komentar pertanyaan baru)." },
+  { name: "Transisi Mengikuti Audio Tren", platform: "TikTok/Reels", structure: "0-3d: buka dengan gerakan/transisi khas audio yang sedang tren → 3-20d: isi pesan employer branding menyesuaikan beat musik → 20-25d: transisi kedua (klimaks beat) → 25-30d: CTA/teks penutup." },
+  { name: "Roleplay Singkat", platform: "TikTok/Reels", structure: "0-3d: hook adegan roleplay lucu/relatable (mis. 'HR vs kandidat') → 3-30d: dialog roleplay berkembang → 30-40d: punchline/insight jujur → 40-45d: CTA." },
+];
+
+function pickRandomFormats(n: number): ViralFormat[] {
+  const pool = [...VIRAL_FORMAT_LIBRARY];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, n);
+}
+
 export const VIRALITY_SOURCES = [
   { label: "HeyOrca — Best social media hooks for 2026", url: "https://www.heyorca.com/blog/the-best-social-media-hooks-for-2026" },
   { label: "Black Digital Group — What makes a post go viral in 2026", url: "https://blackdigitalgroup.com/what-makes-a-social-media-post-go-viral/" },
@@ -318,8 +373,8 @@ export async function callGroqBranding(
       },
       { role: "user", content: prompt },
     ],
-    temperature: 0.7,
-    max_tokens: 4000,
+    temperature: 0.85,
+    max_tokens: 6500,
     response_format: { type: "json_object" },
   });
 
@@ -458,6 +513,18 @@ export function buildBrandingPrompt(
     (p, i) => `${i + 1}. ${p.title}: ${p.description}`,
   ).join("\n");
 
+  const formatsText = pickRandomFormats(8)
+    .map(
+      (f, i) =>
+        `${i + 1}. ${f.name} (${f.platform}) — kerangka beat: ${f.structure}`,
+    )
+    .join("\n");
+
+  const avoidTitlesSection =
+    input.avoidTitles && input.avoidTitles.length > 0
+      ? input.avoidTitles.slice(0, 20).map((t) => `- ${t}`).join("\n")
+      : null;
+
   const goalMap: Record<string, string> = {
     awareness: "Meningkatkan brand awareness perusahaan sebagai tempat kerja pilihan",
     engagement: "Meningkatkan engagement dan interaksi di media sosial",
@@ -491,21 +558,30 @@ ${referenceSection}
 KUNCI VIRAL & ENGAGEMENT (terapkan prinsip-prinsip ini ke SETIAP ide, sebutkan mana yang dipakai):
 ${playbookText}
 
+FORMAT VIRAL UNTUK DIADAPTASI (pilih & modifikasi — SATU IDE = SATU FORMAT BERBEDA, dilarang ada dua ide dengan format yang sama dalam batch ini):
+${formatsText}
+${
+  avoidTitlesSection
+    ? `\nIDE YANG SUDAH PERNAH DIBUAT SEBELUMNYA UNTUK PERUSAHAAN INI — JANGAN BUAT YANG MIRIP, HARUS SESUATU YANG BARU:\n${avoidTitlesSection}\n`
+    : ""
+}
 PILAR KONTEN YANG DIMINTA: ${pillarLabels}
 PLATFORM TARGET: ${platformLabels}
 
 INSTRUKSI:
 1. Prioritaskan TREN VIRAL & TRENDING OTOMATIS sebagai riset utama. TREN TAMBAHAN DARI USER hanya pelengkap opsional — kalau kosong, itu normal, jangan anggap kekurangan data.
-2. Buat 6-8 ide konten yang kreatif, spesifik, dan actionable, masing-masing menerapkan minimal 1-3 KUNCI VIRAL & ENGAGEMENT di atas
-3. Setiap ide harus mencakup production brief lengkap (arahan visual, panduan copy, catatan produksi)
-4. Untuk setiap ide, tulis juga "performancePattern": pola kualitatif kenapa konten sejenis biasanya berkinerja baik (rujuk ke kunci viral & engagement) — JANGAN mengarang angka/statistik spesifik seolah itu data nyata
-5. Untuk setiap ide, tulis "variations": 2 variasi eksekusi/sudut pandang alternatif dari ide inti yang sama, supaya user punya beberapa opsi bukan cuma satu
-6. Jika ada REFERENSI KONTEN dari user, terapkan metode Amati-Tiru-Modifikasi (ATM): amati pola/hook/format dari referensi tsb, lalu modifikasi agar relevan dengan employer branding perusahaan ini — jangan tiru mentah-mentah, dan sertakan idenya di trendReference
-7. Buat editorial plan 4 minggu (tema per minggu, 3-5 post per minggu)
-8. Semua konten harus relevan dengan konteks perusahaan Indonesia
-9. Hashtag campuran Bahasa Indonesia dan Inggris
-10. Pastikan variasi antar pilar, platform, dan tipe konten
-11. Jika ada posisi terbuka, beberapa ide harus mengarah ke talent acquisition
+2. Buat 6-8 ide konten, masing-masing WAJIB memakai format berbeda dari daftar FORMAT VIRAL di atas (boleh dimodifikasi, tapi sebutkan nama format aslinya di "formatUsed" beserta platform asalnya, mis. "POV (TikTok/Reels) — dimodifikasi jadi POV hari pertama kerja")
+3. Untuk SETIAP ide, buat "contentBreakdown": array 4-6 beat konkret detik-per-detik mengikuti kerangka beat format yang dipilih (untuk video/reel/story/live-session/podcast-clip pakai label rentang waktu seperti "0:00-0:03"; untuk carousel/infographic/photo-post/article pakai label "Slide 1", "Slide 2", dst). Setiap beat wajib berisi apa yang TERJADI DI LAYAR secara spesifik (adegan, dialog/teks di layar, aksi) — BUKAN deskripsi umum seperti "buka dengan hook menarik" tanpa isi konkret
+4. visualDirection, copyGuideline, productionNotes, dan contentBreakdown WAJIB berbeda-beda kalimatnya di setiap ide sesuai konten spesifiknya — DILARANG KERAS memakai kalimat yang sama persis di lebih dari satu ide
+5. Setiap ide menerapkan minimal 1-3 KUNCI VIRAL & ENGAGEMENT — sebutkan di "viralPrinciples"
+6. Untuk setiap ide, tulis juga "performancePattern": pola kualitatif kenapa konten sejenis biasanya berkinerja baik (rujuk ke kunci viral & engagement) — JANGAN mengarang angka/statistik spesifik seolah itu data nyata
+7. Untuk setiap ide, tulis "variations": 2 variasi eksekusi/sudut pandang alternatif dari ide inti yang sama, supaya user punya beberapa opsi bukan cuma satu
+8. Jika ada REFERENSI KONTEN dari user, terapkan metode Amati-Tiru-Modifikasi (ATM): amati pola/hook/format dari referensi tsb, lalu modifikasi agar relevan dengan employer branding perusahaan ini — jangan tiru mentah-mentah
+9. Buat editorial plan 4 minggu (tema per minggu, 3-5 post per minggu)
+10. Semua konten harus relevan dengan konteks perusahaan Indonesia
+11. Hashtag campuran Bahasa Indonesia dan Inggris
+12. Pastikan variasi antar pilar, platform, dan tipe konten
+13. Jika ada posisi terbuka, beberapa ide harus mengarah ke talent acquisition
 
 FORMAT OUTPUT JSON:
 {
@@ -529,7 +605,11 @@ FORMAT OUTPUT JSON:
       "productionNotes": "<catatan produksi: durasi video, ukuran asset, tools yang bisa dipakai>",
       "viralPrinciples": ["<1-3 judul prinsip dari daftar KUNCI VIRAL & ENGAGEMENT yang diterapkan di ide ini>"],
       "performancePattern": "<pola kualitatif kenapa konten sejenis biasanya berkinerja baik, merujuk kunci viral & engagement — tanpa angka fiktif>",
-      "variations": ["<variasi eksekusi/sudut pandang alternatif 1>", "<variasi eksekusi/sudut pandang alternatif 2>"]
+      "variations": ["<variasi eksekusi/sudut pandang alternatif 1>", "<variasi eksekusi/sudut pandang alternatif 2>"],
+      "formatUsed": "<nama format dari FORMAT VIRAL + platform asalnya, mis. 'Day in the Life (TikTok/Reels)'>",
+      "contentBreakdown": [
+        { "label": "<'0:00-0:03' untuk video, atau 'Slide 1' untuk carousel/statis>", "beat": "<'Hook'|'Build-up'|'Klimaks/Insight'|'CTA' dsb>", "description": "<apa yang terjadi di layar secara spesifik: adegan, dialog/teks, aksi>" }
+      ]
     }
   ],
   "editorialPlan": [
@@ -623,6 +703,17 @@ export function parseBrandingResponse(raw: string): BrandingIdeasResult {
       variations: Array.isArray(raw.variations)
         ? raw.variations.map(String)
         : [],
+      formatUsed: String(raw.formatUsed ?? ""),
+      contentBreakdown: (Array.isArray(raw.contentBreakdown)
+        ? raw.contentBreakdown
+        : []
+      ).map(
+        (b: Record<string, unknown>): ContentBeat => ({
+          label: String(b.label ?? ""),
+          beat: String(b.beat ?? ""),
+          description: String(b.description ?? ""),
+        }),
+      ),
     }),
   );
 
