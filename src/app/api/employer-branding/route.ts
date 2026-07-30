@@ -12,6 +12,8 @@ import {
   type BrandingInput,
   type ContentPillar,
   type Platform,
+  type GroqBrandingCall,
+  budgetMaxTokens,
   buildBrandingPrompt,
   buildFallbackResult,
   callGroqBranding,
@@ -31,12 +33,30 @@ const VALID_PLATFORMS = new Set([
   "linkedin", "instagram", "tiktok", "career-page", "twitter", "youtube",
 ]);
 
+// Caps free-text fields so a single verbose paste can't blow the prompt past
+// Groq's 12,000-token-per-request budget on its own. Generous enough for a
+// real paragraph, not so long it dominates the prompt.
+function truncate(text: string, max: number): string {
+  const t = text.trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
+// Progressively smaller idea counts to fall back through when a request
+// comes back too large (413, rejected before generation) or truncated
+// (finish_reason "length", cut off mid-JSON). Each step shrinks both the
+// prompt (fewer format citations aren't affected, but less avoidTitles/
+// context repetition risk) and, more importantly, the max_tokens budget.
+const IDEA_COUNT_STEPS = [
+  { min: 5, max: 6 },
+  { min: 3, max: 4 },
+  { min: 2, max: 2 },
+] as const;
+
 export async function POST(request: NextRequest) {
-  // Tracked outside the try body so the catch block can tell a truncated
-  // Groq response (finish_reason "length" — the JSON got cut off mid-way)
-  // apart from a genuine parse failure, and give the user an actionable
-  // message instead of a generic error.
-  let groqFinishReason: string | null = null;
+  // Tracked outside the try body so the catch block can tell what actually
+  // went wrong (too large vs. truncated vs. a genuine parse failure) and
+  // give the user an actionable message instead of a generic error.
+  let lastFailureKind: "tooLarge" | "truncated" | null = null;
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -64,21 +84,21 @@ export async function POST(request: NextRequest) {
       companyName,
       industry,
       employeeCount: String(body.employeeCount ?? ""),
-      companyValues: String(body.companyValues ?? ""),
-      openRoles: String(body.openRoles ?? ""),
+      companyValues: truncate(String(body.companyValues ?? ""), 500),
+      openRoles: truncate(String(body.openRoles ?? ""), 500),
       targetAudience: String(body.targetAudience ?? "Semua level"),
       pillars,
       platforms,
-      additionalContext: String(body.additionalContext ?? ""),
-      manualTrends: String(body.manualTrends ?? ""),
+      additionalContext: truncate(String(body.additionalContext ?? ""), 400),
+      manualTrends: truncate(String(body.manualTrends ?? ""), 400),
       campaignGoal: String(body.campaignGoal ?? "all"),
-      referenceContentUrl: String(body.referenceContentUrl ?? ""),
-      referenceContentNotes: String(body.referenceContentNotes ?? ""),
-      referenceVideoMeta: String(body.referenceVideoMeta ?? ""),
+      referenceContentUrl: truncate(String(body.referenceContentUrl ?? ""), 300),
+      referenceContentNotes: truncate(String(body.referenceContentNotes ?? ""), 500),
+      referenceVideoMeta: truncate(String(body.referenceVideoMeta ?? ""), 150),
       avoidTitles: (Array.isArray(body.avoidTitles) ? body.avoidTitles : [])
         .map((t) => String(t))
         .filter(Boolean)
-        .slice(0, 20),
+        .slice(0, 15),
     };
 
     // Run trend research and company research in parallel — this is what
@@ -95,21 +115,58 @@ export async function POST(request: NextRequest) {
       ...companyNewsData.map((t) => t.url),
     ].filter(Boolean);
 
-    let ideaCount = { min: 6, max: 8 };
-    let prompt = buildBrandingPrompt(input, trendData, companyNewsData, ideaCount);
-    let groq = await callGroqBranding(prompt);
-    groqFinishReason = groq.finishReason;
+    // Groq's org-level TPM budget for this model is a hard 12,000 tokens per
+    // request (prompt + requested max_tokens combined), well below the
+    // model's own 8192-token completion cap — a request that asks for too
+    // much is rejected outright (413) before any generation happens, and
+    // there's nothing to retry-with-backoff about. Instead, step down
+    // through smaller idea counts (which shrinks both the prompt and the
+    // completion budget needed) until a request actually fits.
+    let groq: GroqBrandingCall | null = null;
 
-    // Reference content, manual trends, and the detailed per-idea breakdown
-    // we now require can push the response past the model's 8192-token
-    // completion cap — the JSON gets cut off mid-string and fails to parse.
-    // Retry once with fewer (still fully detailed) ideas instead of failing.
-    if (groq.finishReason === "length") {
-      console.warn("[employer-branding] Response truncated at max_tokens — retrying with fewer ideas");
-      ideaCount = { min: 4, max: 5 };
-      prompt = buildBrandingPrompt(input, trendData, companyNewsData, ideaCount);
-      groq = await callGroqBranding(prompt);
-      groqFinishReason = groq.finishReason;
+    for (let step = 0; step < IDEA_COUNT_STEPS.length; step++) {
+      const ideaCount = IDEA_COUNT_STEPS[step];
+      const isLastStep = step === IDEA_COUNT_STEPS.length - 1;
+      const prompt = buildBrandingPrompt(input, trendData, companyNewsData, ideaCount);
+      const maxTokens = budgetMaxTokens(prompt);
+
+      try {
+        const attempt = await callGroqBranding(prompt, maxTokens);
+        if (attempt.finishReason === "length") {
+          lastFailureKind = "truncated";
+          console.warn(`[employer-branding] Truncated with ${ideaCount.min}-${ideaCount.max} ideas${isLastStep ? " (final step)" : " — stepping down"}`);
+          if (!isLastStep) continue;
+          // Last step and still truncated — leave `groq` null so the loop
+          // falls through to the "didn't fit even at minimum" response
+          // below, instead of handing truncated/invalid JSON to the parser.
+          break;
+        }
+        groq = attempt;
+        lastFailureKind = null;
+        break;
+      } catch (err) {
+        if ((err as { tooLarge?: boolean })?.tooLarge && !isLastStep) {
+          lastFailureKind = "tooLarge";
+          console.warn(`[employer-branding] 413 with ${ideaCount.min}-${ideaCount.max} ideas — stepping down`);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!groq) {
+      // Every step (down to 2 ideas) still didn't fit or kept truncating —
+      // something in the fixed/required parts of the prompt itself (not
+      // just user input) is too large for the budget.
+      return NextResponse.json({
+        success: false,
+        result: buildFallbackResult(
+          lastFailureKind === "tooLarge"
+            ? "Permintaan tetap terlalu besar untuk batas token Groq meski sudah dicoba dengan lebih sedikit ide. Coba persingkat catatan referensi/konteks tambahan, lalu generate ulang."
+            : "Respons AI terus terpotong meski sudah dicoba dengan lebih sedikit ide. Coba persingkat catatan referensi/konteks tambahan, lalu generate ulang.",
+        ),
+        meta: { error: lastFailureKind ?? "unknown" },
+      });
     }
 
     const result = parseBrandingResponse(groq.content, knownTrendUrls);
@@ -137,9 +194,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         result: buildFallbackResult(
-          groqFinishReason === "length"
-            ? "Respons AI terpotong karena kepanjangan untuk konteks yang diberikan (masih terpotong meski sudah dicoba ulang dengan ide lebih sedikit). Coba persingkat catatan referensi/konteks tambahan, kurangi jumlah platform yang dipilih, lalu generate ulang."
-            : "Gagal memparse respons AI. Coba generate ulang.",
+          "Gagal memparse respons AI. Coba generate ulang.",
         ),
         meta: { error: message },
       });

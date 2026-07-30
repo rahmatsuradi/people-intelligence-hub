@@ -400,8 +400,35 @@ export interface GroqBrandingCall {
   finishReason: string | null;
 }
 
+/** Groq's TPM budget for this model/org is a hard 12,000 tokens PER REQUEST
+ *  (prompt + requested max_tokens combined, checked before any generation
+ *  happens — a 413, not a 429). This is much tighter than the model's own
+ *  8192-token completion cap, so max_tokens must be sized against THIS
+ *  budget, not just the model's ceiling. ~3.5 chars/token is a conservative
+ *  estimate for mixed Indonesian/English text — better to overestimate and
+ *  under-request than to guess low and get rejected. */
+export const GROQ_TPM_BUDGET = 12000;
+export const GROQ_TPM_SAFETY_MARGIN = 700;
+
+export function estimateGroqTokens(text: string): number {
+  return Math.ceil(text.length / 3.5);
+}
+
+/** How many completion tokens are safely requestable for this prompt,
+ *  clamped to a sane [floor, ceiling] range. */
+export function budgetMaxTokens(
+  prompt: string,
+  floor = 1500,
+  ceiling = 7000,
+): number {
+  const promptTokens = estimateGroqTokens(prompt);
+  const available = GROQ_TPM_BUDGET - GROQ_TPM_SAFETY_MARGIN - promptTokens;
+  return Math.max(floor, Math.min(ceiling, available));
+}
+
 export async function callGroqBranding(
   prompt: string,
+  maxTokens: number,
   maxAttempts = 3,
 ): Promise<GroqBrandingCall> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -411,7 +438,7 @@ export async function callGroqBranding(
     );
   }
 
-  console.log(`[eb-ai] Calling Groq ${GROQ_MODEL}, prompt: ${prompt.length} chars`);
+  console.log(`[eb-ai] Calling Groq ${GROQ_MODEL}, prompt: ${prompt.length} chars, max_tokens: ${maxTokens}`);
 
   const body = JSON.stringify({
     model: GROQ_MODEL,
@@ -426,7 +453,7 @@ export async function callGroqBranding(
       { role: "user", content: prompt },
     ],
     temperature: 0.85,
-    max_tokens: 7800, // Groq's llama-3.3-70b-versatile caps completions at 8192
+    max_tokens: maxTokens,
     response_format: { type: "json_object" },
   });
 
@@ -485,6 +512,18 @@ export async function callGroqBranding(
       throw new Error("GROQ_API_KEY tidak valid. Periksa key di .env.local");
     if (response.status === 400)
       throw new Error(`Request tidak valid: ${errorText.slice(0, 200)}`);
+
+    // 413 = prompt + requested max_tokens exceeds the org's per-request TPM
+    // budget. Rejected before any generation happens — retrying the exact
+    // same request never helps. Tagged so the caller can shrink and retry
+    // with a smaller idea count / max_tokens instead of just failing.
+    if (response.status === 413) {
+      const err = new Error(
+        `Request terlalu besar untuk batas token Groq: ${errorText.slice(0, 200)}`,
+      ) as Error & { tooLarge?: boolean };
+      err.tooLarge = true;
+      throw err;
+    }
 
     if (
       (response.status === 429 || response.status >= 500) &&
@@ -579,7 +618,7 @@ export function buildBrandingPrompt(
     (p, i) => `${i + 1}. ${p.title}: ${p.description}`,
   ).join("\n");
 
-  const formatsText = pickRandomFormats(8)
+  const formatsText = pickRandomFormats(5)
     .map(
       (f, i) =>
         `${i + 1}. ${f.name} (${f.platform}) — kerangka beat: ${f.structure}`,
