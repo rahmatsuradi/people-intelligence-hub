@@ -95,6 +95,8 @@ export interface ContentIdea {
   formatUsed: string;
   /** Beat-by-beat breakdown — timestamps for video/reel/story, slides for carousel/static formats. */
   contentBreakdown: ContentBeat[];
+  /** Real article URL from the trend research list, if this idea draws on one. Never a fabricated link. */
+  sourceUrl: string;
 }
 
 export interface EditorialPost {
@@ -123,6 +125,8 @@ export interface TrendItem {
   title: string;
   snippet: string;
   source: string;
+  /** Real article URL from Google News RSS — only ever a genuine link, never fabricated. */
+  url: string;
 }
 
 /* ─── Pillar & Platform Labels (Indonesian) ─── */
@@ -286,11 +290,18 @@ export const TARGET_AUDIENCES = [
 export async function fetchTrendData(
   industry: string,
   platforms: Platform[],
+  manualTrendQuery?: string,
 ): Promise<TrendItem[]> {
-  // Ordered so viral/trending social content discovery runs first — this is
-  // the default, automatic research the tool leans on. Industry & platform
-  // queries fill in the rest; manual user input (if any) only supplements it.
+  // If the user named something specific (a person, meme, trend), search for
+  // it directly first — this is what makes "Erling Haaland lagi viral" (etc.)
+  // resolve to real, current articles instead of being a vague footnote the
+  // AI can safely ignore. Falls back to generic viral/industry queries.
+  const manualQuery = manualTrendQuery?.trim()
+    ? encodeURIComponent(manualTrendQuery.trim().slice(0, 80)).replace(/%20/g, "+")
+    : null;
+
   const queries = [
+    ...(manualQuery ? [manualQuery] : []),
     `konten+viral+medsos+Indonesia+minggu+ini`,
     `tren+TikTok+Reels+Indonesia+viral+engagement+tinggi`,
     `employer+branding+${encodeURIComponent(industry)}+Indonesia`,
@@ -311,17 +322,19 @@ export async function fetchTrendData(
         if (!res.ok) continue;
         const xml = await res.text();
 
-        const titleMatches = xml.match(/<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<source[^>]*>(.*?)<\/source>[\s\S]*?<\/item>/g);
+        const titleMatches = xml.match(/<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<source[^>]*>(.*?)<\/source>[\s\S]*?<\/item>/g);
         if (!titleMatches) continue;
 
         for (const match of titleMatches.slice(0, 5)) {
           const t = match.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/);
+          const l = match.match(/<link>(.*?)<\/link>/);
           const s = match.match(/<source[^>]*>(.*?)<\/source>/);
           if (t?.[1]) {
             items.push({
               title: t[1],
               snippet: t[1],
               source: s?.[1] ?? "Google News",
+              url: l?.[1]?.trim() ?? "",
             });
           }
         }
@@ -481,12 +494,12 @@ export function buildBrandingPrompt(
   const trendSection =
     trendData.length > 0
       ? trendData
-          .map((t, i) => `${i + 1}. "${t.title}" (sumber: ${t.source})`)
+          .map((t, i) => `${i + 1}. "${t.title}" (sumber: ${t.source}${t.url ? `, URL: ${t.url}` : ""})`)
           .join("\n")
-      : "Tidak ada data tren terbaru. Gunakan pengetahuanmu tentang tren employer branding terkini.";
+      : "Tidak ada data tren terbaru. Gunakan pengetahuanmu tentang tren employer branding terkini — JANGAN mengarang URL, biarkan sourceUrl kosong.";
 
   const manualTrendSection = input.manualTrends.trim()
-    ? input.manualTrends.trim()
+    ? `"${input.manualTrends.trim()}" — WAJIB DIPAKAI SEBAGAI ANCHOR UTAMA (lihat INSTRUKSI di bawah, ini bukan pelengkap opsional kalau terisi)`
     : "Tidak ada — user tidak mengisi kolom ini (opsional), gunakan sepenuhnya TREN OTOMATIS di atas.";
 
   const openRolesSection = input.openRoles.trim()
@@ -568,20 +581,26 @@ ${
 PILAR KONTEN YANG DIMINTA: ${pillarLabels}
 PLATFORM TARGET: ${platformLabels}
 
+CONTOH STANDAR KUALITAS YANG DIHARAPKAN (ilustrasi pola, jangan disalin persis — buat versi orisinal untuk perusahaan ini):
+Ide: tanya satu per satu ke beberapa karyawan "Sudah berapa lama kerja di sini?" — begitu mereka jawab, wajah & penampilan mereka di-morph pakai efek transformasi usia (aging filter/AI face morph yang sedang tren) jadi terlihat "bertumbuh" sesuai lama kerjanya, sebagai visualisasi jenaka untuk pesan "berkembang bareng perusahaan". Breakdown-nya konkret per detik: 0:00-0:03 karyawan A duduk depan kamera, teks besar muncul "UDAH BERAPA LAMA KERJA DI SINI?"; 0:03-0:06 karyawan A jawab "3 tahun kak!" sambil ketawa; 0:06-0:09 wajahnya di-morph cepat (efek aging transition) jadi versi "3 tahun lebih matang", teks overlay "Level Up"; lalu lanjut ke karyawan berikutnya dengan pola sama tapi durasi kerja beda, dst — bukan cuma "wawancara karyawan tentang masa kerja mereka" yang datar tanpa twist visual.
+Itulah level kekonkretan yang diharapkan: nama efek/teknik visual PERSIS, dialog PERSIS, dan twist konsep yang benar-benar baru — bukan template korporat generik ("video budaya kerja", "hari dalam kehidupan karyawan" tanpa modifikasi kreatif).
+
 INSTRUKSI:
-1. Prioritaskan TREN VIRAL & TRENDING OTOMATIS sebagai riset utama. TREN TAMBAHAN DARI USER hanya pelengkap opsional — kalau kosong, itu normal, jangan anggap kekurangan data.
-2. Buat 6-8 ide konten, masing-masing WAJIB memakai format berbeda dari daftar FORMAT VIRAL di atas (boleh dimodifikasi, tapi sebutkan nama format aslinya di "formatUsed" beserta platform asalnya, mis. "POV (TikTok/Reels) — dimodifikasi jadi POV hari pertama kerja")
-3. Untuk SETIAP ide, buat "contentBreakdown": array 4-6 beat konkret detik-per-detik mengikuti kerangka beat format yang dipilih (untuk video/reel/story/live-session/podcast-clip pakai label rentang waktu seperti "0:00-0:03"; untuk carousel/infographic/photo-post/article pakai label "Slide 1", "Slide 2", dst). Setiap beat wajib berisi apa yang TERJADI DI LAYAR secara spesifik (adegan, dialog/teks di layar, aksi) — BUKAN deskripsi umum seperti "buka dengan hook menarik" tanpa isi konkret
-4. visualDirection, copyGuideline, productionNotes, dan contentBreakdown WAJIB berbeda-beda kalimatnya di setiap ide sesuai konten spesifiknya — DILARANG KERAS memakai kalimat yang sama persis di lebih dari satu ide
-5. Setiap ide menerapkan minimal 1-3 KUNCI VIRAL & ENGAGEMENT — sebutkan di "viralPrinciples"
-6. Untuk setiap ide, tulis juga "performancePattern": pola kualitatif kenapa konten sejenis biasanya berkinerja baik (rujuk ke kunci viral & engagement) — JANGAN mengarang angka/statistik spesifik seolah itu data nyata
-7. Untuk setiap ide, tulis "variations": 2 variasi eksekusi/sudut pandang alternatif dari ide inti yang sama, supaya user punya beberapa opsi bukan cuma satu
-8. Jika ada REFERENSI KONTEN dari user, terapkan metode Amati-Tiru-Modifikasi (ATM): amati pola/hook/format dari referensi tsb, lalu modifikasi agar relevan dengan employer branding perusahaan ini — jangan tiru mentah-mentah
-9. Buat editorial plan 4 minggu (tema per minggu, 3-5 post per minggu)
-10. Semua konten harus relevan dengan konteks perusahaan Indonesia
-11. Hashtag campuran Bahasa Indonesia dan Inggris
-12. Pastikan variasi antar pilar, platform, dan tipe konten
-13. Jika ada posisi terbuka, beberapa ide harus mengarah ke talent acquisition
+1. TREN VIRAL & TRENDING OTOMATIS adalah riset default. TAPI kalau TREN TAMBAHAN DARI USER terisi (nama orang, meme, momen viral spesifik, dll), itu WAJIB jadi anchor konkret untuk MINIMAL 2 ide — sebut entitasnya secara eksplisit di title & description (bukan cuma disinggung sepintas di trendReference), dan jelaskan persis bagaimana entitas/momen itu dihubungkan ke pesan employer branding di contentBreakdown. Kalau kosong, itu normal, pakai TREN OTOMATIS sepenuhnya.
+2. Buat 6-8 ide konten dengan tingkat kekonkretan seperti CONTOH STANDAR KUALITAS di atas. Setiap ide WAJIB memakai format berbeda dari daftar FORMAT VIRAL (boleh dimodifikasi, sebutkan nama format aslinya + platform di "formatUsed")
+3. Untuk SETIAP ide, buat "contentBreakdown": array 4-6 beat. Setiap beat WAJIB memuat: (a) label waktu/slide, (b) nama beat singkat, (c) description berisi CONTOH DIALOG/TEKS-DI-LAYAR PERSIS yang muncul DAN nama teknik visual/transisi spesifik (mis. jump cut, morph/aging filter, split-screen, freeze-frame, whip pan, voice-over reveal). DILARANG deskripsi abstrak seperti "buka dengan hook menarik" tanpa isi konkret — description minimal 15 kata dan harus terbaca seperti instruksi shot-list yang bisa langsung dieksekusi kru produksi
+4. Minimal 2 dari 6-8 ide WAJIB menggabungkan SATU data/fakta spesifik perusahaan (masa kerja karyawan, jabatan, pencapaian) dengan SATU mekanik/efek visual yang sedang tren (age filter, freeze-frame reveal, split-screen before-after, morph cut, voice reveal, dll) — bukan sekadar format wawancara/testimoni polos
+5. visualDirection, copyGuideline, productionNotes, dan contentBreakdown WAJIB berbeda-beda kalimatnya di setiap ide sesuai konten spesifiknya — DILARANG KERAS memakai kalimat yang sama persis di lebih dari satu ide
+6. Setiap ide menerapkan minimal 1-3 KUNCI VIRAL & ENGAGEMENT — sebutkan di "viralPrinciples"
+7. Untuk setiap ide, tulis juga "performancePattern": pola kualitatif kenapa konten sejenis biasanya berkinerja baik (rujuk ke kunci viral & engagement) — JANGAN mengarang angka/statistik spesifik seolah itu data nyata
+8. Untuk setiap ide, tulis "variations": 2 variasi eksekusi/sudut pandang alternatif dari ide inti yang sama, supaya user punya beberapa opsi bukan cuma satu
+9. Jika ada REFERENSI KONTEN dari user (link/video/catatan), WAJIB buat minimal 1 ide yang menerapkan metode Amati-Tiru-Modifikasi (ATM) darinya secara konkret — sebutkan persis pola/hook yang diamati di description, dan detail eksekusi modifikasinya di contentBreakdown. Jangan sekadar menyebut nama trennya tanpa menerjemahkan ke eksekusi nyata
+10. Isi "sourceUrl" dengan URL PERSIS dari daftar TREN VIRAL & TRENDING OTOMATIS di atas kalau ide tsb merujuk padanya — SALIN PERSIS, JANGAN PERNAH mengarang/mengubah URL. Kalau tidak ada yang relevan atau tidak ada URL di daftar, kosongkan ("")
+11. Buat editorial plan 4 minggu (tema per minggu, 3-5 post per minggu)
+12. Semua konten harus relevan dengan konteks perusahaan Indonesia
+13. Hashtag campuran Bahasa Indonesia dan Inggris
+14. Pastikan variasi antar pilar, platform, dan tipe konten
+15. Jika ada posisi terbuka, beberapa ide harus mengarah ke talent acquisition
 
 FORMAT OUTPUT JSON:
 {
@@ -608,8 +627,9 @@ FORMAT OUTPUT JSON:
       "variations": ["<variasi eksekusi/sudut pandang alternatif 1>", "<variasi eksekusi/sudut pandang alternatif 2>"],
       "formatUsed": "<nama format dari FORMAT VIRAL + platform asalnya, mis. 'Day in the Life (TikTok/Reels)'>",
       "contentBreakdown": [
-        { "label": "<'0:00-0:03' untuk video, atau 'Slide 1' untuk carousel/statis>", "beat": "<'Hook'|'Build-up'|'Klimaks/Insight'|'CTA' dsb>", "description": "<apa yang terjadi di layar secara spesifik: adegan, dialog/teks, aksi>" }
-      ]
+        { "label": "0:00-0:04", "beat": "Hook", "description": "<contoh konkret: 'Kamera close-up ke wajah karyawan A, teks besar di layar: SUDAH BERAPA LAMA KERJA DI SINI? — karyawan menjawab \"3 tahun kak!\" sambil tertawa'>" }
+      ],
+      "sourceUrl": "<URL PERSIS dari daftar TREN VIRAL & TRENDING OTOMATIS jika relevan, atau string kosong \"\" jika tidak ada>"
     }
   ],
   "editorialPlan": [
@@ -652,7 +672,10 @@ const VALID_PILLARS = new Set<ContentPillar>([
 ]);
 const VALID_ENGAGEMENT = new Set(["high", "medium", "low"]);
 
-export function parseBrandingResponse(raw: string): BrandingIdeasResult {
+export function parseBrandingResponse(
+  raw: string,
+  knownTrendUrls: string[] = [],
+): BrandingIdeasResult {
   let text = raw.trim();
   // Strip markdown code fences
   if (text.startsWith("```")) {
@@ -667,6 +690,7 @@ export function parseBrandingResponse(raw: string): BrandingIdeasResult {
   text = text.slice(start, end + 1);
 
   const data = JSON.parse(text) as Record<string, unknown>;
+  const trendUrlSet = new Set(knownTrendUrls.filter(Boolean));
 
   const ideas = (Array.isArray(data.ideas) ? data.ideas : []).map(
     (raw: Record<string, unknown>, i: number): ContentIdea => ({
@@ -714,6 +738,11 @@ export function parseBrandingResponse(raw: string): BrandingIdeasResult {
           description: String(b.description ?? ""),
         }),
       ),
+      // Only trust a sourceUrl that exactly matches one of the real URLs we
+      // actually fetched — never let the model's own invented link through.
+      sourceUrl: trendUrlSet.has(String(raw.sourceUrl ?? ""))
+        ? String(raw.sourceUrl)
+        : "",
     }),
   );
 

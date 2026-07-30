@@ -340,8 +340,8 @@ export default function EmployerBrandingPage() {
               {/* Manual Trends */}
               <div>
                 <Label htmlFor="manualTrends">Tren tambahan <span className="font-normal text-slate-400">(opsional)</span></Label>
-                <p className="mb-1 text-[11px] text-slate-400">AI otomatis riset tren viral & trending duluan — isi ini kalau Anda ingin menambahkan pengamatan sendiri. Kosongkan saja kalau tidak ada.</p>
-                <textarea id="manualTrends" className={cn(inputClass, "min-h-[60px] resize-y")} placeholder="Paste tren, topik viral, atau hal menarik yang Anda lihat di medsos... (opsional)" value={manualTrends} onChange={(e) => setManualTrends(e.target.value)} rows={2} />
+                <p className="mb-1 text-[11px] text-slate-400">AI otomatis riset tren viral & trending duluan — isi ini kalau Anda ingin menambahkan pengamatan sendiri. Semakin spesifik (nama orang/meme/momen viral), semakin kuat dipakai jadi ide konkret — bukan sekadar disinggung sepintas.</p>
+                <textarea id="manualTrends" className={cn(inputClass, "min-h-[60px] resize-y")} placeholder="Mis. 'Erling Haaland lagi viral karena selebrasi golnya' — makin spesifik, makin nyambung ke ide... (opsional)" value={manualTrends} onChange={(e) => setManualTrends(e.target.value)} rows={2} />
               </div>
 
               {/* Reference Content — Amati-Tiru-Modifikasi */}
@@ -745,6 +745,24 @@ function IdeaCard({ idea, expanded, saved, onToggle, onSave }: {
               </div>
             </div>
           )}
+
+          {/* Source — real article URL if this idea draws on one of the fetched trends.
+              Honest fallback when there isn't one: the AI can't browse TikTok/Instagram
+              directly, so a citation only exists when Google News actually covered it. */}
+          <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
+            {idea.sourceUrl ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Sumber:{" "}
+                <a href={idea.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                  {idea.sourceUrl.length > 60 ? `${idea.sourceUrl.slice(0, 60)}…` : idea.sourceUrl}
+                </a>
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400">
+                Tidak ada link sumber spesifik — AI belum bisa browsing TikTok/Instagram langsung, jadi hanya mengutip kalau tren tsb tercakup di Google News. Kalau Anda punya link videonya, tempel di &quot;Referensi konten viral&quot; di form supaya bisa dijadikan acuan langsung.
+              </p>
+            )}
+          </div>
 
           {/* Viral Principles Applied */}
           {idea.viralPrinciples.length > 0 && (

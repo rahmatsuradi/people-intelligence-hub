@@ -74,11 +74,12 @@ export async function POST(request: NextRequest) {
         .slice(0, 20),
     };
 
-    const trendData = await fetchTrendData(industry, platforms);
+    const trendData = await fetchTrendData(industry, platforms, input.manualTrends);
+    const knownTrendUrls = trendData.map((t) => t.url).filter(Boolean);
 
     const prompt = buildBrandingPrompt(input, trendData);
     const groq = await callGroqBranding(prompt);
-    const result = parseBrandingResponse(groq.content);
+    const result = parseBrandingResponse(groq.content, knownTrendUrls);
 
     return NextResponse.json({
       success: true,
