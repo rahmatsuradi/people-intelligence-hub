@@ -359,6 +359,8 @@ export interface GroqBrandingCall {
   content: string;
   remainingTokens: number | null;
   resetSeconds: number | null;
+  /** "length" means Groq cut the response off at max_tokens — the JSON is likely truncated/invalid. */
+  finishReason: string | null;
 }
 
 export async function callGroqBranding(
@@ -387,7 +389,7 @@ export async function callGroqBranding(
       { role: "user", content: prompt },
     ],
     temperature: 0.85,
-    max_tokens: 6500,
+    max_tokens: 7800, // Groq's llama-3.3-70b-versatile caps completions at 8192
     response_format: { type: "json_object" },
   });
 
@@ -414,11 +416,14 @@ export async function callGroqBranding(
       };
       const text = data.choices?.[0]?.message?.content;
       if (!text) throw new Error("Groq mengembalikan respons kosong.");
+      const finishReason = data.choices?.[0]?.finish_reason ?? null;
       console.log(
         "[eb-ai] Groq OK, tokens:",
         data.usage?.prompt_tokens,
         "+",
         data.usage?.completion_tokens,
+        "finish_reason:",
+        finishReason,
       );
       const remTok = parseFloat(
         response.headers.get("x-ratelimit-remaining-tokens") ?? "",
@@ -429,6 +434,7 @@ export async function callGroqBranding(
         resetSeconds: parseDurationSeconds(
           response.headers.get("x-ratelimit-reset-tokens"),
         ),
+        finishReason,
       };
     }
 
@@ -483,7 +489,9 @@ export async function callGroqBranding(
 export function buildBrandingPrompt(
   input: BrandingInput,
   trendData: TrendItem[],
+  ideaCount: { min: number; max: number } = { min: 6, max: 8 },
 ): string {
+  const ideaCountLabel = `${ideaCount.min}-${ideaCount.max}`;
   const pillarLabels = input.pillars
     .map((p) => PILLAR_LABELS[p])
     .join(", ");
@@ -587,9 +595,9 @@ Itulah level kekonkretan yang diharapkan: nama efek/teknik visual PERSIS, dialog
 
 INSTRUKSI:
 1. TREN VIRAL & TRENDING OTOMATIS adalah riset default. TAPI kalau TREN TAMBAHAN DARI USER terisi (nama orang, meme, momen viral spesifik, dll), itu WAJIB jadi anchor konkret untuk MINIMAL 2 ide — sebut entitasnya secara eksplisit di title & description (bukan cuma disinggung sepintas di trendReference), dan jelaskan persis bagaimana entitas/momen itu dihubungkan ke pesan employer branding di contentBreakdown. Kalau kosong, itu normal, pakai TREN OTOMATIS sepenuhnya.
-2. Buat 6-8 ide konten dengan tingkat kekonkretan seperti CONTOH STANDAR KUALITAS di atas. Setiap ide WAJIB memakai format berbeda dari daftar FORMAT VIRAL (boleh dimodifikasi, sebutkan nama format aslinya + platform di "formatUsed")
+2. Buat ${ideaCountLabel} ide konten dengan tingkat kekonkretan seperti CONTOH STANDAR KUALITAS di atas. Setiap ide WAJIB memakai format berbeda dari daftar FORMAT VIRAL (boleh dimodifikasi, sebutkan nama format aslinya + platform di "formatUsed")
 3. Untuk SETIAP ide, buat "contentBreakdown": array 4-6 beat. Setiap beat WAJIB memuat: (a) label waktu/slide, (b) nama beat singkat, (c) description berisi CONTOH DIALOG/TEKS-DI-LAYAR PERSIS yang muncul DAN nama teknik visual/transisi spesifik (mis. jump cut, morph/aging filter, split-screen, freeze-frame, whip pan, voice-over reveal). DILARANG deskripsi abstrak seperti "buka dengan hook menarik" tanpa isi konkret — description minimal 15 kata dan harus terbaca seperti instruksi shot-list yang bisa langsung dieksekusi kru produksi
-4. Minimal 2 dari 6-8 ide WAJIB menggabungkan SATU data/fakta spesifik perusahaan (masa kerja karyawan, jabatan, pencapaian) dengan SATU mekanik/efek visual yang sedang tren (age filter, freeze-frame reveal, split-screen before-after, morph cut, voice reveal, dll) — bukan sekadar format wawancara/testimoni polos
+4. Minimal 2 dari ${ideaCountLabel} ide WAJIB menggabungkan SATU data/fakta spesifik perusahaan (masa kerja karyawan, jabatan, pencapaian) dengan SATU mekanik/efek visual yang sedang tren (age filter, freeze-frame reveal, split-screen before-after, morph cut, voice reveal, dll) — bukan sekadar format wawancara/testimoni polos
 5. visualDirection, copyGuideline, productionNotes, dan contentBreakdown WAJIB berbeda-beda kalimatnya di setiap ide sesuai konten spesifiknya — DILARANG KERAS memakai kalimat yang sama persis di lebih dari satu ide
 6. Setiap ide menerapkan minimal 1-3 KUNCI VIRAL & ENGAGEMENT — sebutkan di "viralPrinciples"
 7. Untuk setiap ide, tulis juga "performancePattern": pola kualitatif kenapa konten sejenis biasanya berkinerja baik (rujuk ke kunci viral & engagement) — JANGAN mengarang angka/statistik spesifik seolah itu data nyata
@@ -651,7 +659,7 @@ FORMAT OUTPUT JSON:
 }
 
 PENTING:
-- ideas harus berisi 6-8 item dengan variasi platform dan pilar
+- ideas harus berisi ${ideaCountLabel} item dengan variasi platform dan pilar
 - editorialPlan harus berisi 4 minggu, masing-masing 3-5 post
 - Semua teks dalam Bahasa Indonesia kecuali hashtag dan istilah umum
 - Production brief harus cukup detail untuk briefing tim desain/produksi`;

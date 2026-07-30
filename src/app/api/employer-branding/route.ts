@@ -31,6 +31,12 @@ const VALID_PLATFORMS = new Set([
 ]);
 
 export async function POST(request: NextRequest) {
+  // Tracked outside the try body so the catch block can tell a truncated
+  // Groq response (finish_reason "length" — the JSON got cut off mid-way)
+  // apart from a genuine parse failure, and give the user an actionable
+  // message instead of a generic error.
+  let groqFinishReason: string | null = null;
+
   try {
     const body = (await request.json()) as Record<string, unknown>;
 
@@ -77,8 +83,23 @@ export async function POST(request: NextRequest) {
     const trendData = await fetchTrendData(industry, platforms, input.manualTrends);
     const knownTrendUrls = trendData.map((t) => t.url).filter(Boolean);
 
-    const prompt = buildBrandingPrompt(input, trendData);
-    const groq = await callGroqBranding(prompt);
+    let ideaCount = { min: 6, max: 8 };
+    let prompt = buildBrandingPrompt(input, trendData, ideaCount);
+    let groq = await callGroqBranding(prompt);
+    groqFinishReason = groq.finishReason;
+
+    // Reference content, manual trends, and the detailed per-idea breakdown
+    // we now require can push the response past the model's 8192-token
+    // completion cap — the JSON gets cut off mid-string and fails to parse.
+    // Retry once with fewer (still fully detailed) ideas instead of failing.
+    if (groq.finishReason === "length") {
+      console.warn("[employer-branding] Response truncated at max_tokens — retrying with fewer ideas");
+      ideaCount = { min: 4, max: 5 };
+      prompt = buildBrandingPrompt(input, trendData, ideaCount);
+      groq = await callGroqBranding(prompt);
+      groqFinishReason = groq.finishReason;
+    }
+
     const result = parseBrandingResponse(groq.content, knownTrendUrls);
 
     return NextResponse.json({
@@ -103,7 +124,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         result: buildFallbackResult(
-          "Gagal memparse respons AI. Coba generate ulang.",
+          groqFinishReason === "length"
+            ? "Respons AI terpotong karena kepanjangan untuk konteks yang diberikan (masih terpotong meski sudah dicoba ulang dengan ide lebih sedikit). Coba persingkat catatan referensi/konteks tambahan, kurangi jumlah platform yang dipilih, lalu generate ulang."
+            : "Gagal memparse respons AI. Coba generate ulang.",
         ),
         meta: { error: message },
       });
