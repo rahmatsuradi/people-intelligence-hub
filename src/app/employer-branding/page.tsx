@@ -17,6 +17,8 @@ import {
   INDUSTRIES,
   EMPLOYEE_COUNTS,
   TARGET_AUDIENCES,
+  VIRALITY_PRINCIPLES,
+  VIRALITY_SOURCES,
 } from "@/lib/employer-branding-ai";
 import {
   getSavedIdeas,
@@ -29,7 +31,7 @@ import {
   type SavedContentIdea,
   type EbHistoryItem,
 } from "@/lib/employer-branding-store";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ChangeEvent } from "react";
 
 /* ─── Platform badge colors ─── */
 
@@ -80,6 +82,9 @@ export default function EmployerBrandingPage() {
   const [openRoles, setOpenRoles] = useState("");
   const [manualTrends, setManualTrends] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
+  const [referenceContentUrl, setReferenceContentUrl] = useState("");
+  const [referenceContentNotes, setReferenceContentNotes] = useState("");
+  const [referenceVideoMeta, setReferenceVideoMeta] = useState("");
 
   // Result state
   const [result, setResult] = useState<BrandingIdeasResult | null>(null);
@@ -91,6 +96,7 @@ export default function EmployerBrandingPage() {
   const [savedIdeas, setSavedIdeas] = useState<SavedContentIdea[]>(() => getSavedIdeas());
   const [history, setHistory] = useState<EbHistoryItem[]>(() => getEbHistory());
   const [activeTab, setActiveTab] = useState<"results" | "saved" | "history">("results");
+  const [showPlaybook, setShowPlaybook] = useState(false);
 
   const canGenerate = companyName.trim() && industry && pillars.length > 0 && platforms.length > 0;
 
@@ -110,6 +116,29 @@ export default function EmployerBrandingPage() {
     });
   }, []);
 
+  const handleVideoFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setReferenceVideoMeta("");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const mins = Math.floor(video.duration / 60);
+      const secs = Math.round(video.duration % 60);
+      const durationStr = mins > 0 ? `${mins}m ${secs}d` : `${secs} detik`;
+      setReferenceVideoMeta(`${file.name} · durasi ${durationStr}`);
+      URL.revokeObjectURL(url);
+    };
+    video.onerror = () => {
+      setReferenceVideoMeta(`${file.name} (durasi tidak terbaca)`);
+      URL.revokeObjectURL(url);
+    };
+    video.src = url;
+  }, []);
+
   const pullOpenRoles = useCallback(() => {
     const reqs = getJobReqs().filter((r) => r.status === "active");
     if (reqs.length === 0) {
@@ -125,8 +154,10 @@ export default function EmployerBrandingPage() {
     if (!canGenerate) return;
     setLoading(true);
     setError(null);
-    setResult(null);
     setActiveTab("results");
+    // Note: previous `result` is intentionally NOT cleared here — if this
+    // generation fails (e.g. rate limit), the last successful ideas stay
+    // visible instead of vanishing.
 
     try {
       const res = await fetch("/api/employer-branding", {
@@ -136,6 +167,7 @@ export default function EmployerBrandingPage() {
           companyName, industry, employeeCount, companyValues,
           openRoles, targetAudience, pillars, platforms,
           additionalContext, manualTrends, campaignGoal,
+          referenceContentUrl, referenceContentNotes, referenceVideoMeta,
         }),
       });
 
@@ -160,7 +192,7 @@ export default function EmployerBrandingPage() {
     } finally {
       setLoading(false);
     }
-  }, [canGenerate, companyName, industry, employeeCount, companyValues, openRoles, targetAudience, pillars, platforms, additionalContext, manualTrends, campaignGoal]);
+  }, [canGenerate, companyName, industry, employeeCount, companyValues, openRoles, targetAudience, pillars, platforms, additionalContext, manualTrends, campaignGoal, referenceContentUrl, referenceContentNotes, referenceVideoMeta]);
 
   const handleSaveIdea = useCallback((idea: ContentIdea) => {
     const entry = saveIdea(idea, companyName);
@@ -295,8 +327,43 @@ export default function EmployerBrandingPage() {
 
               {/* Manual Trends */}
               <div>
-                <Label htmlFor="manualTrends">Tren yang Anda lihat</Label>
-                <textarea id="manualTrends" className={cn(inputClass, "min-h-[60px] resize-y")} placeholder="Paste tren, topik viral, atau hal menarik yang Anda lihat di medsos..." value={manualTrends} onChange={(e) => setManualTrends(e.target.value)} rows={2} />
+                <Label htmlFor="manualTrends">Tren tambahan <span className="font-normal text-slate-400">(opsional)</span></Label>
+                <p className="mb-1 text-[11px] text-slate-400">AI otomatis riset tren viral & trending duluan — isi ini kalau Anda ingin menambahkan pengamatan sendiri. Kosongkan saja kalau tidak ada.</p>
+                <textarea id="manualTrends" className={cn(inputClass, "min-h-[60px] resize-y")} placeholder="Paste tren, topik viral, atau hal menarik yang Anda lihat di medsos... (opsional)" value={manualTrends} onChange={(e) => setManualTrends(e.target.value)} rows={2} />
+              </div>
+
+              {/* Reference Content — Amati-Tiru-Modifikasi */}
+              <div className="rounded-lg border border-dashed border-slate-200 p-3 dark:border-slate-700">
+                <Label>Referensi konten viral <span className="font-normal text-slate-400">(opsional — metode Amati-Tiru-Modifikasi)</span></Label>
+                <div className="mt-2 space-y-2.5">
+                  <input
+                    className={inputClass}
+                    placeholder="Link TikTok/Reels/Shorts yang ingin ditiru gayanya..."
+                    value={referenceContentUrl}
+                    onChange={(e) => setReferenceContentUrl(e.target.value)}
+                  />
+                  <div>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoFileChange}
+                      className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:file:bg-slate-700 dark:file:text-slate-300"
+                    />
+                    {referenceVideoMeta && (
+                      <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">✓ {referenceVideoMeta}</p>
+                    )}
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Video hanya dibaca durasinya di browser — belum ada analisis isi video oleh AI. Jelaskan di catatan di bawah apa yang membuatnya menarik; AI akan meniru pola tersebut lalu memodifikasinya untuk konten Anda.
+                    </p>
+                  </div>
+                  <textarea
+                    className={cn(inputClass, "min-h-[48px] resize-y")}
+                    placeholder="Apa yang membuat konten ini menarik? Hook, format, gaya editing, kenapa menurut Anda viral..."
+                    value={referenceContentNotes}
+                    onChange={(e) => setReferenceContentNotes(e.target.value)}
+                    rows={2}
+                  />
+                </div>
               </div>
 
               {/* Additional Context */}
@@ -387,6 +454,41 @@ export default function EmployerBrandingPage() {
 
         {/* ═══ RIGHT PANEL — RESULTS ═══ */}
         <div className="space-y-4 xl:col-span-3">
+          {/* Kunci Viral & Engagement — always available reference */}
+          <Card padding={false}>
+            <button type="button" onClick={() => setShowPlaybook((v) => !v)} className="flex w-full items-center justify-between px-5 py-3.5 text-left">
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4 text-amber-500"><SvgPath name="sparkles" /></Icon>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">Kunci Viral & Engagement (hasil riset)</span>
+              </div>
+              <Icon className={cn("h-4 w-4 text-slate-400 transition-transform", showPlaybook && "rotate-180")}>
+                <SvgPath name="chevronDown" />
+              </Icon>
+            </button>
+            {showPlaybook && (
+              <div className="border-t border-slate-100 px-5 py-4 dark:border-slate-800">
+                <ul className="space-y-3">
+                  {VIRALITY_PRINCIPLES.map((p, i) => (
+                    <li key={i}>
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{p.title}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{p.description}</p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 text-[11px] text-slate-400">
+                  Sumber:{" "}
+                  {VIRALITY_SOURCES.map((s, i) => (
+                    <span key={s.url}>
+                      <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600 dark:hover:text-slate-300">{s.label}</a>
+                      {i < VIRALITY_SOURCES.length - 1 ? "; " : ""}
+                    </span>
+                  ))}
+                </p>
+                <p className="mt-2 text-[11px] text-slate-400">Setiap ide di bawah menerapkan sebagian prinsip ini — lihat badge &quot;Kunci Viral Diterapkan&quot; di masing-masing ide.</p>
+              </div>
+            )}
+          </Card>
+
           {/* Error */}
           {error && (
             <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20">
@@ -400,8 +502,10 @@ export default function EmployerBrandingPage() {
             </Card>
           )}
 
-          {/* Loading */}
-          {loading && (
+          {/* Loading — full card only when there's nothing to show yet.
+              If a previous result exists, show a slim inline banner instead
+              so old ideas stay visible (rate limits shouldn't wipe out work). */}
+          {loading && !result && (
             <Card>
               <div className="flex flex-col items-center py-8">
                 <Icon className="h-8 w-8 animate-pulse text-blue-500"><SvgPath name="sparkles" /></Icon>
@@ -410,6 +514,14 @@ export default function EmployerBrandingPage() {
                 <div className="mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                   <div className="h-full animate-[loading_2s_ease-in-out_infinite] rounded-full bg-blue-500" style={{ width: "60%" }} />
                 </div>
+              </div>
+            </Card>
+          )}
+          {loading && result && (
+            <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-900/20">
+              <div className="flex items-center gap-3">
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">AI sedang membuat ide baru — hasil sebelumnya tetap tampil di bawah.</p>
               </div>
             </Card>
           )}
@@ -427,8 +539,10 @@ export default function EmployerBrandingPage() {
             </Card>
           )}
 
-          {/* Results */}
-          {result && !loading && (
+          {/* Results — stays visible even while a new generation is loading
+              in the background (see slim banner above), so a failed/rate-
+              limited regenerate never wipes out previously built ideas. */}
+          {result && (
             <>
               {/* Trend Analysis */}
               {result.trendAnalysis && (
@@ -595,6 +709,43 @@ function IdeaCard({ idea, expanded, saved, onToggle, onSave }: {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Viral Principles Applied */}
+          {idea.viralPrinciples.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Kunci Viral Diterapkan</p>
+              <div className="flex flex-wrap gap-1.5">
+                {idea.viralPrinciples.map((v, i) => (
+                  <span key={i} className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                    {v}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Performance Pattern */}
+          {idea.performancePattern && (
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Pola Performa (Referensi)</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{idea.performancePattern}</p>
+            </div>
+          )}
+
+          {/* Variations */}
+          {idea.variations.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Variasi Eksekusi Lain</p>
+              <ul className="space-y-1">
+                {idea.variations.map((v, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                    {v}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

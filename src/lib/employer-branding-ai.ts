@@ -51,6 +51,12 @@ export interface BrandingInput {
   additionalContext: string;
   manualTrends: string;
   campaignGoal: string;
+  /** Optional — link to a viral post/video the user wants to use as inspiration. */
+  referenceContentUrl?: string;
+  /** Optional — user's own observation of why the reference content works (hook, format, etc). */
+  referenceContentNotes?: string;
+  /** Optional — client-extracted metadata (filename + duration) of an uploaded reference video. */
+  referenceVideoMeta?: string;
 }
 
 export interface ContentIdea {
@@ -68,6 +74,12 @@ export interface ContentIdea {
   visualDirection: string;
   copyGuideline: string;
   productionNotes: string;
+  /** Which viral/engagement principles (from VIRALITY_PRINCIPLES) this idea applies. */
+  viralPrinciples: string[];
+  /** Qualitative note on why similar content patterns tend to perform well — no fabricated stats. */
+  performancePattern: string;
+  /** 2-3 alternate execution angles for the same core idea, so the user isn't stuck with one take. */
+  variations: string[];
 }
 
 export interface EditorialPost {
@@ -154,6 +166,59 @@ export const INDUSTRIES = [
 
 export const EMPLOYEE_COUNTS = ["1-50", "51-200", "201-500", "501-1000", "1000+"] as const;
 
+/* ─── Virality & Engagement Playbook (research-backed, cited) ───
+   Grounds AI output in real mechanics instead of guessing. Also shown
+   directly to the user in the UI as an educational reference card. */
+
+export interface ViralityPrinciple {
+  title: string;
+  description: string;
+}
+
+export const VIRALITY_PRINCIPLES: ViralityPrinciple[] = [
+  {
+    title: "Hook 2-3 detik pertama",
+    description:
+      "Algoritma TikTok/Reels/Shorts menilai retensi sejak detik pertama. Buka dengan masalah, pertanyaan, atau visual yang mengejutkan — bukan logo perusahaan atau intro panjang.",
+  },
+  {
+    title: "Sinyal engagement awal menentukan jangkauan",
+    description:
+      "Menurut analisis konten Meta awal 2026, sekitar 72% konten dengan engagement rate di atas 4% pada 30 menit pertama akhirnya viral dalam 24 jam, sementara hanya ~4% yang di bawah 2% berhasil viral. Dorong komentar & share sejak awal lewat pertanyaan atau CTA yang jelas.",
+  },
+  {
+    title: "Watch time & completion rate > jumlah follower",
+    description:
+      "Distribusi kini didorong algoritma ke orang yang belum follow akun Anda. Video pendek yang selesai ditonton (bukan di-skip) lebih menentukan jangkauan daripada jumlah follower perusahaan.",
+  },
+  {
+    title: "Autentik mengalahkan polished",
+    description:
+      "Konten mentah/unscripted (cerita karyawan asli, behind-the-scenes) secara konsisten mengungguli video korporat yang terlalu diedit — kandidat bisa membedakan konten yang dibuat-buat dari yang jujur.",
+  },
+  {
+    title: "Native ke platform, bukan re-upload",
+    description:
+      "Video ber-watermark TikTok yang di-upload ulang ke Reels/Shorts biasanya ditekan jangkauannya oleh algoritma. Edit ulang tanpa watermark dan sesuaikan rasio/gaya caption per platform.",
+  },
+  {
+    title: "Saves & shares = sinyal terkuat",
+    description:
+      "Save berarti kandidat menyimpan perusahaan Anda untuk dipertimbangkan nanti — sinyal minat karir yang kuat. Share memperluas jangkauan ke luar audiens yang sudah follow.",
+  },
+  {
+    title: "Tutup dengan CTA atau pertanyaan",
+    description:
+      "Ajak komentar/diskusi di akhir video atau caption (mis. 'Menurutmu gimana?', 'Ada yang pernah ngalamin ini?') untuk memicu komentar yang mendorong algoritma menyebarkan konten lebih luas.",
+  },
+];
+
+export const VIRALITY_SOURCES = [
+  { label: "HeyOrca — Best social media hooks for 2026", url: "https://www.heyorca.com/blog/the-best-social-media-hooks-for-2026" },
+  { label: "Black Digital Group — What makes a post go viral in 2026", url: "https://blackdigitalgroup.com/what-makes-a-social-media-post-go-viral/" },
+  { label: "HR Brew — Employers lean on Instagram & TikTok for Gen-Z recruiting", url: "https://www.hr-brew.com/stories/2025/09/23/hr-recruitment-marketing-tiktok" },
+] as const;
+
 export const TARGET_AUDIENCES = [
   { value: "fresh-graduate", label: "Fresh graduate" },
   { value: "mid-career", label: "Mid-career (3-7 tahun)" },
@@ -167,9 +232,13 @@ export async function fetchTrendData(
   industry: string,
   platforms: Platform[],
 ): Promise<TrendItem[]> {
+  // Ordered so viral/trending social content discovery runs first — this is
+  // the default, automatic research the tool leans on. Industry & platform
+  // queries fill in the rest; manual user input (if any) only supplements it.
   const queries = [
+    `konten+viral+medsos+Indonesia+minggu+ini`,
+    `tren+TikTok+Reels+Indonesia+viral+engagement+tinggi`,
     `employer+branding+${encodeURIComponent(industry)}+Indonesia`,
-    `employer+branding+social+media+trends+2026`,
     ...platforms.slice(0, 2).map(
       (p) => `employer+branding+${encodeURIComponent(PLATFORM_LABELS[p])}`,
     ),
@@ -177,10 +246,10 @@ export async function fetchTrendData(
 
   const items: TrendItem[] = [];
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  const timeout = setTimeout(() => controller.abort(), 6000);
 
   try {
-    for (const q of queries.slice(0, 2)) {
+    for (const q of queries.slice(0, 3)) {
       try {
         const url = `https://news.google.com/rss/search?q=${q}&hl=id&gl=ID&ceid=ID:id`;
         const res = await fetch(url, { signal: controller.signal });
@@ -210,7 +279,7 @@ export async function fetchTrendData(
   }
 
   console.log(`[eb-ai] Fetched ${items.length} trend items`);
-  return items.slice(0, 10);
+  return items.slice(0, 12);
 }
 
 /* ─── Groq API call (branding-specific, creative temperature) ─── */
@@ -363,11 +432,31 @@ export function buildBrandingPrompt(
 
   const manualTrendSection = input.manualTrends.trim()
     ? input.manualTrends.trim()
-    : "Tidak ada tren tambahan dari user.";
+    : "Tidak ada — user tidak mengisi kolom ini (opsional), gunakan sepenuhnya TREN OTOMATIS di atas.";
 
   const openRolesSection = input.openRoles.trim()
     ? input.openRoles.trim()
     : "Tidak ada posisi terbuka saat ini.";
+
+  const referenceLines = [
+    input.referenceContentUrl?.trim()
+      ? `- Link konten referensi: ${input.referenceContentUrl.trim()}`
+      : null,
+    input.referenceVideoMeta?.trim()
+      ? `- Video referensi diunggah user: ${input.referenceVideoMeta.trim()}`
+      : null,
+    input.referenceContentNotes?.trim()
+      ? `- Pengamatan user tentang konten ini: ${input.referenceContentNotes.trim()}`
+      : null,
+  ].filter((l): l is string => Boolean(l));
+  const referenceSection =
+    referenceLines.length > 0
+      ? referenceLines.join("\n")
+      : "Tidak ada — user tidak memberi referensi konten spesifik (opsional).";
+
+  const playbookText = VIRALITY_PRINCIPLES.map(
+    (p, i) => `${i + 1}. ${p.title}: ${p.description}`,
+  ).join("\n");
 
   const goalMap: Record<string, string> = {
     awareness: "Meningkatkan brand awareness perusahaan sebagai tempat kerja pilihan",
@@ -390,24 +479,33 @@ PROFIL PERUSAHAAN:
 POSISI TERBUKA (untuk konten talent acquisition):
 ${openRolesSection}
 
-TREN TERKINI DARI BERITA:
+TREN VIRAL & TRENDING OTOMATIS (RISET UTAMA — prioritaskan ini):
 ${trendSection}
 
-TREN TAMBAHAN DARI USER:
+TREN TAMBAHAN DARI USER (opsional, hanya pelengkap — boleh kosong):
 ${manualTrendSection}
+
+REFERENSI KONTEN UNTUK METODE AMATI-TIRU-MODIFIKASI (opsional):
+${referenceSection}
+
+KUNCI VIRAL & ENGAGEMENT (terapkan prinsip-prinsip ini ke SETIAP ide, sebutkan mana yang dipakai):
+${playbookText}
 
 PILAR KONTEN YANG DIMINTA: ${pillarLabels}
 PLATFORM TARGET: ${platformLabels}
 
 INSTRUKSI:
-1. Analisis tren employer branding yang relevan dari data di atas
-2. Buat 6-8 ide konten yang kreatif, spesifik, dan actionable
+1. Prioritaskan TREN VIRAL & TRENDING OTOMATIS sebagai riset utama. TREN TAMBAHAN DARI USER hanya pelengkap opsional — kalau kosong, itu normal, jangan anggap kekurangan data.
+2. Buat 6-8 ide konten yang kreatif, spesifik, dan actionable, masing-masing menerapkan minimal 1-3 KUNCI VIRAL & ENGAGEMENT di atas
 3. Setiap ide harus mencakup production brief lengkap (arahan visual, panduan copy, catatan produksi)
-4. Buat editorial plan 4 minggu (tema per minggu, 3-5 post per minggu)
-5. Semua konten harus relevan dengan konteks perusahaan Indonesia
-6. Hashtag campuran Bahasa Indonesia dan Inggris
-7. Pastikan variasi antar pilar, platform, dan tipe konten
-8. Jika ada posisi terbuka, beberapa ide harus mengarah ke talent acquisition
+4. Untuk setiap ide, tulis juga "performancePattern": pola kualitatif kenapa konten sejenis biasanya berkinerja baik (rujuk ke kunci viral & engagement) — JANGAN mengarang angka/statistik spesifik seolah itu data nyata
+5. Untuk setiap ide, tulis "variations": 2 variasi eksekusi/sudut pandang alternatif dari ide inti yang sama, supaya user punya beberapa opsi bukan cuma satu
+6. Jika ada REFERENSI KONTEN dari user, terapkan metode Amati-Tiru-Modifikasi (ATM): amati pola/hook/format dari referensi tsb, lalu modifikasi agar relevan dengan employer branding perusahaan ini — jangan tiru mentah-mentah, dan sertakan idenya di trendReference
+7. Buat editorial plan 4 minggu (tema per minggu, 3-5 post per minggu)
+8. Semua konten harus relevan dengan konteks perusahaan Indonesia
+9. Hashtag campuran Bahasa Indonesia dan Inggris
+10. Pastikan variasi antar pilar, platform, dan tipe konten
+11. Jika ada posisi terbuka, beberapa ide harus mengarah ke talent acquisition
 
 FORMAT OUTPUT JSON:
 {
@@ -428,7 +526,10 @@ FORMAT OUTPUT JSON:
       "trendReference": "<tren apa yang menginspirasi ide ini>",
       "visualDirection": "<arahan visual: warna, style, mood, komposisi>",
       "copyGuideline": "<panduan copy: tone of voice, CTA, panjang caption, hook>",
-      "productionNotes": "<catatan produksi: durasi video, ukuran asset, tools yang bisa dipakai>"
+      "productionNotes": "<catatan produksi: durasi video, ukuran asset, tools yang bisa dipakai>",
+      "viralPrinciples": ["<1-3 judul prinsip dari daftar KUNCI VIRAL & ENGAGEMENT yang diterapkan di ide ini>"],
+      "performancePattern": "<pola kualitatif kenapa konten sejenis biasanya berkinerja baik, merujuk kunci viral & engagement — tanpa angka fiktif>",
+      "variations": ["<variasi eksekusi/sudut pandang alternatif 1>", "<variasi eksekusi/sudut pandang alternatif 2>"]
     }
   ],
   "editorialPlan": [
@@ -515,6 +616,13 @@ export function parseBrandingResponse(raw: string): BrandingIdeasResult {
       visualDirection: String(raw.visualDirection ?? ""),
       copyGuideline: String(raw.copyGuideline ?? ""),
       productionNotes: String(raw.productionNotes ?? ""),
+      viralPrinciples: Array.isArray(raw.viralPrinciples)
+        ? raw.viralPrinciples.map(String)
+        : [],
+      performancePattern: String(raw.performancePattern ?? ""),
+      variations: Array.isArray(raw.variations)
+        ? raw.variations.map(String)
+        : [],
     }),
   );
 

@@ -65,6 +65,9 @@ export async function POST(request: NextRequest) {
       additionalContext: String(body.additionalContext ?? ""),
       manualTrends: String(body.manualTrends ?? ""),
       campaignGoal: String(body.campaignGoal ?? "all"),
+      referenceContentUrl: String(body.referenceContentUrl ?? ""),
+      referenceContentNotes: String(body.referenceContentNotes ?? ""),
+      referenceVideoMeta: String(body.referenceVideoMeta ?? ""),
     };
 
     const trendData = await fetchTrendData(industry, platforms);
