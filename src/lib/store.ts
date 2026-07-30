@@ -256,15 +256,21 @@ function getTenantKey(key: string): string {
   return `${key}_${compId}`;
 }
 
-let isSeedingZus = false;
+let isSeedingDemo = false;
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
     const tKey = getTenantKey(key);
     let raw = localStorage.getItem(tKey);
-    if (!raw && !isSeedingZus && (getActiveCompanyId() === "22222222-2222-4222-8222-222222222222" || getActiveCompanyId() === "zus_textile") && (key === "hi_candidates" || key === "hi_jobreqs" || key === "hi_talent_pool" || key === "hi_activity")) {
-      isSeedingZus = true;
-      try { loadZusTextileDemoData(); } finally { isSeedingZus = false; }
+    // First-ever read of these 4 Hire-module keys for whichever company is
+    // currently active auto-seeds that company's demo dataset — previously
+    // this only happened for Zus Textile, so a fresh visitor on Valora TV
+    // (or anyone who cleared storage) saw Candidates/Talent Pool/Open Roles/
+    // Activity as permanently empty instead of ever getting the Valora demo
+    // data that loadDemoData() already knows how to build.
+    if (!raw && !isSeedingDemo && (key === "hi_candidates" || key === "hi_jobreqs" || key === "hi_talent_pool" || key === "hi_activity")) {
+      isSeedingDemo = true;
+      try { loadDemoData(); } finally { isSeedingDemo = false; }
       raw = localStorage.getItem(tKey);
     }
     return raw ? (JSON.parse(raw) as T) : fallback;

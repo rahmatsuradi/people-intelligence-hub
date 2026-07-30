@@ -8,6 +8,16 @@ import {
   type CandidateRecord,
   type PipelineStage,
 } from "@/lib/store";
+import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
+import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
+
+interface DemoEmployee {
+  full_name: string;
+  employment_type: string;
+  department: string | null;
+  position?: string;
+  upah_pokok: number | string;
+}
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -27,6 +37,17 @@ const REC_COLORS: Record<string, string> = {
   "Review":      "bg-amber-500",
   "Reject":      "bg-red-500",
 };
+
+const DEPT_COLORS: { dot: string; bar: string }[] = [
+  { dot: "bg-red-600", bar: "bg-red-600" },
+  { dot: "bg-rose-500", bar: "bg-rose-500" },
+  { dot: "bg-amber-500", bar: "bg-amber-500" },
+  { dot: "bg-blue-500", bar: "bg-blue-500" },
+  { dot: "bg-emerald-500", bar: "bg-emerald-500" },
+  { dot: "bg-violet-500", bar: "bg-violet-500" },
+  { dot: "bg-cyan-500", bar: "bg-cyan-500" },
+  { dot: "bg-slate-500", bar: "bg-slate-500" },
+];
 
 const REC_TEXT: Record<string, string> = {
   "Strong Hire": "text-emerald-700 dark:text-emerald-400",
@@ -75,6 +96,8 @@ function BarRow({ label, sub, count, pct, barClass }: {
 
 export default function AnalyticsPage() {
   const [candidates, setCandidates] = useState<CandidateRecord[]>([]);
+  const [employees, setEmployees] = useState<DemoEmployee[]>([]);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"workforce" | "simulator" | "recruitment">("workforce");
 
@@ -85,12 +108,37 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const refresh = () => {
       setCandidates(getCandidates());
+      setEmployees(getActiveCompanyEmployees());
+      setCompanyProfile(getActiveCompanyProfile());
       setLoaded(true);
     };
     refresh();
     document.addEventListener("visibilitychange", refresh);
     return () => document.removeEventListener("visibilitychange", refresh);
   }, []);
+
+  const isBroadcast = companyProfile?.industry === "broadcast";
+
+  const workforce = useMemo(() => {
+    const total = employees.length;
+    const permanentCount = employees.filter((e) => /PKWTT|Tetap/i.test(e.employment_type)).length;
+    const contractCount = total - permanentCount;
+    const permanentPct = total > 0 ? Math.round((permanentCount / total) * 1000) / 10 : 0;
+
+    const deptMap = new Map<string, number>();
+    for (const e of employees) {
+      const d = e.department || "Lainnya";
+      deptMap.set(d, (deptMap.get(d) ?? 0) + 1);
+    }
+    const departments = Array.from(deptMap.entries())
+      .map(([name, count]) => ({ name, count, pct: total > 0 ? Math.round((count / total) * 1000) / 10 : 0 }))
+      .sort((a, b) => b.count - a.count);
+
+    const totalBaseSalary = employees.reduce((s, e) => s + (Number(e.upah_pokok) || 0), 0);
+    const avgBaseSalary = total > 0 ? Math.round(totalBaseSalary / total) : 0;
+
+    return { total, permanentCount, contractCount, permanentPct, departments, totalBaseSalary, avgBaseSalary };
+  }, [employees]);
 
   const stats = useMemo(() => {
     const total = candidates.length;
@@ -203,7 +251,7 @@ export default function AnalyticsPage() {
   const burnoutRiskPct = Math.min(98, Math.round(22 + (breakingNewsHours - 8) * 4.8)); // kurva ilustratif
 
   return (
-    <AppShell activeNavId="analytics" title="Pusat Analitik & Strategi HRBP" subtitle="Demo sintetis — dikalibrasi dari laporan tahunan publik industri penyiaran nasional (2025)">
+    <AppShell activeNavId="analytics" title="Pusat Analitik & Strategi HRBP" subtitle={`Demo sintetis — data ${companyProfile?.shortName ?? "entitas aktif"}`}>
       
       {/* Top Tab Navigation */}
       <div className="mb-6 flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
@@ -217,21 +265,23 @@ export default function AnalyticsPage() {
           )}
         >
           <span>🏛️</span>
-          <span>Workforce & Headcount (Valora 2025)</span>
+          <span>Workforce & Headcount</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab("simulator")}
-          className={cn(
-            "flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all shadow-sm",
-            activeTab === "simulator"
-              ? "bg-red-600 text-white shadow-red-500/20"
-              : "bg-white text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-          )}
-        >
-          <span>🚀</span>
-          <span>Simulator Beban Siaran (What-If)</span>
-        </button>
+        {isBroadcast && (
+          <button
+            onClick={() => setActiveTab("simulator")}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all shadow-sm",
+              activeTab === "simulator"
+                ? "bg-red-600 text-white shadow-red-500/20"
+                : "bg-white text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            )}
+          >
+            <span>🚀</span>
+            <span>Simulator Beban Siaran (What-If)</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab("recruitment")}
@@ -247,227 +297,105 @@ export default function AnalyticsPage() {
         </button>
       </div>
 
-      {/* TAB 1: WORKFORCE & HEADCOUNT (kalibrasi sintetis 2025) */}
+      {/* TAB 1: WORKFORCE & HEADCOUNT — computed live from the active tenant's employee dataset */}
       {activeTab === "workforce" && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          
-          {/* Official Ground-Truth Banner */}
+
+          {/* Company banner */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-600 via-rose-700 to-amber-600 p-6 text-white shadow-xl">
             <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider backdrop-blur-md mb-3">
-                  Data Sintetis — Kalibrasi Industri Penyiaran (2025)
+                  Data Sintetis — Dihitung Langsung dari Dataset Demo
                 </div>
-                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">PT Valora Media Television (VALORA TV)</h1>
-                <p className="mt-1 text-sm md:text-base text-red-100 max-w-2xl">
-                  Dasbor analitik SDM perusahaan demo fiktif, dengan orde besaran dikalibrasi dari laporan tahunan publik emiten penyiaran nasional agar realistis.
-                </p>
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">{companyProfile?.name ?? "—"}</h1>
+                <p className="mt-1 text-sm md:text-base text-red-100 max-w-2xl">{companyProfile?.tagline ?? ""}</p>
               </div>
               <div className="shrink-0 flex flex-col items-start md:items-end bg-black/20 p-4 rounded-xl backdrop-blur-sm border border-white/10">
                 <span className="text-xs font-semibold text-red-200">Rasio Karyawan Tetap (PKWTT)</span>
-                <span className="text-2xl font-black text-white">86,74% <span className="text-xs font-normal text-emerald-300">● 654 Org</span></span>
-                <span className="text-xs text-red-200 mt-1">vs Kontrak (PKWT): 13,26% (100 Org)</span>
+                <span className="text-2xl font-black text-white">
+                  {workforce.permanentPct.toLocaleString("id-ID")}% <span className="text-xs font-normal text-emerald-300">● {workforce.permanentCount} Org</span>
+                </span>
+                <span className="text-xs text-red-200 mt-1">
+                  vs Kontrak: {(100 - workforce.permanentPct).toLocaleString("id-ID")}% ({workforce.contractCount} Org)
+                </span>
               </div>
             </div>
           </div>
 
-          {/* KPI Cards — Audited Figures */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard 
-              label="Total Headcount Resmi" 
-              value="754 Org" 
-              sub="Turun dari 1.047 (Efisiensi & AI Restructuring)" 
-              colorClass="text-slate-900 dark:text-white" 
+          {/* KPI Cards — computed from the active tenant's employee dataset */}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <StatCard
+              label="Total Headcount"
+              value={`${workforce.total} Org`}
+              sub={`Target profil: ${companyProfile?.headcountTarget ?? "—"} Org`}
+              colorClass="text-slate-900 dark:text-white"
             />
             <StatCard
-              label="Beban SDM & Kesejahteraan" 
-              value="Rp 263,15 M" 
-              sub="Tahun 2025 (Salaries, wages, & benefits)"
+              label="Total Gaji Pokok Bulanan"
+              value={`Rp ${(workforce.totalBaseSalary / 1_000_000_000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M`}
+              sub="Jumlah upah_pokok seluruh karyawan (belum termasuk tunjangan)"
               colorClass="text-red-600 dark:text-red-400"
             />
             <StatCard
-              label="Liabilitas Imbalan Kerja" 
-              value="Rp 148,37 M" 
-              sub="PSAK 24 / Pension Liabilities"
-              colorClass="text-amber-600 dark:text-amber-400"
-            />
-            <StatCard
-              label="Rata-Rata Gaji Perseroan" 
-              value="Rp 6,00 Jt" 
-              sub="vs UMR DKI Jakarta Rp 5,40 Jt (Rasio 1:1+)"
+              label="Rata-Rata Gaji Pokok"
+              value={`Rp ${(workforce.avgBaseSalary / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} Jt`}
+              sub="Per karyawan, dihitung dari dataset aktif"
               colorClass="text-emerald-600 dark:text-emerald-400"
             />
           </div>
 
-          {/* Division Composition & Demographics */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            
-            {/* Division Mapping Valora TV */}
-            <Card>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Komposisi 5 Pilar Divisi Utama (Valora TV)</h2>
-                  <p className="text-xs text-slate-500">Distribusi penyiaran berita 24/7 & produksi program hiburan</p>
-                </div>
-                <span className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-500/10 dark:text-red-400">
-                  754 Karyawan
-                </span>
-              </div>
-
-              <div className="mt-5 space-y-4">
-                <div>
-                  <div className="mb-1 flex items-center justify-between text-sm font-medium">
-                    <span className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-red-600" />
-                      Divisi Redaksi & Pemberitaan (News Directorate)
-                    </span>
-                    <span className="tabular-nums text-slate-600 dark:text-slate-400 font-bold">316 Org · 41,9%</span>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-red-600 transition-all duration-700" style={{ width: "41.9%" }} />
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">Inti pemberitaan: Pemred, Redpel, Produser Eksekutif, Anchor, Reporter Lapangan</p>
-                </div>
-
-                <div>
-                  <div className="mb-1 flex items-center justify-between text-sm font-medium">
-                    <span className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-                      Divisi Operasional Studio & Broadcast (Production)
-                    </span>
-                    <span className="tabular-nums text-slate-600 dark:text-slate-400 font-bold">166 Org · 22,0%</span>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-rose-500 transition-all duration-700" style={{ width: "22.0%" }} />
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">Chief Cameraman, ENG Cameraman, Audio Mixer, Lighting, Video Editor</p>
-                </div>
-
-                <div>
-                  <div className="mb-1 flex items-center justify-between text-sm font-medium">
-                    <span className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                      Divisi Kreatif & Program Siaran TV (Entertainment)
-                    </span>
-                    <span className="tabular-nums text-slate-600 dark:text-slate-400 font-bold">121 Org · 16,0%</span>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-amber-500 transition-all duration-700" style={{ width: "16.0%" }} />
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">Inti hiburan: PD, FD, Scriptwriter, Talent Coordinator, Sports Programming</p>
-                </div>
-
-                <div>
-                  <div className="mb-1 flex items-center justify-between text-sm font-medium">
-                    <span className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                      Divisi Teknik Penyiaran & IT (Engineering & Network)
-                    </span>
-                    <span className="tabular-nums text-slate-600 dark:text-slate-400 font-bold">90 Org · 11,9%</span>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-blue-500 transition-all duration-700" style={{ width: "11.9%" }} />
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">MCR Supervisor, Switching Operator, SNG & Uplink, 83 Stasiun Transmisi</p>
-                </div>
-
-                <div>
-                  <div className="mb-1 flex items-center justify-between text-sm font-medium">
-                    <span className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                      Divisi Human Capital, GA, Keuangan & Komersial
-                    </span>
-                    <span className="tabular-nums text-slate-600 dark:text-slate-400 font-bold">61 Org · 8,2%</span>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full rounded-full bg-emerald-500 transition-all duration-700" style={{ width: "8.2%" }} />
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">HRBP, OD, Payroll, Accounting, Tax, Traffic & Ad Sales Manager</p>
-                </div>
-              </div>
-            </Card>
-
-            {/* Demographics: Education & Age */}
-            <Card className="flex flex-col justify-between">
+          {/* Division/Department Composition — real counts from the active tenant */}
+          <Card>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
               <div>
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Demografi Tingkat Pendidikan & Usia</h2>
-                    <p className="text-xs text-slate-500">Standar kualifikasi SDM penyiaran nasional</p>
-                  </div>
-                  <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
-                    S1: 74,8%
-                  </span>
-                </div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Komposisi Departemen</h2>
+                <p className="text-xs text-slate-500">Distribusi headcount per departemen — {companyProfile?.shortName ?? ""}</p>
+              </div>
+              <span className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                {workforce.total} Karyawan
+              </span>
+            </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-4">
-                  {/* Education */}
-                  <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Pendidikan (Education)</h3>
-                    <div className="space-y-2 text-xs font-medium">
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">S1 (Sarjana)</span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">564 Org (74,8%)</span>
+            {workforce.departments.length === 0 ? (
+              <p className="mt-5 text-sm text-slate-400">Belum ada data karyawan untuk entitas ini.</p>
+            ) : (
+              <div className="mt-5 space-y-4">
+                {workforce.departments.map((dept, i) => {
+                  const dotColor = DEPT_COLORS[i % DEPT_COLORS.length];
+                  return (
+                    <div key={dept.name}>
+                      <div className="mb-1 flex items-center justify-between text-sm font-medium">
+                        <span className="text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                          <span className={cn("h-2.5 w-2.5 rounded-full", dotColor.dot)} />
+                          {dept.name}
+                        </span>
+                        <span className="tabular-nums text-slate-600 dark:text-slate-400 font-bold">
+                          {dept.count} Org · {dept.pct.toLocaleString("id-ID")}%
+                        </span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">Diploma (D1-D3)</span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400">128 Org (17,0%)</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">S2 (Magister)</span>
-                        <span className="font-bold text-violet-600 dark:text-violet-400">39 Org (5,2%)</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">Lainnya (SMA/K)</span>
-                        <span className="font-bold text-slate-500">23 Org (3,0%)</span>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div className={cn("h-full rounded-full transition-all duration-700", dotColor.bar)} style={{ width: `${Math.max(dept.pct, 2)}%` }} />
                       </div>
                     </div>
-                  </div>
-
-                  {/* Age */}
-                  <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Kelompok Usia (Age)</h3>
-                    <div className="space-y-2 text-xs font-medium">
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">41 - 50 tahun</span>
-                        <span className="font-bold text-red-600 dark:text-red-400">306 Org (40,6%)</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">31 - 40 tahun</span>
-                        <span className="font-bold text-amber-600 dark:text-amber-400">247 Org (32,8%)</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">21 - 30 tahun</span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400">153 Org (20,3%)</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-700 dark:text-slate-300">&gt; 50 tahun</span>
-                        <span className="font-bold text-slate-500">48 Org (6,4%)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
-
-              <div className="mt-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 p-3.5 border border-amber-200 dark:border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
-                <span className="font-bold">💡 Catatan Kinerja SDM (Demo 2025):</span> Tingkat retensi karyawan tetap berada di angka sangat tinggi (86,7% PKWTT), menunjukkan loyalitas kuat di tengah disrupsi media digital dan masa transisi *post-pandemic recovery*.
-              </div>
-            </Card>
-          </div>
+            )}
+          </Card>
 
           {/* Methodology / provenance note */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-            <span className="font-bold text-slate-800 dark:text-slate-200">📖 Metodologi kalibrasi:</span>{" "}
-            Seluruh entitas, nama, dan angka pada dasbor ini adalah <strong>data demo sintetis</strong>. Orde besarannya
-            dikalibrasi dari laporan tahunan publik emiten penyiaran nasional (IDX, tahun buku 2025) agar proporsi
-            headcount, beban SDM, dan demografi terasa realistis untuk industri TV — namun bukan data resmi
-            perusahaan mana pun dan tidak boleh dikutip sebagai fakta.
+            <span className="font-bold text-slate-800 dark:text-slate-200">📖 Metodologi:</span>{" "}
+            Seluruh entitas, nama, dan angka pada dasbor ini adalah <strong>data demo sintetis</strong>, dihitung langsung
+            dari dataset karyawan aktif ({companyProfile?.shortName ?? "entitas aktif"}) — bukan data resmi perusahaan mana pun
+            dan tidak boleh dikutip sebagai fakta. Beralih perusahaan di header untuk melihat dataset entitas lain.
           </div>
         </div>
       )}
 
       {/* TAB 2: AI HRBP & BREAKING NEWS SIMULATOR */}
-      {activeTab === "simulator" && (
+      {activeTab === "simulator" && isBroadcast && (
         <div className="space-y-6 animate-in fade-in duration-300">
           
           <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-red-950 p-6 text-white shadow-xl border border-slate-800">

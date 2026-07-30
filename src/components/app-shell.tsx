@@ -96,7 +96,7 @@ export function SvgPath({ name }: { name: keyof typeof ICON_PATHS }) {
 
 const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 1. Dashboard
-  dashboard: "dashboard", analytics: "chart", "report-gen": "document",
+  dashboard: "dashboard", analytics: "chart",
   // 2. Employer Branding
   "employer-branding": "sparkles", "ai-trends": "sparkles", "editorial-plan": "calendarDays", engagement: "users",
   // 3. Talent Acquisition
@@ -240,7 +240,7 @@ export function AppShell({
       items: [
         { id: "dashboard", label: "Overview", href: "/" },
         { id: "analytics", label: "HR Analytics", href: "/analytics" },
-        { id: "report-gen", label: "Report Generator", href: "/report" },
+        { id: "hiring-report", label: "Hiring Report", href: "/report" },
       ],
     },
     {
@@ -261,7 +261,7 @@ export function AppShell({
         { id: "candidates", label: "Candidates", href: "/candidates", badge: badges.candidates || undefined },
         { id: "cv-analyzer", label: "CV Analyzer", href: "/cv-analyzer" },
         { id: "interviews", label: "Interview Workspace", href: "/interview" },
-        { id: "hiring-analytics", label: "Hiring Analytics", href: "/analytics/hiring", soon: true },
+        { id: "hiring-analytics", label: "Hiring Analytics", href: "/analytics/hiring" },
       ],
     },
     {

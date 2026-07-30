@@ -1335,7 +1335,7 @@ export default function InterviewPage() {
   };
 
   return (
-    <AppShell activeNavId="interview-workspace" title="Interview Workspace" subtitle="Structured question kits & scoring guides">
+    <AppShell activeNavId="interviews" title="Interview Workspace" subtitle="Structured question kits & scoring guides">
       {cvAnalysisData && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-5 py-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
           <div className="flex flex-wrap items-start justify-between gap-3">
