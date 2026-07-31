@@ -1130,6 +1130,15 @@ export function loadDemoData(): void {
 
 export async function syncFromSupabase(): Promise<void> {
   if (!supabase) return;
+  // The candidates/job_reqs/activities tables have no tenant_id column (unlike
+  // pi_employees) — RLS scopes them to the logged-in user, not to which demo
+  // company is currently selected. Syncing while a non-base tenant (Zus
+  // Textile) is active would write the base tenant's cloud rows into Zus's
+  // suffixed local keys, contaminating one tenant's view with the other's
+  // data. Zus is a local-only demo sandbox by design (see getTenantKey), so
+  // only sync cloud data while the base/default tenant is active.
+  const compId = getActiveCompanyId();
+  if (compId !== "11111111-1111-4111-8111-111111111111" && compId !== "valora_tv") return;
   const [candidatesRes, reqsRes, activitiesRes] = await Promise.all([
     supabase.from('candidates').select('*').order('created_at', { ascending: false }),
     supabase.from('job_reqs').select('*').order('created_at', { ascending: false }),
