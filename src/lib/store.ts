@@ -261,7 +261,14 @@ function getTenantKey(key: string): string {
 // pipeline, 120-person contributor pool). A browser that already cached the
 // older dataset otherwise never sees the new shape, since the seed-on-first-
 // read below only fires when the key is completely absent.
-const DEMO_SEED_VERSION = 2;
+//
+// v3: browsers that already migrated to v2 *before* pushValoraDemoDataToCloud()
+// existed got their version marker bumped, then had syncFromSupabase() revert
+// their local data back to the stale cloud snapshot afterwards — so the
+// marker says "current" while the actual data is stale, and the reseed
+// never re-fires for them. Bumping the version forces one more reseed for
+// everyone, this time with the cloud-push fix already in place so it holds.
+const DEMO_SEED_VERSION = 3;
 const SEED_VERSION_KEY = "hi_demo_seed_version";
 const VALORA_TV_ID = "11111111-1111-4111-8111-111111111111";
 
