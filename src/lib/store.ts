@@ -256,6 +256,15 @@ function getTenantKey(key: string): string {
   return `${key}_${compId}`;
 }
 
+// Bump whenever loadDemoData()'s Valora TV dataset shape changes materially
+// (v2 = broadcast-domain overhaul: 28 broadcast requisitions, 145-candidate
+// pipeline, 120-person contributor pool). A browser that already cached the
+// older dataset otherwise never sees the new shape, since the seed-on-first-
+// read below only fires when the key is completely absent.
+const DEMO_SEED_VERSION = 2;
+const SEED_VERSION_KEY = "hi_demo_seed_version";
+const VALORA_TV_ID = "11111111-1111-4111-8111-111111111111";
+
 let isSeedingDemo = false;
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -268,10 +277,22 @@ function readJson<T>(key: string, fallback: T): T {
     // (or anyone who cleared storage) saw Candidates/Talent Pool/Open Roles/
     // Activity as permanently empty instead of ever getting the Valora demo
     // data that loadDemoData() already knows how to build.
-    if (!raw && !isSeedingDemo && (key === "hi_candidates" || key === "hi_jobreqs" || key === "hi_talent_pool" || key === "hi_activity")) {
-      isSeedingDemo = true;
-      try { loadDemoData(); } finally { isSeedingDemo = false; }
-      raw = localStorage.getItem(tKey);
+    const isDemoSeedKey = key === "hi_candidates" || key === "hi_jobreqs" || key === "hi_talent_pool" || key === "hi_activity";
+    if (isDemoSeedKey && !isSeedingDemo) {
+      const compId = getActiveCompanyId();
+      const isValora = compId === VALORA_TV_ID || compId === "valora_tv";
+      // Zus Textile's generator wasn't touched by the broadcast-domain rework
+      // (and uses Math.random() for talent ratings), so it keeps the plain
+      // "seed only if truly empty" behavior — only Valora TV gets the
+      // version-gated forced reseed.
+      const versionKey = getTenantKey(SEED_VERSION_KEY);
+      const needsVersionReseed = isValora && Number(localStorage.getItem(versionKey) ?? "0") < DEMO_SEED_VERSION;
+      if (!raw || needsVersionReseed) {
+        isSeedingDemo = true;
+        try { loadDemoData(); } finally { isSeedingDemo = false; }
+        if (isValora) localStorage.setItem(versionKey, String(DEMO_SEED_VERSION));
+        raw = localStorage.getItem(tKey);
+      }
     }
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
