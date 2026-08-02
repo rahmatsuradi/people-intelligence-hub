@@ -3,6 +3,7 @@
 import { AppShell, Icon, SvgPath, Card, cn } from "@/components/app-shell";
 import {
   getCandidates,
+  getJobReqs,
   PIPELINE_STAGES,
   STAGE_LABELS,
   type CandidateRecord,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/store";
 import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
+import { computeOvertimeLoad } from "@/lib/overtime-load";
 
 interface DemoEmployee {
   full_name: string;
@@ -17,6 +19,8 @@ interface DemoEmployee {
   department: string | null;
   position?: string;
   upah_pokok: number | string;
+  overtime_hours_monthly?: number;
+  employment_status?: string;
 }
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -56,12 +60,26 @@ const REC_TEXT: Record<string, string> = {
   "Reject":      "text-red-700 dark:text-red-400",
 };
 
-function StatCard({ label, value, sub, colorClass = "text-slate-900 dark:text-white" }: {
+const BADGE_TONE: Record<"success" | "warning" | "danger", string> = {
+  success: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+  warning: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+  danger: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
+};
+
+function StatCard({ label, value, sub, colorClass = "text-slate-900 dark:text-white", badge }: {
   label: string; value: string | number; sub?: string; colorClass?: string;
+  badge?: { text: string; tone: "success" | "warning" | "danger" };
 }) {
   return (
     <Card>
-      <p className="text-sm font-medium text-slate-500">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-slate-500">{label}</p>
+        {badge && (
+          <span className={cn("shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold", BADGE_TONE[badge.tone])}>
+            {badge.text}
+          </span>
+        )}
+      </div>
       <p className={cn("mt-2 text-3xl font-bold tabular-nums", colorClass)}>{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </Card>
@@ -97,6 +115,7 @@ function BarRow({ label, sub, count, pct, barClass }: {
 export default function AnalyticsPage() {
   const [candidates, setCandidates] = useState<CandidateRecord[]>([]);
   const [employees, setEmployees] = useState<DemoEmployee[]>([]);
+  const [openRoles, setOpenRoles] = useState<number>(0);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"workforce" | "simulator" | "recruitment">("workforce");
@@ -109,6 +128,7 @@ export default function AnalyticsPage() {
     const refresh = () => {
       setCandidates(getCandidates());
       setEmployees(getActiveCompanyEmployees());
+      setOpenRoles(getJobReqs().filter((r) => r.status === "active").length);
       setCompanyProfile(getActiveCompanyProfile());
       setLoaded(true);
     };
@@ -137,8 +157,23 @@ export default function AnalyticsPage() {
     const totalBaseSalary = employees.reduce((s, e) => s + (Number(e.upah_pokok) || 0), 0);
     const avgBaseSalary = total > 0 ? Math.round(totalBaseSalary / total) : 0;
 
-    return { total, permanentCount, contractCount, permanentPct, departments, totalBaseSalary, avgBaseSalary };
-  }, [employees]);
+    // Formasi organisasi = karyawan aktif + posisi yang masih dibuka (bukan
+    // headcountTarget statis, yang kebetulan sama persis dengan jumlah
+    // karyawan yang di-seed sehingga selalu tampak 100% terisi).
+    const orgStructureTarget = total + openRoles;
+    const fulfillmentPct = orgStructureTarget > 0 ? Math.round((total / orgStructureTarget) * 1000) / 10 : 100;
+
+    return { total, permanentCount, contractCount, permanentPct, departments, totalBaseSalary, avgBaseSalary, orgStructureTarget, fulfillmentPct };
+  }, [employees, openRoles]);
+
+  const overtimeLoad = useMemo(
+    () =>
+      computeOvertimeLoad(
+        employees.map((e) => ({ ...e, upah_pokok: Number(e.upah_pokok) || 0 })),
+        companyProfile?.id ?? ""
+      ),
+    [employees, companyProfile]
+  );
 
   const stats = useMemo(() => {
     const total = candidates.length;
@@ -326,16 +361,32 @@ export default function AnalyticsPage() {
           {/* KPI Cards — computed from the active tenant's employee dataset */}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <StatCard
-              label="Total Headcount"
+              label="Total Headcount (Aktif)"
               value={`${workforce.total} Org`}
-              sub={`Target profil: ${companyProfile?.headcountTarget ?? "—"} Org`}
+              sub={`Formasi (aktif + ${openRoles} lowongan terbuka): ${workforce.orgStructureTarget} Org`}
               colorClass="text-slate-900 dark:text-white"
+              badge={{
+                text: `Fulfillment ${workforce.fulfillmentPct.toLocaleString("id-ID")}%`,
+                tone: workforce.fulfillmentPct >= 98 ? "success" : workforce.fulfillmentPct >= 90 ? "warning" : "danger",
+              }}
             />
             <StatCard
-              label="Total Gaji Pokok Bulanan"
-              value={`Rp ${(workforce.totalBaseSalary / 1_000_000_000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M`}
-              sub="Jumlah upah_pokok seluruh karyawan (belum termasuk tunjangan)"
+              label="Total Biaya Tenaga Kerja (Bulanan)"
+              value={`Rp ${((workforce.totalBaseSalary + overtimeLoad.monthlyCost) / 1_000_000_000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M`}
+              sub={
+                overtimeLoad.available
+                  ? `Tetap (gaji pokok): Rp ${(workforce.totalBaseSalary / 1_000_000_000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M · Variabel (lembur): Rp ${(overtimeLoad.monthlyCost / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} Jt`
+                  : "Jumlah upah_pokok seluruh karyawan (belum termasuk tunjangan)"
+              }
               colorClass="text-red-600 dark:text-red-400"
+              badge={
+                overtimeLoad.available
+                  ? {
+                      text: `${overtimeLoad.variancePct > 0 ? "+" : ""}${overtimeLoad.variancePct.toLocaleString("id-ID")}% vs Budget Lembur`,
+                      tone: overtimeLoad.variancePct > 10 ? "danger" : overtimeLoad.variancePct > 0 ? "warning" : "success",
+                    }
+                  : undefined
+              }
             />
             <StatCard
               label="Rata-Rata Gaji Pokok"
