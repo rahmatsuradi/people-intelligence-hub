@@ -29,6 +29,9 @@ export interface ExecutiveMetrics {
   slaTargetDays: number; // target time-to-fill yang ditetapkan HR
   bottleneckTitle: string | null; // requisition yang paling lama terbuka
   bottleneckDays: number | null;
+  turnoverRatePct: number | null; // null = data lifecycle karyawan belum tersedia utk tenant ini
+  voluntaryTurnoverPct: number | null;
+  involuntaryTurnoverPct: number | null;
 }
 
 export function buildInsightPrompt(m: ExecutiveMetrics): string {
@@ -38,6 +41,9 @@ export function buildInsightPrompt(m: ExecutiveMetrics): string {
   const fillLine = m.avgDaysOpen !== null
     ? `Time to Fill rata-rata: ${m.avgDaysOpen} hari (target HR: <${m.slaTargetDays} hari)${m.bottleneckTitle ? `; posisi paling lama terbuka: ${m.bottleneckTitle} (${m.bottleneckDays} hari)` : ""}`
     : "Time to Fill: tidak ada posisi terbuka saat ini";
+  const turnoverLine = m.turnoverRatePct !== null
+    ? `Turnover rate tahun berjalan: ${m.turnoverRatePct}% (voluntary ${m.voluntaryTurnoverPct}%, involuntary ${m.involuntaryTurnoverPct}%)`
+    : "Turnover rate: data siklus hidup karyawan belum tersedia untuk entitas ini";
 
   return `Kamu adalah asisten eksekutif HR. Berdasarkan metrik nyata di bawah, tulis ringkasan 2-3 kalimat dalam Bahasa Indonesia untuk C-Level (CEO/CHRO), singkat, padat, dan action-oriented (beri satu rekomendasi konkret jika relevan).
 
@@ -55,7 +61,8 @@ DATA:
 - Kandidat aktif di pipeline: ${m.activePipeline}
 - Talent pool: ${m.talentCount} orang, rata-rata rating ${m.talentAvgPct}%
 - ${enpsLine}
-- ${fillLine}`;
+- ${fillLine}
+- ${turnoverLine}`;
 }
 
 interface InsightGroqCall {
@@ -137,6 +144,9 @@ export function buildFallbackSummary(m: ExecutiveMetrics): string {
     parts.push(
       `Time to Fill rata-rata ${m.avgDaysOpen} hari${overSla ? ` — melewati target ${m.slaTargetDays} hari` : ` (dalam target ${m.slaTargetDays} hari)`}${m.bottleneckTitle ? `; posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka` : ""}.`,
     );
+  }
+  if (m.turnoverRatePct !== null) {
+    parts.push(`Turnover rate tahun berjalan ${m.turnoverRatePct}% (voluntary ${m.voluntaryTurnoverPct}%, involuntary ${m.involuntaryTurnoverPct}%).`);
   }
   return parts.join(" ");
 }

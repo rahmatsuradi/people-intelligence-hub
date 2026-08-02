@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
       slaTargetDays: toNumber(body.slaTargetDays, 45),
       bottleneckTitle: body.bottleneckTitle ? String(body.bottleneckTitle).slice(0, 120) : null,
       bottleneckDays: body.bottleneckDays === null || body.bottleneckDays === undefined ? null : toNumber(body.bottleneckDays),
+      turnoverRatePct: body.turnoverRatePct === null || body.turnoverRatePct === undefined ? null : toNumber(body.turnoverRatePct),
+      voluntaryTurnoverPct: body.voluntaryTurnoverPct === null || body.voluntaryTurnoverPct === undefined ? null : toNumber(body.voluntaryTurnoverPct),
+      involuntaryTurnoverPct: body.involuntaryTurnoverPct === null || body.involuntaryTurnoverPct === undefined ? null : toNumber(body.involuntaryTurnoverPct),
     };
 
     const result = await generateExecutiveInsight(metrics);

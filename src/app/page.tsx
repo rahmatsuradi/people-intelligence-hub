@@ -11,6 +11,7 @@ import { getEnpsRounds, computeEnps } from "@/lib/engagement-store";
 import { getCachedInsight, setCachedInsight, type CachedInsight } from "@/lib/executive-insight-store";
 import type { ExecutiveMetrics } from "@/lib/executive-insight-ai";
 import { getSlaTargetDays, setSlaTargetDays } from "@/lib/recruitment-sla-store";
+import { computeYtdTurnover, type TurnoverMetrics, type EmployeeLifecycle } from "@/lib/turnover";
 
 const MGMT_TITLE_RE = /Direktur|VP|Kepala|Manajer|Produser|Pemimpin|Redaktur|Supervisor|Lead|Chief/i;
 
@@ -115,6 +116,9 @@ export default function DashboardPage() {
   const [editingSla, setEditingSla] = useState(false);
   const [slaInput, setSlaInput] = useState("45");
 
+  // Turnover Rate — YTD, dari field lifecycle karyawan (join_date/exit_date/exit_type)
+  const [turnover, setTurnover] = useState<TurnoverMetrics | null>(null);
+
   // AI Smart Summary
   const [insight, setInsight] = useState<CachedInsight | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
@@ -160,7 +164,7 @@ export default function DashboardPage() {
 
     async function loadDashboardStats() {
       try {
-        const applyEmps = (emps: { department?: string | null; position?: string | null; employment_type?: string | null }[]) => {
+        const applyEmps = (emps: ({ department?: string | null; position?: string | null; employment_type?: string | null } & EmployeeLifecycle)[]) => {
           setTotalHeadcount(emps.length);
           const mgmt = emps.filter((e) => MGMT_TITLE_RE.test((e.department || "") + " " + (e.position || ""))).length;
           setMgmtCount(mgmt);
@@ -168,6 +172,7 @@ export default function DashboardPage() {
           const tetap = emps.filter((e) => /PKWTT/i.test(e.employment_type || "")).length;
           setPkwttCount(tetap);
           setPkwtCount(emps.length - tetap);
+          setTurnover(computeYtdTurnover(emps));
         };
         if (isSupabaseConfigured && supabase) {
           await ensureDemoEmployeesExist(supabase);
@@ -229,6 +234,9 @@ export default function DashboardPage() {
       slaTargetDays: slaTarget,
       bottleneckTitle: bottleneck?.title ?? null,
       bottleneckDays: bottleneck?.days ?? null,
+      turnoverRatePct: turnover?.available ? turnover.turnoverRatePct : null,
+      voluntaryTurnoverPct: turnover?.available ? turnover.voluntaryRatePct : null,
+      involuntaryTurnoverPct: turnover?.available ? turnover.involuntaryRatePct : null,
     };
     const snapshot = JSON.stringify(metrics);
     const cached = getCachedInsight(activeCompany.id);
@@ -238,7 +246,7 @@ export default function DashboardPage() {
     }
     generateInsight(metrics, snapshot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalHeadcount, pkwttCount, pkwtCount, openRoles, activePipeline, talentCount, talentAvgPct, enpsScore, enpsPeriod, avgDaysOpen, slaTarget, bottleneck]);
+  }, [totalHeadcount, pkwttCount, pkwtCount, openRoles, activePipeline, talentCount, talentAvgPct, enpsScore, enpsPeriod, avgDaysOpen, slaTarget, bottleneck, turnover]);
 
   const handleRefreshInsight = () => {
     if (totalHeadcount === null || insightLoading) return;
@@ -258,6 +266,9 @@ export default function DashboardPage() {
       slaTargetDays: slaTarget,
       bottleneckTitle: bottleneck?.title ?? null,
       bottleneckDays: bottleneck?.days ?? null,
+      turnoverRatePct: turnover?.available ? turnover.turnoverRatePct : null,
+      voluntaryTurnoverPct: turnover?.available ? turnover.voluntaryRatePct : null,
+      involuntaryTurnoverPct: turnover?.available ? turnover.involuntaryRatePct : null,
     };
     generateInsight(metrics, JSON.stringify(metrics));
   };
@@ -541,6 +552,26 @@ export default function DashboardPage() {
                   <span className="text-amber-600 text-xs">Orang</span>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-100 p-4 dark:border-slate-800">
+              <span className="text-slate-500 text-sm font-medium">Turnover Rate {turnover ? `(${turnover.periodLabel})` : ""}</span>
+              {turnover?.available ? (
+                <>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className={cn("text-3xl font-bold", turnover.turnoverRatePct >= 10 ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white")}>
+                      {turnover.turnoverRatePct}%
+                    </span>
+                    <span className="text-xs text-slate-400">{turnover.totalExits} keluar dari {turnover.headcountStart} awal periode</span>
+                  </div>
+                  <div className="mt-2 flex gap-4 text-xs">
+                    <span className="text-slate-500">Voluntary <span className="font-semibold text-slate-700 dark:text-slate-300">{turnover.voluntaryRatePct}%</span></span>
+                    <span className="text-slate-500">Involuntary <span className="font-semibold text-slate-700 dark:text-slate-300">{turnover.involuntaryRatePct}%</span></span>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1.5 text-xs text-slate-400">Data siklus hidup karyawan belum tersedia untuk entitas ini.</p>
+              )}
             </div>
           </Card>
 
