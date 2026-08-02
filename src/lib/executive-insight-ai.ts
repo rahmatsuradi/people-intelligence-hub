@@ -78,6 +78,8 @@ Sebutkan secara eksplisit keterkaitan antar-metrik ini bila datanya memang menga
 
 PERHATIAN KHUSUS — waspadai "Flaw of Averages": rata-rata Time to Fill bisa terlihat sehat (dalam target SLA) padahal menyembunyikan satu posisi bottleneck yang waktu bukanya jauh di atas rata-rata (outlier ekstrem). Jika situasi ini muncul di data — rata-rata dalam/mendekati target TAPI posisi bottleneck jauh melampauinya — kamu WAJIB menyoroti anomali ini secara eksplisit, jangan biarkan rata-rata yang tampak sehat menyembunyikan risiko nyata dari satu posisi kritis yang kosong berbulan-bulan. Jelaskan secara logis bagaimana kekosongan posisi kritis tersebut memicu lonjakan beban lembur pada kru yang menutup kekurangannya, yang pada akhirnya berisiko menekan eNPS akibat kelelahan (burnout).
 
+WAJIB KUANTIFIKASI — "Cost of Delay": jika data beban lembur (biaya lembur kuartal + deviasi budget) tersedia BERSAMAAN dengan bottleneck rekrutmen, kamu WAJIB menyebutkan angka Rupiah beban lembur dan persentase deviasi budgetnya SECARA EKSPLISIT dalam kalimat — jangan pernah menulisnya secara abstrak seperti "lonjakan biaya lembur" tanpa angka. Bingkai ini sebagai argumen "Cost of Delay": menunda pengisian posisi kritis menciptakan biaya variabel (lembur) yang nyata dan terukur, yang kemungkinan besar lebih mahal daripada segera mengisi posisi tersebut. Sebutkan pula divisi penyumbang lembur terbesar jika datanya tersedia.
+
 ATURAN KETAT:
 - Hanya gunakan angka yang diberikan di bawah. JANGAN mengarang angka, persentase, nominal rupiah, atau statistik apa pun yang tidak ada di data ini.
 - Jangan menyebut revenue, profit, atau biaya per hire — tidak tersedia.
@@ -174,30 +176,45 @@ export function buildFallbackSummary(m: ExecutiveMetrics): string {
   if (m.openRoles > 0) {
     parts.push(`${m.openRoles} posisi masih terbuka dengan ${m.activePipeline} kandidat aktif di pipeline${m.talentCount > 0 ? `; pertimbangkan menengok ${m.talentCount} kandidat di talent pool` : ""}.`);
   }
-  if (m.avgDaysOpen !== null) {
-    const overSla = m.avgDaysOpen > m.slaTargetDays;
-    // "Flaw of Averages": rata-rata bisa terlihat sehat padahal satu posisi
-    // bottleneck adalah outlier ekstrem yang tersembunyi di baliknya — jangan
-    // biarkan rata-rata yang sehat menutupi risiko nyata dari posisi kritis
-    // yang kosong berbulan-bulan.
-    const isHiddenOutlier = !overSla && m.bottleneckDays !== null && m.bottleneckDays >= m.slaTargetDays * 2;
+  const hasBottleneck = m.avgDaysOpen !== null && m.bottleneckTitle !== null && m.bottleneckDays !== null;
+  const hasOvertime = m.overtimeQuarterlyCost !== null;
+
+  if (hasBottleneck && hasOvertime) {
+    // "Cost of Delay": merge the bottleneck and overtime cost into one
+    // explicit financial argument, citing the exact Rupiah figure rather
+    // than an abstract "lonjakan biaya" — matches the AI prompt's mandate.
+    const overSla = m.avgDaysOpen! > m.slaTargetDays;
+    const isHiddenOutlier = !overSla && m.bottleneckDays! >= m.slaTargetDays * 2;
+    const healthyAvgNote = isHiddenOutlier
+      ? `Time to Fill rata-rata ${m.avgDaysOpen} hari terlihat sehat (dalam target ${m.slaTargetDays} hari), namun `
+      : "";
+    const varianceStr = m.overtimeVariancePct !== null && m.overtimeVariancePct > 0 ? `, ${m.overtimeVariancePct}% di atas target budget` : "";
+    parts.push(
+      `${healthyAvgNote}posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari kosong — Cost of Delay-nya nyata: beban lembur kuartal berjalan mencapai ${formatRupiah(m.overtimeQuarterlyCost!)}${varianceStr}${m.overtimeTopDepartment ? `, terkonsentrasi di ${m.overtimeTopDepartment}` : ""}, kemungkinan besar lebih mahal daripada segera mengisi posisi tersebut.`,
+    );
+  } else if (hasBottleneck) {
+    const overSla = m.avgDaysOpen! > m.slaTargetDays;
+    const isHiddenOutlier = !overSla && m.bottleneckDays! >= m.slaTargetDays * 2;
     if (isHiddenOutlier) {
       parts.push(
         `Time to Fill rata-rata ${m.avgDaysOpen} hari terlihat sehat (dalam target ${m.slaTargetDays} hari), namun posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka — jauh di atas rata-rata, dan berisiko membebani kru yang menutup kekurangannya dengan lembur.`,
       );
     } else {
       parts.push(
-        `Time to Fill rata-rata ${m.avgDaysOpen} hari${overSla ? ` — melewati target ${m.slaTargetDays} hari` : ` (dalam target ${m.slaTargetDays} hari)`}${m.bottleneckTitle ? `; posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka` : ""}.`,
+        `Time to Fill rata-rata ${m.avgDaysOpen} hari${overSla ? ` — melewati target ${m.slaTargetDays} hari` : ` (dalam target ${m.slaTargetDays} hari)`}; posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka.`,
       );
     }
+  } else if (m.avgDaysOpen !== null) {
+    const overSla = m.avgDaysOpen > m.slaTargetDays;
+    parts.push(`Time to Fill rata-rata ${m.avgDaysOpen} hari${overSla ? ` — melewati target ${m.slaTargetDays} hari` : ` (dalam target ${m.slaTargetDays} hari)`}.`);
+  } else if (hasOvertime) {
+    parts.push(
+      `Beban lembur kuartal berjalan ${formatRupiah(m.overtimeQuarterlyCost!)}${m.overtimeVariancePct !== null && m.overtimeVariancePct > 0 ? ` — ${m.overtimeVariancePct}% di atas target budget` : " (dalam target budget)"}${m.overtimeTopDepartment ? `, terbesar di ${m.overtimeTopDepartment}` : ""}.`,
+    );
   }
+
   if (m.turnoverRatePct !== null) {
     parts.push(`Turnover rate tahun berjalan ${m.turnoverRatePct}% (voluntary ${m.voluntaryTurnoverPct}%, involuntary ${m.involuntaryTurnoverPct}%).`);
-  }
-  if (m.overtimeQuarterlyCost !== null) {
-    parts.push(
-      `Beban lembur kuartal berjalan ${formatRupiah(m.overtimeQuarterlyCost)}${m.overtimeVariancePct !== null && m.overtimeVariancePct > 0 ? ` — ${m.overtimeVariancePct}% di atas target budget` : " (dalam target budget)"}${m.overtimeTopDepartment ? `, terbesar di ${m.overtimeTopDepartment}` : ""}.`,
-    );
   }
   return parts.join(" ");
 }
