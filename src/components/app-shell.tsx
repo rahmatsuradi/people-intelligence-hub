@@ -342,7 +342,7 @@ export function AppShell({
     });
 
   return (
-    <div className={cn("flex min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100", isDark && "dark")} data-theme={theme}>
+    <div className={cn("flex h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100", isDark && "dark")} data-theme={theme}>
       {/* Sidebar */}
       {sidebarOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
       <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-out dark:border-slate-800 dark:bg-slate-900 lg:static lg:translate-x-0", sidebarOpen ? "translate-x-0" : "-translate-x-full")} aria-label="Main navigation">

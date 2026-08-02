@@ -61,6 +61,28 @@ const REC_TEXT: Record<string, string> = {
   "Reject":      "text-red-700 dark:text-red-400",
 };
 
+// Konteks per divisi untuk Simulator Beban Siaran — kru lapangan/redaksi
+// menyerap lembur yang jauh lebih mahal & lebih siap dibantu magang riset
+// dibanding fungsi teknik/support, jadi koefisien & peran magang berbeda per
+// divisi. magangBasePct per divisi dijumlahkan ke 100 (total peserta magang).
+const DIVISION_SIM_CONTEXT: Record<string, { internRole: string; overtimeCoefficient: number; magangBasePct: number }> = {
+  "Redaksi & Pemberitaan": {
+    internRole: "riset naskah berita, pengindeksan materi newsroom, dan asisten liputan lapangan",
+    overtimeCoefficient: 1,
+    magangBasePct: 52,
+  },
+  "Operasional Studio & Broadcast": {
+    internRole: "asisten floor director, wardrobe, dan operasional studio siaran",
+    overtimeCoefficient: 0.7,
+    magangBasePct: 28,
+  },
+  "Teknik Penyiaran & IT": {
+    internRole: "MCR helper dan dukungan IT/jaringan siaran",
+    overtimeCoefficient: 0.5,
+    magangBasePct: 20,
+  },
+};
+
 const BADGE_TONE: Record<"success" | "warning" | "danger", string> = {
   success: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
   warning: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
@@ -338,16 +360,17 @@ export default function AnalyticsPage() {
 
   // Dampak (ROI) rekomendasi HRBP — sama seperti nilai simulator di atas: koefisien
   // ILUSTRATIF untuk demo, tapi tetap dihitung dari state (bukan angka statis di JSX)
-  // sehingga ikut bergerak saat slider intensitas siaran digeser.
+  // sehingga ikut bergerak saat slider intensitas ATAU dropdown divisi diubah.
   const MAGANG_TOTAL = 100;
-  const MAGANG_REDAKSI_PCT = 52;
-  const magangDiRedaksi = Math.round(MAGANG_TOTAL * (MAGANG_REDAKSI_PCT / 100));
-  const redaksiHeadcount = workforce.departments.find((d) => /Redaksi/i.test(d.name))?.count ?? 0;
-  const reporterWorkloadReductionPct = redaksiHeadcount > 0 ? Math.round((magangDiRedaksi / redaksiHeadcount) * 1000) / 10 : 0;
-  const magangDeployRecommended = Math.min(magangDiRedaksi, Math.round(10 + (breakingNewsHours - 8) * 2.6));
-  const overtimeSavingsFromMagang = Math.round(Math.max(0, simulatedMonthlyBill - baseMonthlySalaryBill) * 0.15); // asumsi demo: magang offset 15% kenaikan lembur
-  const sickLeaveReductionPct = Math.min(12, Math.round(burnoutRiskPct * 0.12)); // asumsi demo: intervensi K3 proporsional thd risiko burnout
-  const aiEfficiencyGainPct = Math.min(45, Math.round(20 + (breakingNewsHours - 8) * 1.5)); // asumsi demo: adopsi AI makin bernilai saat beban tinggi
+  const divisionContext = DIVISION_SIM_CONTEXT[selectedDivisionSim] ?? DIVISION_SIM_CONTEXT["Redaksi & Pemberitaan"];
+  const magangDiDivisi = Math.round(MAGANG_TOTAL * (divisionContext.magangBasePct / 100));
+  const divisiHeadcount = workforce.departments.find((d) => d.name.includes(selectedDivisionSim))?.count ?? 0;
+  const divisiWorkloadReductionPct = divisiHeadcount > 0 ? Math.round((magangDiDivisi / divisiHeadcount) * 1000) / 10 : 0;
+  const magangDeployRecommended = Math.min(magangDiDivisi, Math.round((10 + (breakingNewsHours - 8) * 2.6) * divisionContext.overtimeCoefficient));
+  const overtimeSavingsFromMagang = Math.round(Math.max(0, simulatedMonthlyBill - baseMonthlySalaryBill) * 0.15 * divisionContext.overtimeCoefficient); // asumsi demo: magang offset sebagian kenaikan lembur, tergantung divisi
+  const sickLeaveReductionPct = Math.min(12, Math.round(burnoutRiskPct * 0.12 * divisionContext.overtimeCoefficient)); // asumsi demo: intervensi K3 proporsional thd risiko burnout & intensitas kerja lapangan divisi
+  const aiEfficiencyGainPct = Math.min(45, Math.round(20 + (breakingNewsHours - 8) * 1.5)); // asumsi demo: adopsi AI makin bernilai saat beban tinggi (lintas divisi, tidak spesifik satu divisi)
+  const rupiahCompact = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 
   return (
     <AppShell activeNavId="analytics" title="Pusat Analitik & Strategi HRBP" subtitle={`Demo sintetis — data ${companyProfile?.shortName ?? "entitas aktif"}`}>
@@ -523,10 +546,10 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            
-            {/* Control Panel */}
-            <Card className="lg:col-span-1 space-y-6 bg-slate-50/50 dark:bg-slate-900/50 border-2 border-red-500/20">
+          <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
+
+            {/* Control Panel — sticky di layar desktop supaya slider tetap terlihat saat kolom rekomendasi di kanan (lebih panjang) di-scroll */}
+            <Card className="lg:col-span-1 lg:sticky lg:top-20 space-y-6 bg-slate-50/50 dark:bg-slate-900/50 border-2 border-red-500/20">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <span>🎛️</span>
@@ -598,12 +621,12 @@ export default function AnalyticsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card className="border-l-4 border-l-red-600 bg-gradient-to-br from-white to-red-50/30 dark:from-slate-900 dark:to-red-950/20">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Proyeksi Beban Gaji & Lembur (Per Bulan)</p>
-                  <p className="mt-2 text-3xl font-black tabular-nums text-red-600 dark:text-red-400">
+                  <p key={`bill-${breakingNewsHours}`} className="mt-2 text-3xl font-black tabular-nums text-red-600 dark:text-red-400 animate-in fade-in slide-in-from-bottom-1 duration-300">
                     Rp {(simulatedMonthlyBill / 1000000000).toFixed(2)} Miliar
                   </p>
                   <div className="mt-2 flex items-center justify-between text-xs font-medium text-slate-500">
                     <span>Baseline Normal: Rp 21,93 M/bln</span>
-                    <span className={cn("font-bold", breakingNewsHours > 8 ? "text-red-600" : "text-emerald-600")}>
+                    <span key={`ot-${breakingNewsHours}`} className={cn("font-bold animate-in fade-in duration-300", breakingNewsHours > 8 ? "text-red-600" : "text-emerald-600")}>
                       +{Math.round((overtimeMultiplier - 1) * 100)}% Lembur
                     </span>
                   </div>
@@ -611,8 +634,8 @@ export default function AnalyticsPage() {
 
                 <Card className="border-l-4 border-l-amber-500 bg-gradient-to-br from-white to-amber-50/30 dark:from-slate-900 dark:to-amber-950/20">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Estimasi Risiko Burnout (Model Ilustratif)</p>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <p className={cn("text-3xl font-black tabular-nums", 
+                  <div key={`burnout-${breakingNewsHours}`} className="mt-2 flex items-baseline gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                    <p className={cn("text-3xl font-black tabular-nums",
                       burnoutRiskPct > 65 ? "text-red-600 dark:text-red-400" : burnoutRiskPct > 40 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
                     )}>
                       {burnoutRiskPct}%
@@ -635,7 +658,7 @@ export default function AnalyticsPage() {
                 <div className="border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
                   <div>
                     <h2 className="text-base font-bold text-slate-900 dark:text-white">Rekomendasi Strategis HRBP & Kaderisasi Magang</h2>
-                    <p className="text-xs text-slate-500">Rekomendasi live terhadap intensitas liputan {breakingNewsHours} jam/hari — geser slider di panel kiri untuk melihat rekomendasi berubah</p>
+                    <p className="text-xs text-slate-500">Rekomendasi live terhadap intensitas liputan {breakingNewsHours} jam/hari, fokus Divisi {selectedDivisionSim} — ubah slider/dropdown di panel kiri untuk melihat rekomendasi berubah</p>
                   </div>
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
                     100 Peserta Magang Aktif
@@ -651,14 +674,14 @@ export default function AnalyticsPage() {
                       <span className="text-lg">🎓</span>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Aktivasi Talent Pool Magang Nasional (Program Magang Valora 2025)</h3>
-                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                          Dalam skenario demo ini terdapat <strong className="text-red-600 dark:text-red-400">100 mahasiswa magang terpilih</strong> dari PTN/PTS ({magangDiRedaksi}% ditempatkan di Divisi News/Redaksi). Pada intensitas siaran saat ini, HRBP merekomendasikan pengerahan{" "}
-                          <strong className="text-red-600 dark:text-red-400">{magangDeployRecommended} dari {magangDiRedaksi} magang Redaksi</strong>{" "}
-                          untuk mendukung riset naskah berita, pengindeksan materi newsroom, dan asisten liputan lapangan guna meringankan beban reporter senior.
+                        <p key={`magang-copy-${breakingNewsHours}-${selectedDivisionSim}`} className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed animate-in fade-in duration-300">
+                          Dalam skenario demo ini terdapat <strong className="text-red-600 dark:text-red-400">100 mahasiswa magang terpilih</strong> dari PTN/PTS ({divisionContext.magangBasePct}% dialokasikan ke Divisi {selectedDivisionSim}). Pada intensitas siaran &amp; fokus divisi saat ini, HRBP merekomendasikan pengerahan{" "}
+                          <strong className="text-red-600 dark:text-red-400">{magangDeployRecommended} dari {magangDiDivisi} magang Divisi {selectedDivisionSim}</strong>{" "}
+                          sebagai {divisionContext.internRole}, guna meringankan beban tim inti divisi tersebut.
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <RoiBadge text={`Prediksi Penghematan Lembur: Rp ${(overtimeSavingsFromMagang / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} Jt/bln`} />
-                          <RoiBadge text={`Beban Kerja Reporter Redaksi: -${reporterWorkloadReductionPct.toLocaleString("id-ID")}%`} />
+                        <div key={`magang-roi-${breakingNewsHours}-${selectedDivisionSim}`} className="mt-2 flex flex-wrap items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                          <RoiBadge text={`Prediksi Penghematan Lembur: Rp ${rupiahCompact.format(overtimeSavingsFromMagang / 1_000_000)} Jt/bln`} />
+                          <RoiBadge text={`Beban Kerja Divisi ${selectedDivisionSim}: -${divisiWorkloadReductionPct.toLocaleString("id-ID")}%`} />
                         </div>
                         <div className="mt-3">
                           <ActionButton
@@ -677,12 +700,12 @@ export default function AnalyticsPage() {
                       <span className="text-lg">🩺</span>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Intervensi Kesehatan & K3 (Klinik On-Site Valora Tower)</h3>
-                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <p key={`k3-copy-${breakingNewsHours}`} className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed animate-in fade-in duration-300">
                           {breakingNewsHours > 16
                             ? "🚨 INSTRUKSI KRUSIAL HRBP: Dengan risiko burnout mencapai " + burnoutRiskPct + "%, aktifkan dokter jaga 24 jam di Klinik On-Site studio Valora dan fasilitas medis kantor pusat Valora Tower. Wajibkan pemeriksaan tekanan darah bagi kamerawan ENG dan anchor sebelum bertugas."
                             : "Tim HRBP secara berkala menjalankan sesi 'Health Talk' (pencegahan kelelahan mata buram & ergonomi studio) serta pelatihan kesiapsiagaan darurat APAR sesuai standar Kemnaker RI."}
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <div key={`k3-roi-${breakingNewsHours}-${selectedDivisionSim}`} className="mt-2 flex flex-wrap items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
                           <RoiBadge text={`Estimasi Penurunan Risiko Sick Leave: -${sickLeaveReductionPct.toLocaleString("id-ID")}%`} />
                         </div>
                         <div className="mt-3">
@@ -701,11 +724,11 @@ export default function AnalyticsPage() {
                     <div className="flex items-start gap-3">
                       <span className="text-lg">🤖</span>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Implementasi "Agentic AI" dalam Alur Kerja Redaksi</h3>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Implementasi "Agentic AI" dalam Alur Kerja Divisi {selectedDivisionSim}</h3>
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                           Untuk menjaga efisiensi biaya operasional, HRBP mendorong adopsi *AI Practical Tools* untuk transkripsi wawancara otomatis, *prompter indexing*, dan *vocal training analysis*, sehingga reporter dapat fokus pada investigasi dan verifikasi kebenaran berita di lapangan.
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <div key={`ai-roi-${breakingNewsHours}`} className="mt-2 flex flex-wrap items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
                           <RoiBadge text={`Peningkatan Efisiensi Produksi Berita: +${aiEfficiencyGainPct.toLocaleString("id-ID")}%`} />
                         </div>
                         <div className="mt-3">
