@@ -76,6 +76,8 @@ KERANGKA ANALISIS yang harus kamu pertimbangkan (pakai hanya yang didukung data 
 - eNPS yang turun mendahului naiknya turnover sukarela (voluntary) → memperparah kekosongan posisi → lingkaran yang saling memperkuat.
 Sebutkan secara eksplisit keterkaitan antar-metrik ini bila datanya memang mengarah ke sana. Jika data TIDAK mendukung sebuah keterkaitan, jangan dipaksakan.
 
+PERHATIAN KHUSUS — waspadai "Flaw of Averages": rata-rata Time to Fill bisa terlihat sehat (dalam target SLA) padahal menyembunyikan satu posisi bottleneck yang waktu bukanya jauh di atas rata-rata (outlier ekstrem). Jika situasi ini muncul di data — rata-rata dalam/mendekati target TAPI posisi bottleneck jauh melampauinya — kamu WAJIB menyoroti anomali ini secara eksplisit, jangan biarkan rata-rata yang tampak sehat menyembunyikan risiko nyata dari satu posisi kritis yang kosong berbulan-bulan. Jelaskan secara logis bagaimana kekosongan posisi kritis tersebut memicu lonjakan beban lembur pada kru yang menutup kekurangannya, yang pada akhirnya berisiko menekan eNPS akibat kelelahan (burnout).
+
 ATURAN KETAT:
 - Hanya gunakan angka yang diberikan di bawah. JANGAN mengarang angka, persentase, nominal rupiah, atau statistik apa pun yang tidak ada di data ini.
 - Jangan menyebut revenue, profit, atau biaya per hire — tidak tersedia.
@@ -174,9 +176,20 @@ export function buildFallbackSummary(m: ExecutiveMetrics): string {
   }
   if (m.avgDaysOpen !== null) {
     const overSla = m.avgDaysOpen > m.slaTargetDays;
-    parts.push(
-      `Time to Fill rata-rata ${m.avgDaysOpen} hari${overSla ? ` — melewati target ${m.slaTargetDays} hari` : ` (dalam target ${m.slaTargetDays} hari)`}${m.bottleneckTitle ? `; posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka` : ""}.`,
-    );
+    // "Flaw of Averages": rata-rata bisa terlihat sehat padahal satu posisi
+    // bottleneck adalah outlier ekstrem yang tersembunyi di baliknya — jangan
+    // biarkan rata-rata yang sehat menutupi risiko nyata dari posisi kritis
+    // yang kosong berbulan-bulan.
+    const isHiddenOutlier = !overSla && m.bottleneckDays !== null && m.bottleneckDays >= m.slaTargetDays * 2;
+    if (isHiddenOutlier) {
+      parts.push(
+        `Time to Fill rata-rata ${m.avgDaysOpen} hari terlihat sehat (dalam target ${m.slaTargetDays} hari), namun posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka — jauh di atas rata-rata, dan berisiko membebani kru yang menutup kekurangannya dengan lembur.`,
+      );
+    } else {
+      parts.push(
+        `Time to Fill rata-rata ${m.avgDaysOpen} hari${overSla ? ` — melewati target ${m.slaTargetDays} hari` : ` (dalam target ${m.slaTargetDays} hari)`}${m.bottleneckTitle ? `; posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka` : ""}.`,
+      );
+    }
   }
   if (m.turnoverRatePct !== null) {
     parts.push(`Turnover rate tahun berjalan ${m.turnoverRatePct}% (voluntary ${m.voluntaryTurnoverPct}%, involuntary ${m.involuntaryTurnoverPct}%).`);
