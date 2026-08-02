@@ -3,6 +3,14 @@
    feedback log. There is no in-app survey distribution mechanism, so eNPS
    rounds are HR-entered aggregate results (e.g. tallied from a paper/Google
    Form survey) rather than collected live from employees inside this app.
+
+   A first-ever read of either demo tenant auto-seeds one synthetic eNPS
+   round — same "first read seeds demo data" pattern store.ts already uses
+   for candidates/job reqs/talent pool (see readJson() there), so the
+   public portfolio deployment doesn't show an empty gauge on a fresh
+   browser. Still 100% synthetic data for the fictional demo companies,
+   same as the rest of the seed dataset; HR can edit/delete it like any
+   other round once seeded.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 export interface EnpsRound {
@@ -48,11 +56,45 @@ export function computeEnps(round: Pick<EnpsRound, "respondentCount" | "promoter
   return Math.round(pctPromoter - pctDetractor);
 }
 
+const DEFAULT_ENPS_SEED: Record<string, Omit<EnpsRound, "id" | "createdAt" | "updatedAt">> = {
+  "11111111-1111-4111-8111-111111111111": {
+    period: new Date().toISOString().slice(0, 7),
+    respondentCount: 200,
+    promoters: 100,
+    passives: 80,
+    detractors: 20,
+    keyThemes: "Karyawan menghargai fleksibilitas jam kerja & budaya tim redaksi; area perbaikan utama: jenjang karir dan pelatihan teknis broadcast.",
+    enteredBy: "HR",
+  },
+  "22222222-2222-4222-8222-222222222222": {
+    period: new Date().toISOString().slice(0, 7),
+    respondentCount: 60,
+    promoters: 30,
+    passives: 24,
+    detractors: 6,
+    keyThemes: "Karyawan lini produksi menghargai kepastian shift & THR tepat waktu; area perbaikan: ventilasi ruang jahit dan kecepatan penanganan keluhan.",
+    enteredBy: "HR",
+  },
+};
+
+let isSeedingEnpsDefault = false;
+
 export function getEnpsRounds(tenantId: string): EnpsRound[] {
   if (typeof window === "undefined") return [];
   try {
-    const data = localStorage.getItem(ENPS_PREFIX + tenantId);
-    const rounds: EnpsRound[] = data ? JSON.parse(data) : [];
+    const key = ENPS_PREFIX + tenantId;
+    const raw = localStorage.getItem(key);
+    if (raw === null && !isSeedingEnpsDefault && DEFAULT_ENPS_SEED[tenantId]) {
+      isSeedingEnpsDefault = true;
+      try {
+        upsertEnpsRound(tenantId, DEFAULT_ENPS_SEED[tenantId]);
+      } finally {
+        isSeedingEnpsDefault = false;
+      }
+      const seeded = localStorage.getItem(key);
+      return seeded ? (JSON.parse(seeded) as EnpsRound[]) : [];
+    }
+    const rounds: EnpsRound[] = raw ? JSON.parse(raw) : [];
     return rounds.sort((a, b) => a.period.localeCompare(b.period));
   } catch {
     return [];
