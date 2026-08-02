@@ -41,6 +41,12 @@ export async function POST(req: NextRequest) {
       turnoverRatePct: body.turnoverRatePct === null || body.turnoverRatePct === undefined ? null : toNumber(body.turnoverRatePct),
       voluntaryTurnoverPct: body.voluntaryTurnoverPct === null || body.voluntaryTurnoverPct === undefined ? null : toNumber(body.voluntaryTurnoverPct),
       involuntaryTurnoverPct: body.involuntaryTurnoverPct === null || body.involuntaryTurnoverPct === undefined ? null : toNumber(body.involuntaryTurnoverPct),
+      headcountYoYPct: body.headcountYoYPct === null || body.headcountYoYPct === undefined ? null : toNumber(body.headcountYoYPct),
+      enpsDeltaVsPrev: body.enpsDeltaVsPrev === null || body.enpsDeltaVsPrev === undefined ? null : toNumber(body.enpsDeltaVsPrev),
+      overtimeQuarterlyCost: body.overtimeQuarterlyCost === null || body.overtimeQuarterlyCost === undefined ? null : toNumber(body.overtimeQuarterlyCost),
+      overtimeVariancePct: body.overtimeVariancePct === null || body.overtimeVariancePct === undefined ? null : toNumber(body.overtimeVariancePct),
+      overtimeTopDepartment: body.overtimeTopDepartment ? String(body.overtimeTopDepartment).slice(0, 120) : null,
+      overtimeAvgHours: body.overtimeAvgHours === null || body.overtimeAvgHours === undefined ? null : toNumber(body.overtimeAvgHours),
     };
 
     const result = await generateExecutiveInsight(metrics);

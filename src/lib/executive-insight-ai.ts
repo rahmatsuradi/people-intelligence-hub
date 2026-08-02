@@ -32,6 +32,18 @@ export interface ExecutiveMetrics {
   turnoverRatePct: number | null; // null = data lifecycle karyawan belum tersedia utk tenant ini
   voluntaryTurnoverPct: number | null;
   involuntaryTurnoverPct: number | null;
+  headcountYoYPct: number | null;
+  enpsDeltaVsPrev: number | null; // selisih poin vs round eNPS sebelumnya
+  overtimeQuarterlyCost: number | null;
+  overtimeVariancePct: number | null; // + = melewati budget
+  overtimeTopDepartment: string | null;
+  overtimeAvgHours: number | null;
+}
+
+function formatRupiah(n: number): string {
+  if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)} miliar`;
+  if (n >= 1_000_000) return `Rp ${Math.round(n / 1_000_000)} juta`;
+  return `Rp ${Math.round(n).toLocaleString("id-ID")}`;
 }
 
 export function buildInsightPrompt(m: ExecutiveMetrics): string {
@@ -44,25 +56,46 @@ export function buildInsightPrompt(m: ExecutiveMetrics): string {
   const turnoverLine = m.turnoverRatePct !== null
     ? `Turnover rate tahun berjalan: ${m.turnoverRatePct}% (voluntary ${m.voluntaryTurnoverPct}%, involuntary ${m.involuntaryTurnoverPct}%)`
     : "Turnover rate: data siklus hidup karyawan belum tersedia untuk entitas ini";
+  const headcountLine = m.headcountYoYPct !== null
+    ? `Pertumbuhan headcount YoY: ${m.headcountYoYPct > 0 ? "+" : ""}${m.headcountYoYPct}%`
+    : "Pertumbuhan headcount YoY: tidak tersedia";
+  const enpsTrendLine = m.enpsDeltaVsPrev !== null
+    ? `Perubahan eNPS vs survei sebelumnya: ${m.enpsDeltaVsPrev > 0 ? "+" : ""}${m.enpsDeltaVsPrev} poin`
+    : "Perubahan eNPS: belum ada survei pembanding";
+  const overtimeLine = m.overtimeQuarterlyCost !== null
+    ? `Beban lembur kuartal berjalan: ${formatRupiah(m.overtimeQuarterlyCost)} (${m.overtimeVariancePct! > 0 ? "+" : ""}${m.overtimeVariancePct}% vs target budget)${m.overtimeTopDepartment ? `; penyumbang terbesar: ${m.overtimeTopDepartment}` : ""}${m.overtimeAvgHours !== null ? `; rata-rata ${m.overtimeAvgHours} jam lembur/karyawan/bulan` : ""}`
+    : "Beban lembur: data jam lembur belum tersedia untuk entitas ini";
 
-  return `Kamu adalah asisten eksekutif HR. Berdasarkan metrik nyata di bawah, tulis ringkasan 2-3 kalimat dalam Bahasa Indonesia untuk C-Level (CEO/CHRO), singkat, padat, dan action-oriented (beri satu rekomendasi konkret jika relevan).
+  return `Berperanlah sebagai HR Analytics Consultant senior (setara konsultan manajemen tier-1) untuk sebuah stasiun televisi nasional. Audiensmu adalah C-Level (CEO/CHRO/CFO).
+
+TUGAS: tulis ringkasan 3-4 kalimat dalam Bahasa Indonesia yang TIDAK sekadar membaca ulang angka, melainkan MENGKORELASIKAN antar-metrik menjadi satu diagnosis sebab-akibat, lalu ditutup dengan TEPAT SATU rekomendasi strategis yang konkret dan bisa dieksekusi.
+
+KERANGKA ANALISIS yang harus kamu pertimbangkan (pakai hanya yang didukung data di bawah):
+- Rekrutmen yang lambat pada posisi produksi/lapangan memaksa kru yang ada menutup kekurangan → mendorong lonjakan jam lembur dan beban biaya lembur.
+- Beban lembur tinggi yang berkepanjangan → kelelahan (burnout) kru lapangan → menekan skor eNPS.
+- eNPS yang turun mendahului naiknya turnover sukarela (voluntary) → memperparah kekosongan posisi → lingkaran yang saling memperkuat.
+Sebutkan secara eksplisit keterkaitan antar-metrik ini bila datanya memang mengarah ke sana. Jika data TIDAK mendukung sebuah keterkaitan, jangan dipaksakan.
 
 ATURAN KETAT:
-- Hanya gunakan angka yang diberikan di bawah. JANGAN mengarang angka, persentase, atau statistik lain yang tidak ada di data ini.
-- Jangan menyebut biaya, revenue, atau data finansial — tidak tersedia.
+- Hanya gunakan angka yang diberikan di bawah. JANGAN mengarang angka, persentase, nominal rupiah, atau statistik apa pun yang tidak ada di data ini.
+- Jangan menyebut revenue, profit, atau biaya per hire — tidak tersedia.
+- Jangan menyebut metrik yang statusnya "tidak tersedia"/"belum ada data".
 - Balas HANYA dalam format JSON: {"summary": "..."}
 
 DATA:
 - Perusahaan: ${m.companyName} (industri: ${m.industry})
 - Total headcount: ${m.totalHeadcount}
+- ${headcountLine}
 - Karyawan tetap (PKWTT): ${m.pkwttPct}% (${m.totalHeadcount - m.pkwtCount} orang)
 - Karyawan kontrak (PKWT): ${m.pkwtCount} orang
 - Posisi terbuka (open roles): ${m.openRoles}
 - Kandidat aktif di pipeline: ${m.activePipeline}
-- Talent pool: ${m.talentCount} orang, rata-rata rating ${m.talentAvgPct}%
+- Freelance & kontributor aktif: ${m.talentCount} orang, readiness rate ${m.talentAvgPct}%
 - ${enpsLine}
+- ${enpsTrendLine}
 - ${fillLine}
-- ${turnoverLine}`;
+- ${turnoverLine}
+- ${overtimeLine}`;
 }
 
 interface InsightGroqCall {
@@ -147,6 +180,11 @@ export function buildFallbackSummary(m: ExecutiveMetrics): string {
   }
   if (m.turnoverRatePct !== null) {
     parts.push(`Turnover rate tahun berjalan ${m.turnoverRatePct}% (voluntary ${m.voluntaryTurnoverPct}%, involuntary ${m.involuntaryTurnoverPct}%).`);
+  }
+  if (m.overtimeQuarterlyCost !== null) {
+    parts.push(
+      `Beban lembur kuartal berjalan ${formatRupiah(m.overtimeQuarterlyCost)}${m.overtimeVariancePct !== null && m.overtimeVariancePct > 0 ? ` — ${m.overtimeVariancePct}% di atas target budget` : " (dalam target budget)"}${m.overtimeTopDepartment ? `, terbesar di ${m.overtimeTopDepartment}` : ""}.`,
+    );
   }
   return parts.join(" ");
 }

@@ -56,25 +56,56 @@ export function computeEnps(round: Pick<EnpsRound, "respondentCount" | "promoter
   return Math.round(pctPromoter - pctDetractor);
 }
 
-const DEFAULT_ENPS_SEED: Record<string, Omit<EnpsRound, "id" | "createdAt" | "updatedAt">> = {
-  "11111111-1111-4111-8111-111111111111": {
-    period: new Date().toISOString().slice(0, 7),
-    respondentCount: 200,
-    promoters: 100,
-    passives: 80,
-    detractors: 20,
-    keyThemes: "Karyawan menghargai fleksibilitas jam kerja & budaya tim redaksi; area perbaikan utama: jenjang karir dan pelatihan teknis broadcast.",
-    enteredBy: "HR",
-  },
-  "22222222-2222-4222-8222-222222222222": {
-    period: new Date().toISOString().slice(0, 7),
-    respondentCount: 60,
-    promoters: 30,
-    passives: 24,
-    detractors: 6,
-    keyThemes: "Karyawan lini produksi menghargai kepastian shift & THR tepat waktu; area perbaikan: ventilasi ruang jahit dan kecepatan penanganan keluhan.",
-    enteredBy: "HR",
-  },
+function monthsAgoPeriod(n: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return d.toISOString().slice(0, 7);
+}
+
+/** Two rounds per tenant (previous quarter + current) so the dashboard's
+ *  quarter-over-quarter delta is genuinely computed from stored rounds
+ *  rather than displayed as a static label. */
+const DEFAULT_ENPS_SEED: Record<string, Omit<EnpsRound, "id" | "createdAt" | "updatedAt">[]> = {
+  "11111111-1111-4111-8111-111111111111": [
+    {
+      period: monthsAgoPeriod(3),
+      respondentCount: 200,
+      promoters: 102,
+      passives: 80,
+      detractors: 18,
+      keyThemes: "Sentimen kuat pada kebanggaan brand & kualitas liputan; keluhan awal soal jadwal shift liputan akhir pekan.",
+      enteredBy: "HR",
+    },
+    {
+      period: monthsAgoPeriod(0),
+      respondentCount: 200,
+      promoters: 100,
+      passives: 80,
+      detractors: 20,
+      keyThemes: "Kru lapangan & studio melaporkan kelelahan akibat jam lembur tinggi dan posisi produksi yang lama kosong; apresiasi tetap tinggi pada budaya tim redaksi.",
+      enteredBy: "HR",
+    },
+  ],
+  "22222222-2222-4222-8222-222222222222": [
+    {
+      period: monthsAgoPeriod(3),
+      respondentCount: 60,
+      promoters: 31,
+      passives: 24,
+      detractors: 5,
+      keyThemes: "Apresiasi pada kepastian shift dan THR tepat waktu.",
+      enteredBy: "HR",
+    },
+    {
+      period: monthsAgoPeriod(0),
+      respondentCount: 60,
+      promoters: 30,
+      passives: 24,
+      detractors: 6,
+      keyThemes: "Karyawan lini produksi menghargai kepastian shift & THR tepat waktu; area perbaikan: ventilasi ruang jahit dan kecepatan penanganan keluhan.",
+      enteredBy: "HR",
+    },
+  ],
 };
 
 let isSeedingEnpsDefault = false;
@@ -87,7 +118,7 @@ export function getEnpsRounds(tenantId: string): EnpsRound[] {
     if (raw === null && !isSeedingEnpsDefault && DEFAULT_ENPS_SEED[tenantId]) {
       isSeedingEnpsDefault = true;
       try {
-        upsertEnpsRound(tenantId, DEFAULT_ENPS_SEED[tenantId]);
+        for (const round of DEFAULT_ENPS_SEED[tenantId]) upsertEnpsRound(tenantId, round);
       } finally {
         isSeedingEnpsDefault = false;
       }

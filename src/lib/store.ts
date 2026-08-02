@@ -708,7 +708,12 @@ export function getCandidatesForReq(reqId: string): CandidateRecord[] {
 /* ─── Demo Data ─── */
 
 function loadZusTextileDemoData(): void {
-  const base = new Date("2026-05-15T08:00:00.000Z");
+  // Anchored to seed time, not a fixed calendar date: requisition aging and
+  // time-to-hire are computed from these timestamps, so a fixed base makes
+  // every number drift upward forever (a req would read "300 days open" a
+  // year from now). Anchoring to now keeps the demo believable whenever a
+  // visitor first loads it.
+  const base = new Date();
   const daysAgo = (d: number) => new Date(base.getTime() - d * 86400000).toISOString();
 
   const reqs: JobRequisition[] = [
@@ -897,7 +902,12 @@ export function loadDemoData(): void {
   if (typeof window !== "undefined" && (getActiveCompanyId() === "22222222-2222-4222-8222-222222222222" || getActiveCompanyId() === "zus_textile")) {
     return loadZusTextileDemoData();
   }
-  const base = new Date("2026-05-15T08:00:00.000Z");
+  // Anchored to seed time, not a fixed calendar date: requisition aging and
+  // time-to-hire are computed from these timestamps, so a fixed base makes
+  // every number drift upward forever (a req would read "300 days open" a
+  // year from now). Anchoring to now keeps the demo believable whenever a
+  // visitor first loads it.
+  const base = new Date();
   const daysAgo = (d: number) => new Date(base.getTime() - d * 86400000).toISOString();
 
   const reqs: JobRequisition[] = [
@@ -909,11 +919,11 @@ export function loadDemoData(): void {
       headcount: 2, hiringManager: "Demo:Carlo Ancelotti", createdAt: daysAgo(45), updatedAt: daysAgo(10),
     },
     {
-      id: "REQ-DEMO-PRD01", title: "Executive Producer", department: "Production & Creative",
-      level: "Manager", status: "active", description: "Executive Producer for prime-time talk shows, breaking news special broadcasts, and investigative journalism programs.",
+      id: "REQ-DEMO-PRD01", title: "Executive Producer - News", department: "News & Editorial",
+      level: "Manager", status: "active", description: "Executive Producer for prime-time news bulletins, breaking news special broadcasts, and investigative journalism programs.",
       requirements: "8+ yrs broadcast production management, live studio directing, rundown optimization, and budget supervision.", salaryMin: 28000000,
       salaryMax: 45000000, currency: "IDR", location: "Jakarta (Studio Valora)", targetDate: "2026-07-20",
-      headcount: 1, hiringManager: "Demo:Arsène Wenger", createdAt: daysAgo(30), updatedAt: daysAgo(5),
+      headcount: 1, hiringManager: "Demo:Arsène Wenger", createdAt: daysAgo(112), updatedAt: daysAgo(5),
     },
     {
       id: "REQ-DEMO-DES01", title: "Senior News Anchor", department: "News & Editorial",
@@ -944,6 +954,57 @@ export function loadDemoData(): void {
       headcount: 5, hiringManager: "Demo:Anindya Bakrie", createdAt: daysAgo(12), updatedAt: daysAgo(2),
     },
   ];
+
+  // A national TV station runs a permanently hot field-crew pipeline: VJs,
+  // reporters, MCR shifts and graphics turn over far faster than corporate
+  // roles. These fill out the requisition board to broadcast-realistic scale.
+  // Deterministic (index-derived, no Math.random) so every visitor sees the
+  // same demo.
+  const bulkReqSpecs: { title: string; department: string; level: string; headcount: number; ageDays: number; salaryMin: number; salaryMax: number; manager: string }[] = [
+    { title: "Video Journalist (VJ)", department: "News & Editorial", level: "Mid-Level", headcount: 8, ageDays: 96, salaryMin: 7000000, salaryMax: 11000000, manager: "Demo:Karni Ilyas" },
+    { title: "Field Reporter - Biro Jakarta", department: "News & Editorial", level: "Mid-Level", headcount: 6, ageDays: 88, salaryMin: 7500000, salaryMax: 12000000, manager: "Demo:Najwa Shihab" },
+    { title: "Field Reporter - Biro Surabaya", department: "News & Editorial", level: "Mid-Level", headcount: 3, ageDays: 74, salaryMin: 6500000, salaryMax: 10000000, manager: "Demo:Najwa Shihab" },
+    { title: "Master Control Room (MCR) Operator", department: "Engineering & IT", level: "Mid-Level", headcount: 6, ageDays: 81, salaryMin: 7000000, salaryMax: 11500000, manager: "Demo:Carlo Ancelotti" },
+    { title: "Motion Graphic Designer", department: "Production & Creative", level: "Mid-Level", headcount: 4, ageDays: 69, salaryMin: 8000000, salaryMax: 14000000, manager: "Demo:Arsène Wenger" },
+    { title: "Video Editor & Colorist", department: "Production & Creative", level: "Mid-Level", headcount: 5, ageDays: 63, salaryMin: 7500000, salaryMax: 13000000, manager: "Demo:Arsène Wenger" },
+    { title: "ENG Cameraman", department: "Production & Creative", level: "Mid-Level", headcount: 7, ageDays: 58, salaryMin: 6500000, salaryMax: 11000000, manager: "Demo:Roberto Mancini" },
+    { title: "Audio Mixer & Sound Engineer", department: "Production & Creative", level: "Mid-Level", headcount: 3, ageDays: 54, salaryMin: 7000000, salaryMax: 12000000, manager: "Demo:Roberto Mancini" },
+    { title: "Lighting Specialist & Switcher", department: "Production & Creative", level: "Mid-Level", headcount: 3, ageDays: 51, salaryMin: 6500000, salaryMax: 10500000, manager: "Demo:Roberto Mancini" },
+    { title: "News Desk & Scriptwriter", department: "News & Editorial", level: "Mid-Level", headcount: 5, ageDays: 47, salaryMin: 7000000, salaryMax: 11000000, manager: "Demo:Karni Ilyas" },
+    { title: "Produser Berita Pagi", department: "News & Editorial", level: "Senior", headcount: 2, ageDays: 44, salaryMin: 15000000, salaryMax: 24000000, manager: "Demo:Karni Ilyas" },
+    { title: "Koordinator Liputan (Korlip) Daerah", department: "News & Editorial", level: "Senior", headcount: 2, ageDays: 41, salaryMin: 14000000, salaryMax: 22000000, manager: "Demo:Najwa Shihab" },
+    { title: "Social Media & Digital Content Officer", department: "Commercial & Traffic", level: "Entry Level", headcount: 4, ageDays: 38, salaryMin: 6000000, salaryMax: 9500000, manager: "Demo:Jose Mourinho" },
+    { title: "Creative Scriptwriter & Rundown Planner", department: "Production & Creative", level: "Mid-Level", headcount: 3, ageDays: 35, salaryMin: 7500000, salaryMax: 12500000, manager: "Demo:Arsène Wenger" },
+    { title: "Transmisi RF & Satellite Uplink Engineer", department: "Engineering & IT", level: "Senior", headcount: 2, ageDays: 33, salaryMin: 14000000, salaryMax: 22000000, manager: "Demo:Carlo Ancelotti" },
+    { title: "IT Network & Cybersecurity Specialist", department: "Engineering & IT", level: "Senior", headcount: 2, ageDays: 29, salaryMin: 15000000, salaryMax: 25000000, manager: "Demo:Carlo Ancelotti" },
+    { title: "Talent Coordinator & Guest Relation", department: "Production & Creative", level: "Entry Level", headcount: 3, ageDays: 26, salaryMin: 5500000, salaryMax: 9000000, manager: "Demo:Arsène Wenger" },
+    { title: "Studio Prompter & CG Operator", department: "Engineering & IT", level: "Entry Level", headcount: 4, ageDays: 23, salaryMin: 5500000, salaryMax: 8500000, manager: "Demo:Carlo Ancelotti" },
+    { title: "Sports Programming & Broadcast Specialist", department: "Production & Creative", level: "Mid-Level", headcount: 2, ageDays: 19, salaryMin: 8000000, salaryMax: 13500000, manager: "Demo:Roberto Mancini" },
+    { title: "HRBP - Redaksi & Produksi", department: "Human Capital & GA", level: "Senior", headcount: 1, ageDays: 16, salaryMin: 16000000, salaryMax: 26000000, manager: "Demo:Thibaut Courtois" },
+    { title: "Payroll & Compensation Specialist", department: "Human Capital & GA", level: "Mid-Level", headcount: 1, ageDays: 13, salaryMin: 10000000, salaryMax: 16000000, manager: "Demo:Thibaut Courtois" },
+    { title: "Ad Traffic & Sponsorship Analyst", department: "Commercial & Traffic", level: "Mid-Level", headcount: 2, ageDays: 8, salaryMin: 9000000, salaryMax: 15000000, manager: "Demo:Jose Mourinho" },
+  ];
+
+  for (const [i, s] of bulkReqSpecs.entries()) {
+    reqs.push({
+      id: `REQ-DEMO-BC${(i + 1).toString().padStart(2, "0")}`,
+      title: s.title,
+      department: s.department,
+      level: s.level,
+      status: "active",
+      description: `Posisi ${s.title} untuk mendukung operasional siaran 24/7 Valora TV di ${s.department}.`,
+      requirements: `Pengalaman relevan di industri penyiaran, siap kerja sistem shift dan liputan lapangan sesuai kebutuhan rundown.`,
+      salaryMin: s.salaryMin,
+      salaryMax: s.salaryMax,
+      currency: "IDR",
+      location: "Jakarta (Studio Valora)",
+      targetDate: new Date(base.getTime() + 45 * 86400000).toISOString().slice(0, 10),
+      headcount: s.headcount,
+      hiringManager: s.manager,
+      createdAt: daysAgo(s.ageDays),
+      updatedAt: daysAgo(Math.max(1, Math.round(s.ageDays / 8))),
+    });
+  }
 
   const candidates: CandidateRecord[] = [
     {
@@ -1073,45 +1134,83 @@ export function loadDemoData(): void {
     { id: "A-DEMO-06", action: "Moved from Applied to Screened:", target: "Andrea Pirlo", user: "You", time: daysAgo(11), type: "move" },
   ];
 
+  // Bulk pipeline — field-crew hiring at a national TV station runs at a very
+  // different volume than the handful of hand-written executive candidates
+  // above. Deterministic (index-derived) so the demo is identical for every
+  // visitor. These carry no cvAnalysis/interviewResults: they're pipeline
+  // volume, not analyzed candidates, so nothing here fabricates an AI score.
+  const bulkFirst = ["Rizky", "Dimas", "Anisa", "Bayu", "Citra", "Damar", "Elang", "Fajar", "Gita", "Hanif", "Intan", "Joko", "Kirana", "Lukman", "Maya", "Naufal", "Okta", "Prita", "Rangga", "Sinta", "Tegar", "Utari", "Vino", "Wulan", "Yoga", "Zahra"];
+  const bulkLast = ["Pratama", "Wijaya", "Hidayat", "Nugroho", "Saputra", "Lestari", "Ramadhan", "Kusuma", "Anggraini", "Purnama", "Setiawan", "Maulana", "Handayani", "Firmansyah", "Wibowo", "Susanti"];
+  const bulkSources = ["Jobstreet Portal", "LinkedIn Jobs", "Career Site (Web)", "Internal Referral", "Kampus / Job Fair", "Instagram Recruitment"];
+  const bulkStages: PipelineStage[] = ["applied", "screened", "interviewed", "offered"];
+  const bulkReqPool = reqs.filter((r) => r.id.startsWith("REQ-DEMO-BC"));
+
+  const bulkCandidates: CandidateRecord[] = Array.from({ length: 137 }).map((_, i) => {
+    const req = bulkReqPool[i % bulkReqPool.length];
+    // Weighted toward the top of the funnel, like a real pipeline.
+    const stage = bulkStages[i % 7 === 0 ? 2 : i % 5 === 0 ? 1 : i % 11 === 0 ? 3 : 0];
+    const ageDays = 3 + ((i * 7) % 70);
+    return {
+      id: `C-DEMO-BC-${(i + 1).toString().padStart(3, "0")}`,
+      name: `${bulkFirst[i % bulkFirst.length]} ${bulkLast[(i * 3) % bulkLast.length]}`,
+      email: `kandidat${i + 1}@email.com`,
+      phone: `08${(1200000000 + i * 7919).toString().slice(0, 10)}`,
+      stage,
+      jobReqId: req.id,
+      department: req.department,
+      position: req.title,
+      source: bulkSources[i % bulkSources.length],
+      notes: "",
+      cvAnalysis: null,
+      interviewResults: [],
+      createdAt: daysAgo(ageDays),
+      updatedAt: daysAgo(Math.max(1, Math.round(ageDays / 3))),
+    };
+  });
+
+  candidates.push(...bulkCandidates);
+
   const existingCandidates = getCandidates().filter((c) => c.source !== "Demo");
   const existingReqs = getJobReqs().filter((r) => !r.hiringManager.startsWith("Demo:"));
   const existingActivities = getActivities().filter((a) => !a.id.startsWith("A-DEMO"));
   const existingTalent = getTalentPool().filter((t) => t.source !== "Demo");
 
-  // Generate 48 Talent Pool Mock Data (Broadcasting & Media Specialists)
-  const locations = ["Jakarta Pusat", "Jakarta Selatan", "Jakarta Barat", "Surabaya", "Bandung", "Yogyakarta", "Medan", "Makassar"];
-  const allSkills = ["News Anchor", "Video Editing", "Camera Operating", "Live Broadcasting", "Scriptwriting", "Audio Engineering", "Graphic Design", "Investigative Reporting", "Digital Marketing", "Studio Lighting", "MCR Operations", "Rundown Management"];
-  const mockTalent: TalentProfile[] = Array.from({ length: 48 }).map((_, i) => {
-    const loc = locations[Math.floor(Math.random() * locations.length)];
-    const numSkills = Math.floor(Math.random() * 3) + 1;
-    const skills = Array.from({ length: numSkills }).map(() => allSkills[Math.floor(Math.random() * allSkills.length)]);
-    const uniqueSkills = Array.from(new Set(skills));
-    
-    const category = Math.random() > 0.3 ? "Karyawan Inti" : "Freelance";
-    const capacity = category === "Freelance" ? Math.floor(Math.random() * 30) + 20 : 0; // 20-50 hours/week
-    
-    let status: "Available" | "Active" | "Inactive" = "Available";
-    const r = Math.random();
-    if (r > 0.6) status = "Active";
-    else if (r < 0.1) status = "Inactive";
+  // 120 freelance & kontributor daerah — the operational backbone of a
+  // national TV station: stringers, freelance VJs, and regional contributors
+  // who cover live events and daerah news without being on the payroll.
+  // Deterministic (index-derived, no Math.random) so every visitor sees the
+  // same pool and the Readiness Rate on the dashboard is reproducible.
+  const locations = ["Jakarta Pusat", "Jakarta Selatan", "Jakarta Barat", "Bogor", "Bandung", "Surabaya", "Yogyakarta", "Semarang", "Medan", "Makassar", "Denpasar", "Palembang"];
+  const allSkills = ["Video Journalist (VJ)", "Live Reporting", "ENG Camera", "Video Editing", "Audio Engineering", "Motion Graphic", "Studio Lighting", "MCR Operations", "Scriptwriting", "Investigative Reporting", "Drone Operator", "Rundown Management"];
+  const talentFirst = ["Adit", "Bimo", "Cahya", "Dewi", "Eka", "Farhan", "Galih", "Hesti", "Ilham", "Jihan", "Krisna", "Laras", "Mahesa", "Nadia", "Oki", "Putra", "Qori", "Rahma", "Satria", "Tirta", "Umar", "Vika", "Wahyu", "Yanti"];
+  const talentLast = ["Nugraha", "Santoso", "Permana", "Rahayu", "Wibisono", "Halim", "Mahendra", "Safitri", "Kurniawan", "Utami", "Baskoro", "Anindya", "Prasetyo", "Melati", "Gunawan"];
 
-    const names = ["Lionel", "Cristiano", "Erling", "Kylian", "Kevin", "Luka", "Harry", "Son", "Virgil", "Alisson", "Ederson", "Thibaut", "Jude", "Martin", "Bruno", "Bernardo", "Rodri", "Federico", "Paulo", "Lautaro"];
-    const lastNames = ["Messi", "Ronaldo", "Haaland", "Mbappé", "De Bruyne", "Modrić", "Kane", "Heung-min", "van Dijk", "Becker", "Moraes", "Courtois", "Bellingham", "Ødegaard", "Fernandes", "Silva", "Hernández", "Valverde", "Dybala", "Martínez"];
-    const name = `${names[Math.floor(Math.random() * names.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
+  const mockTalent: TalentProfile[] = Array.from({ length: 120 }).map((_, i) => {
+    const uniqueSkills = Array.from(new Set([
+      allSkills[i % allSkills.length],
+      allSkills[(i * 5 + 3) % allSkills.length],
+    ]));
+
+    // Freelance-heavy, as a broadcaster's contributor network actually is.
+    const category: TalentProfile["category"] = i % 5 === 0 ? "Mitra Borongan" : "Freelance";
+
+    // Readiness: ~62% siap ditugaskan, ~30% sedang bertugas, ~8% non-aktif.
+    const bucket = i % 50;
+    const status: TalentProfile["status"] = bucket < 31 ? "Available" : bucket < 46 ? "Active" : "Inactive";
 
     return {
-      id: `T-DEMO-${(i+1).toString().padStart(3, '0')}`,
-      name,
-      phone: `08${Math.floor(Math.random() * 9000000000) + 1000000000}`,
-      location: loc,
+      id: `T-DEMO-${(i + 1).toString().padStart(3, "0")}`,
+      name: `${talentFirst[i % talentFirst.length]} ${talentLast[(i * 7) % talentLast.length]}`,
+      phone: `08${(1300000000 + i * 6421).toString().slice(0, 10)}`,
+      location: locations[i % locations.length],
       skills: uniqueSkills,
-      category: category as any,
-      capacity,
+      category,
+      capacity: 20 + ((i * 3) % 30), // jam siap tugas / minggu
       status,
-      rating: Number((Math.random() * 1.5 + 3.5).toFixed(1)), // 3.5 - 5.0
+      rating: Number((3.5 + ((i * 7) % 15) / 10).toFixed(1)), // 3.5 - 4.9, deterministik
       source: "Demo",
-      createdAt: daysAgo(Math.floor(Math.random() * 90) + 30),
-      updatedAt: daysAgo(Math.floor(Math.random() * 20)),
+      createdAt: daysAgo(30 + ((i * 11) % 90)),
+      updatedAt: daysAgo(1 + ((i * 3) % 20)),
     };
   });
 

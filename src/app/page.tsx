@@ -11,7 +11,8 @@ import { getEnpsRounds, computeEnps } from "@/lib/engagement-store";
 import { getCachedInsight, setCachedInsight, type CachedInsight } from "@/lib/executive-insight-store";
 import type { ExecutiveMetrics } from "@/lib/executive-insight-ai";
 import { getSlaTargetDays, setSlaTargetDays } from "@/lib/recruitment-sla-store";
-import { computeYtdTurnover, type TurnoverMetrics } from "@/lib/turnover";
+import { computeYtdTurnover, computeHeadcountYoY, type TurnoverMetrics, type HeadcountTrend } from "@/lib/turnover";
+import { computeOvertimeLoad, formatRupiahCompact, type OvertimeLoad } from "@/lib/overtime-load";
 
 const MGMT_TITLE_RE = /Direktur|VP|Kepala|Manajer|Produser|Pemimpin|Redaktur|Supervisor|Lead|Chief/i;
 
@@ -63,6 +64,25 @@ function ENPSGauge({ score }: { score: number }) {
   );
 }
 
+/** Trend badge. `tone` is semantic: "good" = arah yang diinginkan, "bad" =
+ *  arah yang mengkhawatirkan, "neutral" = stabil / tidak signifikan. Warna
+ *  hanya dipakai untuk menandai status, bukan dekorasi. */
+function TrendBadge({ tone, children, onDark = false }: { tone: "good" | "bad" | "neutral"; children: React.ReactNode; onDark?: boolean }) {
+  const light = {
+    good: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+    bad: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
+    neutral: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+  };
+  return (
+    <span className={cn(
+      "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap",
+      onDark ? "bg-white/20 text-white" : light[tone],
+    )}>
+      {children}
+    </span>
+  );
+}
+
 interface EnpsBreakdown { promoters: number; passives: number; detractors: number; respondentCount: number }
 
 function ENPSDistributionBar({ breakdown }: { breakdown: EnpsBreakdown }) {
@@ -100,7 +120,6 @@ export default function DashboardPage() {
   const [inInterview, setInInterview] = useState<number>(0);
   const [activePipeline, setActivePipeline] = useState<number>(0);
   const [talentCount, setTalentCount] = useState<number>(0);
-  const [talentAvgPct, setTalentAvgPct] = useState<number>(0);
   const [payrollDone, setPayrollDone] = useState<boolean | null>(null);
   const currentPeriod = new Date().toISOString().slice(0, 7);
 
@@ -118,6 +137,10 @@ export default function DashboardPage() {
 
   // Turnover Rate — YTD, dari field lifecycle karyawan (join_date/exit_date/exit_type)
   const [turnover, setTurnover] = useState<TurnoverMetrics | null>(null);
+  const [headcountTrend, setHeadcountTrend] = useState<HeadcountTrend | null>(null);
+  const [enpsDelta, setEnpsDelta] = useState<number | null>(null);
+  const [overtime, setOvertime] = useState<OvertimeLoad | null>(null);
+  const [talentReadyPct, setTalentReadyPct] = useState<number>(0);
 
   // AI Smart Summary
   const [insight, setInsight] = useState<CachedInsight | null>(null);
@@ -150,24 +173,32 @@ export default function DashboardPage() {
 
     const pool = getTalentPool();
     setTalentCount(pool.length);
-    const avgRating = pool.length ? pool.reduce((s, t) => s + (t.rating ?? 0), 0) / pool.length : 0;
-    setTalentAvgPct(Math.round((avgRating / 5) * 100));
+    // Readiness Rate — proporsi kontributor yang berstatus "Available" (siap
+    // ditugaskan), metrik yang jauh lebih operasional untuk stasiun TV
+    // ketimbang rata-rata rating.
+    setTalentReadyPct(pool.length ? Math.round((pool.filter((t) => t.status === "Available").length / pool.length) * 100) : 0);
 
-    // eNPS — round terakhir yang tercatat HR di Employee Engagement
+    // eNPS — round terakhir + delta vs round sebelumnya (dihitung, bukan label statis)
     const rounds = getEnpsRounds(comp.id);
     const latest = rounds[rounds.length - 1];
     if (latest) {
-      setEnpsScore(computeEnps(latest));
+      const latestScore = computeEnps(latest);
+      setEnpsScore(latestScore);
       setEnpsPeriod(latest.period);
       setEnpsBreakdown({ promoters: latest.promoters, passives: latest.passives, detractors: latest.detractors, respondentCount: latest.respondentCount });
+      const prev = rounds.length > 1 ? rounds[rounds.length - 2] : null;
+      setEnpsDelta(prev ? latestScore - computeEnps(prev) : null);
     }
 
-    // Turnover Rate — lifecycle fields (join_date/employment_status/exit_date/exit_type)
-    // only exist on the local demo array, not on the real pi_employees Supabase
-    // table (which ensureDemoEmployeesExist seeds with a fixed join_date and no
-    // exit tracking at all). So this always reads the local generator directly,
-    // independent of which source wins below for headcount/PKWTT.
-    setTurnover(computeYtdTurnover(getActiveCompanyEmployees()));
+    // Turnover / headcount trend / overtime — all read the local generator
+    // directly. The lifecycle and overtime-hour fields only exist there, not
+    // on the real pi_employees Supabase table (ensureDemoEmployeesExist seeds
+    // it with a fixed join_date and no exit or overtime tracking at all), so
+    // these must not depend on which source wins below for headcount/PKWTT.
+    const localEmps = getActiveCompanyEmployees();
+    setTurnover(computeYtdTurnover(localEmps));
+    setHeadcountTrend(computeHeadcountYoY(localEmps));
+    setOvertime(computeOvertimeLoad(localEmps, comp.id));
 
     async function loadDashboardStats() {
       try {
@@ -233,7 +264,7 @@ export default function DashboardPage() {
       openRoles,
       activePipeline,
       talentCount,
-      talentAvgPct,
+      talentAvgPct: talentReadyPct,
       enpsScore,
       enpsPeriod,
       avgDaysOpen,
@@ -243,6 +274,12 @@ export default function DashboardPage() {
       turnoverRatePct: turnover?.available ? turnover.turnoverRatePct : null,
       voluntaryTurnoverPct: turnover?.available ? turnover.voluntaryRatePct : null,
       involuntaryTurnoverPct: turnover?.available ? turnover.involuntaryRatePct : null,
+      headcountYoYPct: headcountTrend?.available ? headcountTrend.deltaPct : null,
+      enpsDeltaVsPrev: enpsDelta,
+      overtimeQuarterlyCost: overtime?.available ? overtime.quarterlyCost : null,
+      overtimeVariancePct: overtime?.available ? overtime.variancePct : null,
+      overtimeTopDepartment: overtime?.available ? overtime.topDepartment?.name ?? null : null,
+      overtimeAvgHours: overtime?.available ? overtime.avgHoursPerEmployee : null,
     };
     const snapshot = JSON.stringify(metrics);
     const cached = getCachedInsight(activeCompany.id);
@@ -252,7 +289,7 @@ export default function DashboardPage() {
     }
     generateInsight(metrics, snapshot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalHeadcount, pkwttCount, pkwtCount, openRoles, activePipeline, talentCount, talentAvgPct, enpsScore, enpsPeriod, avgDaysOpen, slaTarget, bottleneck, turnover]);
+  }, [totalHeadcount, pkwttCount, pkwtCount, openRoles, activePipeline, talentCount, talentReadyPct, enpsScore, enpsPeriod, avgDaysOpen, slaTarget, bottleneck, turnover, headcountTrend, enpsDelta, overtime]);
 
   const handleRefreshInsight = () => {
     if (totalHeadcount === null || insightLoading) return;
@@ -265,7 +302,7 @@ export default function DashboardPage() {
       openRoles,
       activePipeline,
       talentCount,
-      talentAvgPct,
+      talentAvgPct: talentReadyPct,
       enpsScore,
       enpsPeriod,
       avgDaysOpen,
@@ -275,6 +312,12 @@ export default function DashboardPage() {
       turnoverRatePct: turnover?.available ? turnover.turnoverRatePct : null,
       voluntaryTurnoverPct: turnover?.available ? turnover.voluntaryRatePct : null,
       involuntaryTurnoverPct: turnover?.available ? turnover.involuntaryRatePct : null,
+      headcountYoYPct: headcountTrend?.available ? headcountTrend.deltaPct : null,
+      enpsDeltaVsPrev: enpsDelta,
+      overtimeQuarterlyCost: overtime?.available ? overtime.quarterlyCost : null,
+      overtimeVariancePct: overtime?.available ? overtime.variancePct : null,
+      overtimeTopDepartment: overtime?.available ? overtime.topDepartment?.name ?? null : null,
+      overtimeAvgHours: overtime?.available ? overtime.avgHoursPerEmployee : null,
     };
     generateInsight(metrics, JSON.stringify(metrics));
   };
@@ -342,9 +385,15 @@ export default function DashboardPage() {
                   <Icon className="text-white"><SvgPath name="users" /></Icon>
                 </div>
               </div>
-              <div className="flex items-baseline gap-2">
+              <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-5xl font-bold tracking-tight">{totalHeadcount ?? "—"}</span>
                 <span className="text-blue-200 text-sm">Active Personnel</span>
+                {headcountTrend?.available && (
+                  <TrendBadge tone="neutral" onDark>
+                    {headcountTrend.deltaPct > 0 ? "▲" : headcountTrend.deltaPct < 0 ? "▼" : "●"}{" "}
+                    {headcountTrend.deltaPct > 0 ? "+" : ""}{headcountTrend.deltaPct}% YoY
+                  </TrendBadge>
+                )}
               </div>
 
               <div className="mt-8 grid grid-cols-2 gap-4 border-t border-white/20 pt-4">
@@ -365,14 +414,14 @@ export default function DashboardPage() {
             <div className="p-6 h-full flex flex-col justify-between" onClick={() => router.push('/talent-pool')}>
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-emerald-100 font-medium text-lg">Talent Pool</h3>
+                  <h3 className="text-emerald-100 font-medium text-lg">Freelance &amp; Kontributor Aktif</h3>
                   <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                     <Icon className="text-white"><SvgPath name="search" /></Icon>
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-5xl font-bold tracking-tight">{talentCount}</span>
-                  <span className="text-emerald-200 text-sm">Orang Tersedia</span>
+                  <span className="text-emerald-200 text-sm">Orang di Jaringan</span>
                 </div>
               </div>
 
@@ -380,15 +429,15 @@ export default function DashboardPage() {
                 {talentCount > 0 ? (
                   <>
                     <div className="flex justify-between items-end mb-2">
-                      <p className="text-emerald-100 text-sm">Rata-rata Rating Talent</p>
-                      <span className="text-xl font-bold">{talentAvgPct}%</span>
+                      <p className="text-emerald-100 text-sm">Readiness Rate (siap ditugaskan)</p>
+                      <span className="text-xl font-bold">{talentReadyPct}%</span>
                     </div>
                     <div className="w-full bg-black/20 rounded-full h-2">
-                      <div className="bg-white rounded-full h-2" style={{ width: `${talentAvgPct}%` }}></div>
+                      <div className="bg-white rounded-full h-2" style={{ width: `${talentReadyPct}%` }}></div>
                     </div>
                   </>
                 ) : (
-                  <p className="text-emerald-100 text-sm">Belum ada talent tersimpan — tambahkan dari halaman Candidates.</p>
+                  <p className="text-emerald-100 text-sm">Belum ada kontributor tersimpan — tambahkan dari halaman Talent Pool.</p>
                 )}
               </div>
             </div>
@@ -406,7 +455,14 @@ export default function DashboardPage() {
                 <Icon><SvgPath name="users" /></Icon>
               </div>
               <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white">Employee Sentiment (eNPS)</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-slate-900 dark:text-white">Employee Sentiment (eNPS)</h3>
+                  {enpsDelta !== null && (
+                    <TrendBadge tone={enpsDelta < 0 ? "bad" : enpsDelta > 0 ? "good" : "neutral"}>
+                      {enpsDelta > 0 ? "▲ +" : enpsDelta < 0 ? "▼ " : "● "}{enpsDelta} poin vs survei lalu
+                    </TrendBadge>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400">{enpsPeriod ? `Periode ${enpsPeriod}` : "Belum ada survei"}</p>
               </div>
             </div>
@@ -564,12 +620,15 @@ export default function DashboardPage() {
               <span className="text-slate-500 text-sm font-medium">Turnover Rate {turnover ? `(${turnover.periodLabel})` : ""}</span>
               {turnover?.available ? (
                 <>
-                  <div className="mt-1 flex items-baseline gap-2">
+                  <div className="mt-1 flex flex-wrap items-baseline gap-2">
                     <span className={cn("text-3xl font-bold", turnover.turnoverRatePct >= 10 ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white")}>
                       {turnover.turnoverRatePct}%
                     </span>
-                    <span className="text-xs text-slate-400">{turnover.totalExits} keluar dari {turnover.headcountStart} awal periode</span>
+                    <TrendBadge tone={turnover.turnoverRatePct >= 10 ? "bad" : "neutral"}>
+                      {turnover.turnoverRatePct >= 10 ? "▲ Perlu perhatian" : "● Stabil"}
+                    </TrendBadge>
                   </div>
+                  <p className="mt-1 text-xs text-slate-400">{turnover.totalExits} keluar dari {turnover.headcountStart} awal periode</p>
                   <div className="mt-2 flex gap-4 text-xs">
                     <span className="text-slate-500">Voluntary <span className="font-semibold text-slate-700 dark:text-slate-300">{turnover.voluntaryRatePct}%</span></span>
                     <span className="text-slate-500">Involuntary <span className="font-semibold text-slate-700 dark:text-slate-300">{turnover.involuntaryRatePct}%</span></span>
@@ -587,29 +646,66 @@ export default function DashboardPage() {
               <div className="p-2.5 bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg">
                 <Icon><SvgPath name="report" /></Icon>
               </div>
-              <h3 className="font-semibold text-slate-900 dark:text-white">Payroll & Operations</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">Payroll & Beban Lembur</h3>
             </div>
 
-            <div className="space-y-6 flex-1 flex flex-col justify-center">
-              <div className="text-center">
-                <div className={cn("inline-flex items-center justify-center h-16 w-16 rounded-full mb-3",
-                  payrollDone ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-amber-100 dark:bg-amber-900/40")}>
-                  <Icon className={cn("h-8 w-8", payrollDone ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+            <div className="flex flex-1 flex-col justify-between gap-4">
+              {overtime?.available ? (
+                <div>
+                  <span className="text-sm font-medium text-slate-500">Beban Lembur Kuartal Berjalan</span>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                    <span className={cn("text-3xl font-bold", overtime.variancePct > 0 ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white")}>
+                      {formatRupiahCompact(overtime.quarterlyCost)}
+                    </span>
+                    <TrendBadge tone={overtime.variancePct > 0 ? "bad" : "good"}>
+                      {overtime.variancePct > 0 ? "▲ +" : "▼ "}{overtime.variancePct}% vs budget
+                    </TrendBadge>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="mb-1 flex justify-between text-[11px] text-slate-500">
+                      <span>Realisasi</span>
+                      <span>Target {formatRupiahCompact(overtime.budgetQuarterly)}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div
+                        className={cn("h-full rounded-full transition-all duration-700", overtime.variancePct > 0 ? "bg-red-500" : "bg-emerald-500")}
+                        style={{ width: `${Math.min(100, overtime.budgetQuarterly > 0 ? (overtime.quarterlyCost / overtime.budgetQuarterly) * 100 : 0)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-xs text-slate-400">
+                    Rata-rata {overtime.avgHoursPerEmployee} jam/karyawan/bulan
+                    {overtime.topDepartment && <> · tertinggi: <span className="font-medium text-slate-600 dark:text-slate-300">{overtime.topDepartment.name}</span></>}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Dihitung dengan tarif lembur PP 35/2021 (1/173 × upah, multiplier 1,5×/2×)
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <span className="text-sm font-medium text-slate-500">Beban Lembur</span>
+                  <p className="mt-1.5 text-xs text-slate-400">Data jam lembur belum tersedia untuk entitas ini.</p>
+                </div>
+              )}
+
+              <div>
+                <div className="mb-3 flex items-center gap-2 text-xs text-slate-500">
+                  <Icon className={cn("h-4 w-4", payrollDone ? "text-emerald-500" : "text-amber-500")}>
                     <SvgPath name={payrollDone ? "check" : "clock"} />
                   </Icon>
+                  <span>
+                    Payroll {currentPeriod}: {payrollDone === null ? "—" : payrollDone ? "run tersimpan" : "belum dihitung"}
+                  </span>
                 </div>
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {payrollDone === null ? "—" : payrollDone ? "Run Tersimpan" : "Belum Dihitung"}
-                </h4>
-                <p className="text-sm text-slate-500 mt-1">Status Payroll Periode {currentPeriod}</p>
+                <button
+                  onClick={() => router.push('/pay/payroll')}
+                  className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium transition-colors dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                >
+                  Buka Modul Payroll
+                </button>
               </div>
-
-              <button
-                onClick={() => router.push('/pay/payroll')}
-                className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium transition-colors dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
-              >
-                Buka Modul Payroll
-              </button>
             </div>
           </Card>
 
