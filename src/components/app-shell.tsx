@@ -249,7 +249,7 @@ export function AppShell({
         { id: "employer-branding", label: "AI Content Generator", href: "/employer-branding" },
         { id: "ai-trends", label: "Trend & Ide Konten", href: "/employer-branding/ai-trends" },
         { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial" },
-        { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement", soon: true },
+        { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement" },
       ],
     },
     {
@@ -268,7 +268,7 @@ export function AppShell({
       label: "Core HR & IR",
       items: [
         { id: "employees", label: "Employee Directory", href: "/employees" },
-        { id: "ir", label: "Industrial Relations", href: "/core-hr/ir", soon: true },
+        { id: "ir", label: "Industrial Relations", href: "/core-hr/ir" },
         { id: "onboarding", label: "Onboarding & Offboarding", href: "/pay/onboarding" },
         { id: "attendance", label: "Attendance", href: "/attendance" },
       ],
@@ -277,7 +277,7 @@ export function AppShell({
       label: "Performance & Talent",
       items: [
         { id: "performance", label: "Performance (PMS)", href: "/performance" },
-        { id: "succession", label: "Succession Planning", href: "/talent/succession", soon: true },
+        { id: "succession", label: "Succession Planning", href: "/talent/succession" },
         { id: "od", label: "Org. Development", href: "/talent/od", soon: true },
       ],
     },
@@ -285,7 +285,7 @@ export function AppShell({
       label: "Learning & Development",
       items: [
         { id: "courses", label: "Training & Courses", href: "/learning/courses", soon: true },
-        { id: "competency", label: "Competency Matrix", href: "/learning/competency", soon: true },
+        { id: "competency", label: "Competency Matrix", href: "/learning/competency" },
       ],
     },
     {
