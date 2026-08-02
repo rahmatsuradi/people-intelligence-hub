@@ -34,6 +34,10 @@ export async function POST(req: NextRequest) {
       talentAvgPct: Math.max(0, Math.min(100, toNumber(body.talentAvgPct))),
       enpsScore: body.enpsScore === null || body.enpsScore === undefined ? null : Math.max(-100, Math.min(100, toNumber(body.enpsScore))),
       enpsPeriod: body.enpsPeriod ? String(body.enpsPeriod).slice(0, 10) : null,
+      avgDaysOpen: body.avgDaysOpen === null || body.avgDaysOpen === undefined ? null : toNumber(body.avgDaysOpen),
+      slaTargetDays: toNumber(body.slaTargetDays, 45),
+      bottleneckTitle: body.bottleneckTitle ? String(body.bottleneckTitle).slice(0, 120) : null,
+      bottleneckDays: body.bottleneckDays === null || body.bottleneckDays === undefined ? null : toNumber(body.bottleneckDays),
     };
 
     const result = await generateExecutiveInsight(metrics);

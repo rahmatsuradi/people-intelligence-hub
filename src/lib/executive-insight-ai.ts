@@ -25,12 +25,19 @@ export interface ExecutiveMetrics {
   talentAvgPct: number; // 0-100
   enpsScore: number | null; // -100..100, null = belum ada survei
   enpsPeriod: string | null;
+  avgDaysOpen: number | null; // rata-rata usia requisition aktif (proxy time-to-fill), null = tidak ada req aktif
+  slaTargetDays: number; // target time-to-fill yang ditetapkan HR
+  bottleneckTitle: string | null; // requisition yang paling lama terbuka
+  bottleneckDays: number | null;
 }
 
 export function buildInsightPrompt(m: ExecutiveMetrics): string {
   const enpsLine = m.enpsScore !== null
     ? `eNPS periode ${m.enpsPeriod}: ${m.enpsScore} (skala -100 s/d 100)`
     : "eNPS: belum ada data survei";
+  const fillLine = m.avgDaysOpen !== null
+    ? `Time to Fill rata-rata: ${m.avgDaysOpen} hari (target HR: <${m.slaTargetDays} hari)${m.bottleneckTitle ? `; posisi paling lama terbuka: ${m.bottleneckTitle} (${m.bottleneckDays} hari)` : ""}`
+    : "Time to Fill: tidak ada posisi terbuka saat ini";
 
   return `Kamu adalah asisten eksekutif HR. Berdasarkan metrik nyata di bawah, tulis ringkasan 2-3 kalimat dalam Bahasa Indonesia untuk C-Level (CEO/CHRO), singkat, padat, dan action-oriented (beri satu rekomendasi konkret jika relevan).
 
@@ -47,7 +54,8 @@ DATA:
 - Posisi terbuka (open roles): ${m.openRoles}
 - Kandidat aktif di pipeline: ${m.activePipeline}
 - Talent pool: ${m.talentCount} orang, rata-rata rating ${m.talentAvgPct}%
-- ${enpsLine}`;
+- ${enpsLine}
+- ${fillLine}`;
 }
 
 interface InsightGroqCall {
@@ -123,6 +131,12 @@ export function buildFallbackSummary(m: ExecutiveMetrics): string {
   }
   if (m.openRoles > 0) {
     parts.push(`${m.openRoles} posisi masih terbuka dengan ${m.activePipeline} kandidat aktif di pipeline${m.talentCount > 0 ? `; pertimbangkan menengok ${m.talentCount} kandidat di talent pool` : ""}.`);
+  }
+  if (m.avgDaysOpen !== null) {
+    const overSla = m.avgDaysOpen > m.slaTargetDays;
+    parts.push(
+      `Time to Fill rata-rata ${m.avgDaysOpen} hari${overSla ? ` — melewati target ${m.slaTargetDays} hari` : ` (dalam target ${m.slaTargetDays} hari)`}${m.bottleneckTitle ? `; posisi ${m.bottleneckTitle} sudah ${m.bottleneckDays} hari terbuka` : ""}.`,
+    );
   }
   return parts.join(" ");
 }

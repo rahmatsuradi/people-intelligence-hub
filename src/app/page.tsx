@@ -10,8 +10,13 @@ import { getJobReqs, getCandidates, getTalentPool } from "@/lib/store";
 import { getEnpsRounds, computeEnps } from "@/lib/engagement-store";
 import { getCachedInsight, setCachedInsight, type CachedInsight } from "@/lib/executive-insight-store";
 import type { ExecutiveMetrics } from "@/lib/executive-insight-ai";
+import { getSlaTargetDays, setSlaTargetDays } from "@/lib/recruitment-sla-store";
 
 const MGMT_TITLE_RE = /Direktur|VP|Kepala|Manajer|Produser|Pemimpin|Redaktur|Supervisor|Lead|Chief/i;
+
+function daysBetween(a: string, b: string): number {
+  return Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000));
+}
 
 function enpsColorClass(score: number): string {
   if (score >= 30) return "text-emerald-500";
@@ -103,6 +108,13 @@ export default function DashboardPage() {
   const [enpsPeriod, setEnpsPeriod] = useState<string | null>(null);
   const [enpsBreakdown, setEnpsBreakdown] = useState<EnpsBreakdown | null>(null);
 
+  // Time to Fill — usia requisition aktif (proxy time-to-fill real-time)
+  const [avgDaysOpen, setAvgDaysOpen] = useState<number | null>(null);
+  const [bottleneck, setBottleneck] = useState<{ title: string; days: number } | null>(null);
+  const [slaTarget, setSlaTarget] = useState<number>(45);
+  const [editingSla, setEditingSla] = useState(false);
+  const [slaInput, setSlaInput] = useState("45");
+
   // AI Smart Summary
   const [insight, setInsight] = useState<CachedInsight | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
@@ -114,9 +126,24 @@ export default function DashboardPage() {
     // KPI rekrutmen dari store lokal (sumber yang sama dengan /candidates & /roles)
     const reqs = getJobReqs();
     const cands = getCandidates();
-    setOpenRoles(reqs.filter((r) => r.status === "active").length);
+    const activeReqs = reqs.filter((r) => r.status === "active");
+    setOpenRoles(activeReqs.length);
     setInInterview(cands.filter((c) => c.stage === "interviewed").length);
     setActivePipeline(cands.filter((c) => c.stage !== "hired" && c.stage !== "rejected").length);
+
+    // Time to Fill — usia hari ini untuk tiap requisition aktif
+    if (activeReqs.length > 0) {
+      const now = new Date().toISOString();
+      const aged = activeReqs.map((r) => ({ title: r.title, days: daysBetween(r.createdAt, now) }));
+      setAvgDaysOpen(Math.round(aged.reduce((s, r) => s + r.days, 0) / aged.length));
+      setBottleneck(aged.sort((a, b) => b.days - a.days)[0]);
+    } else {
+      setAvgDaysOpen(null);
+      setBottleneck(null);
+    }
+    setSlaTarget(getSlaTargetDays(comp.id));
+    setSlaInput(String(getSlaTargetDays(comp.id)));
+
     const pool = getTalentPool();
     setTalentCount(pool.length);
     const avgRating = pool.length ? pool.reduce((s, t) => s + (t.rating ?? 0), 0) / pool.length : 0;
@@ -198,6 +225,10 @@ export default function DashboardPage() {
       talentAvgPct,
       enpsScore,
       enpsPeriod,
+      avgDaysOpen,
+      slaTargetDays: slaTarget,
+      bottleneckTitle: bottleneck?.title ?? null,
+      bottleneckDays: bottleneck?.days ?? null,
     };
     const snapshot = JSON.stringify(metrics);
     const cached = getCachedInsight(activeCompany.id);
@@ -207,7 +238,7 @@ export default function DashboardPage() {
     }
     generateInsight(metrics, snapshot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalHeadcount, pkwttCount, pkwtCount, openRoles, activePipeline, talentCount, talentAvgPct, enpsScore, enpsPeriod]);
+  }, [totalHeadcount, pkwttCount, pkwtCount, openRoles, activePipeline, talentCount, talentAvgPct, enpsScore, enpsPeriod, avgDaysOpen, slaTarget, bottleneck]);
 
   const handleRefreshInsight = () => {
     if (totalHeadcount === null || insightLoading) return;
@@ -223,8 +254,20 @@ export default function DashboardPage() {
       talentAvgPct,
       enpsScore,
       enpsPeriod,
+      avgDaysOpen,
+      slaTargetDays: slaTarget,
+      bottleneckTitle: bottleneck?.title ?? null,
+      bottleneckDays: bottleneck?.days ?? null,
     };
     generateInsight(metrics, JSON.stringify(metrics));
+  };
+
+  const handleSaveSla = () => {
+    const days = Number(slaInput);
+    if (!Number.isFinite(days) || days <= 0) return;
+    setSlaTargetDays(activeCompany.id, days);
+    setSlaTarget(days);
+    setEditingSla(false);
   };
 
   return (
@@ -396,6 +439,55 @@ export default function DashboardPage() {
               <div className="flex justify-between items-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
                 <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Hiring Pipeline</span>
                 <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{activePipeline}</span>
+              </div>
+
+              <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Time to Fill (rata-rata)</span>
+                  {!editingSla && (
+                    <button
+                      type="button"
+                      onClick={() => { setSlaInput(String(slaTarget)); setEditingSla(true); }}
+                      className="text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400"
+                      title="Ubah target SLA"
+                    >
+                      <Icon className="h-3.5 w-3.5"><SvgPath name="pencil" /></Icon>
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-1.5 flex items-baseline gap-2">
+                  <span
+                    className={cn(
+                      "text-2xl font-bold",
+                      avgDaysOpen === null ? "text-slate-400" : avgDaysOpen <= slaTarget ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+                    )}
+                  >
+                    {avgDaysOpen ?? "—"} Hari
+                  </span>
+                  {editingSla ? (
+                    <span className="flex items-center gap-1 text-xs">
+                      <span className="text-slate-400">Target: &lt;</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={slaInput}
+                        onChange={(e) => setSlaInput(e.target.value)}
+                        className="w-12 rounded border border-slate-200 bg-white px-1 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+                        autoFocus
+                      />
+                      <button type="button" onClick={handleSaveSla} className="font-medium text-blue-600 hover:underline dark:text-blue-400">Simpan</button>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">Target: &lt;{slaTarget} Hari</span>
+                  )}
+                </div>
+
+                {bottleneck && (
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    Terlama: <span className="font-medium text-slate-600 dark:text-slate-300">{bottleneck.title}</span> ({bottleneck.days} hari)
+                  </p>
+                )}
               </div>
             </div>
           </Card>
