@@ -348,6 +348,7 @@ export default function AnalyticsPage() {
   const overtimeSavingsFromMagang = Math.round(Math.max(0, simulatedMonthlyBill - baseMonthlySalaryBill) * 0.15); // asumsi demo: magang offset 15% kenaikan lembur
   const sickLeaveReductionPct = Math.min(12, Math.round(burnoutRiskPct * 0.12)); // asumsi demo: intervensi K3 proporsional thd risiko burnout
   const aiEfficiencyGainPct = Math.min(45, Math.round(20 + (breakingNewsHours - 8) * 1.5)); // asumsi demo: adopsi AI makin bernilai saat beban tinggi
+  const rupiahCompact = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 
   return (
     <AppShell activeNavId="analytics" title="Pusat Analitik & Strategi HRBP" subtitle={`Demo sintetis — data ${companyProfile?.shortName ?? "entitas aktif"}`}>
@@ -598,12 +599,12 @@ export default function AnalyticsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card className="border-l-4 border-l-red-600 bg-gradient-to-br from-white to-red-50/30 dark:from-slate-900 dark:to-red-950/20">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Proyeksi Beban Gaji & Lembur (Per Bulan)</p>
-                  <p className="mt-2 text-3xl font-black tabular-nums text-red-600 dark:text-red-400">
+                  <p key={`bill-${breakingNewsHours}`} className="mt-2 text-3xl font-black tabular-nums text-red-600 dark:text-red-400 animate-in fade-in slide-in-from-bottom-1 duration-300">
                     Rp {(simulatedMonthlyBill / 1000000000).toFixed(2)} Miliar
                   </p>
                   <div className="mt-2 flex items-center justify-between text-xs font-medium text-slate-500">
                     <span>Baseline Normal: Rp 21,93 M/bln</span>
-                    <span className={cn("font-bold", breakingNewsHours > 8 ? "text-red-600" : "text-emerald-600")}>
+                    <span key={`ot-${breakingNewsHours}`} className={cn("font-bold animate-in fade-in duration-300", breakingNewsHours > 8 ? "text-red-600" : "text-emerald-600")}>
                       +{Math.round((overtimeMultiplier - 1) * 100)}% Lembur
                     </span>
                   </div>
@@ -611,8 +612,8 @@ export default function AnalyticsPage() {
 
                 <Card className="border-l-4 border-l-amber-500 bg-gradient-to-br from-white to-amber-50/30 dark:from-slate-900 dark:to-amber-950/20">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Estimasi Risiko Burnout (Model Ilustratif)</p>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <p className={cn("text-3xl font-black tabular-nums", 
+                  <div key={`burnout-${breakingNewsHours}`} className="mt-2 flex items-baseline gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                    <p className={cn("text-3xl font-black tabular-nums",
                       burnoutRiskPct > 65 ? "text-red-600 dark:text-red-400" : burnoutRiskPct > 40 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
                     )}>
                       {burnoutRiskPct}%
@@ -651,13 +652,13 @@ export default function AnalyticsPage() {
                       <span className="text-lg">🎓</span>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Aktivasi Talent Pool Magang Nasional (Program Magang Valora 2025)</h3>
-                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <p key={`magang-copy-${breakingNewsHours}`} className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed animate-in fade-in duration-300">
                           Dalam skenario demo ini terdapat <strong className="text-red-600 dark:text-red-400">100 mahasiswa magang terpilih</strong> dari PTN/PTS ({magangDiRedaksi}% ditempatkan di Divisi News/Redaksi). Pada intensitas siaran saat ini, HRBP merekomendasikan pengerahan{" "}
                           <strong className="text-red-600 dark:text-red-400">{magangDeployRecommended} dari {magangDiRedaksi} magang Redaksi</strong>{" "}
                           untuk mendukung riset naskah berita, pengindeksan materi newsroom, dan asisten liputan lapangan guna meringankan beban reporter senior.
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <RoiBadge text={`Prediksi Penghematan Lembur: Rp ${(overtimeSavingsFromMagang / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} Jt/bln`} />
+                        <div key={`magang-roi-${breakingNewsHours}`} className="mt-2 flex flex-wrap items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                          <RoiBadge text={`Prediksi Penghematan Lembur: Rp ${rupiahCompact.format(overtimeSavingsFromMagang / 1_000_000)} Jt/bln`} />
                           <RoiBadge text={`Beban Kerja Reporter Redaksi: -${reporterWorkloadReductionPct.toLocaleString("id-ID")}%`} />
                         </div>
                         <div className="mt-3">
@@ -677,12 +678,12 @@ export default function AnalyticsPage() {
                       <span className="text-lg">🩺</span>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Intervensi Kesehatan & K3 (Klinik On-Site Valora Tower)</h3>
-                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <p key={`k3-copy-${breakingNewsHours}`} className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed animate-in fade-in duration-300">
                           {breakingNewsHours > 16
                             ? "🚨 INSTRUKSI KRUSIAL HRBP: Dengan risiko burnout mencapai " + burnoutRiskPct + "%, aktifkan dokter jaga 24 jam di Klinik On-Site studio Valora dan fasilitas medis kantor pusat Valora Tower. Wajibkan pemeriksaan tekanan darah bagi kamerawan ENG dan anchor sebelum bertugas."
                             : "Tim HRBP secara berkala menjalankan sesi 'Health Talk' (pencegahan kelelahan mata buram & ergonomi studio) serta pelatihan kesiapsiagaan darurat APAR sesuai standar Kemnaker RI."}
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <div key={`k3-roi-${breakingNewsHours}`} className="mt-2 flex flex-wrap items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
                           <RoiBadge text={`Estimasi Penurunan Risiko Sick Leave: -${sickLeaveReductionPct.toLocaleString("id-ID")}%`} />
                         </div>
                         <div className="mt-3">
@@ -705,7 +706,7 @@ export default function AnalyticsPage() {
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                           Untuk menjaga efisiensi biaya operasional, HRBP mendorong adopsi *AI Practical Tools* untuk transkripsi wawancara otomatis, *prompter indexing*, dan *vocal training analysis*, sehingga reporter dapat fokus pada investigasi dan verifikasi kebenaran berita di lapangan.
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <div key={`ai-roi-${breakingNewsHours}`} className="mt-2 flex flex-wrap items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
                           <RoiBadge text={`Peningkatan Efisiensi Produksi Berita: +${aiEfficiencyGainPct.toLocaleString("id-ID")}%`} />
                         </div>
                         <div className="mt-3">
