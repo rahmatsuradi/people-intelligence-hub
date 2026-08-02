@@ -3,6 +3,12 @@
    dashboard visit: we cache the last generated summary alongside a snapshot
    of the metrics it was built from, and only regenerate when the underlying
    numbers actually change (or the user hits refresh).
+
+   metricsSnapshot is opaque here — page.tsx suffixes it with
+   INSIGHT_PROMPT_VERSION (see executive-insight-ai.ts) so a prompt rewrite
+   also invalidates the cache even when the metrics themselves are
+   unchanged. Without that, a returning visitor would keep seeing a summary
+   generated under the old prompt indefinitely.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 export interface CachedInsight {

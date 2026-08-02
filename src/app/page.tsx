@@ -9,7 +9,7 @@ import { getActiveCompanyProfile } from "@/lib/payroll/company-profile";
 import { getJobReqs, getCandidates, getTalentPool } from "@/lib/store";
 import { getEnpsRounds, computeEnps } from "@/lib/engagement-store";
 import { getCachedInsight, setCachedInsight, type CachedInsight } from "@/lib/executive-insight-store";
-import type { ExecutiveMetrics } from "@/lib/executive-insight-ai";
+import { INSIGHT_PROMPT_VERSION, type ExecutiveMetrics } from "@/lib/executive-insight-ai";
 import { getSlaTargetDays, setSlaTargetDays } from "@/lib/recruitment-sla-store";
 import { computeYtdTurnover, computeHeadcountYoY, type TurnoverMetrics, type HeadcountTrend } from "@/lib/turnover";
 import { computeOvertimeLoad, formatRupiahCompact, type OvertimeLoad } from "@/lib/overtime-load";
@@ -281,7 +281,10 @@ export default function DashboardPage() {
       overtimeTopDepartment: overtime?.available ? overtime.topDepartment?.name ?? null : null,
       overtimeAvgHours: overtime?.available ? overtime.avgHoursPerEmployee : null,
     };
-    const snapshot = JSON.stringify(metrics);
+    // Suffixed with the prompt version (not sent to the API — only affects
+    // the cache key) so a prompt rewrite always forces at least one fresh
+    // generation, even when the underlying metrics haven't changed at all.
+    const snapshot = JSON.stringify(metrics) + `|pv${INSIGHT_PROMPT_VERSION}`;
     const cached = getCachedInsight(activeCompany.id);
     if (cached && cached.metricsSnapshot === snapshot) {
       setInsight(cached);
@@ -319,7 +322,7 @@ export default function DashboardPage() {
       overtimeTopDepartment: overtime?.available ? overtime.topDepartment?.name ?? null : null,
       overtimeAvgHours: overtime?.available ? overtime.avgHoursPerEmployee : null,
     };
-    generateInsight(metrics, JSON.stringify(metrics));
+    generateInsight(metrics, JSON.stringify(metrics) + `|pv${INSIGHT_PROMPT_VERSION}`);
   };
 
   const handleSaveSla = () => {

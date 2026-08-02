@@ -13,6 +13,15 @@
 export const GROQ_MODEL = "llama-3.3-70b-versatile";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
+// Bump whenever buildInsightPrompt()/buildFallbackSummary()'s logic changes
+// materially. The Overview dashboard caches the last generated summary
+// keyed on the metrics values alone — if the metrics haven't changed (same
+// headcount/eNPS/turnover/overtime as before), the cache short-circuits and
+// keeps serving a summary generated under the OLD prompt forever, even
+// after the prompt itself is rewritten. page.tsx folds this into the cache
+// key so a prompt change always forces at least one fresh generation.
+export const INSIGHT_PROMPT_VERSION = 1;
+
 export interface ExecutiveMetrics {
   companyName: string;
   industry: "broadcast" | "garment" | string;
