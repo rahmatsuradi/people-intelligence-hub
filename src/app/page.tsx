@@ -317,8 +317,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 
           {/* Headcount Card */}
-          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-0 shadow-lg" padding={false}>
-            <div className="p-6">
+          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-0 shadow-lg cursor-pointer transition-transform hover:scale-[1.02]" padding={false}>
+            <div className="p-6" onClick={() => router.push('/employees')}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-blue-100 font-medium text-lg">Total Headcount</h3>
                 <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
@@ -428,22 +428,36 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-4 flex-1">
-              <div className="flex justify-between items-center p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <div
+                className="flex cursor-pointer justify-between items-center p-3 rounded-lg bg-slate-50 transition-colors hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                onClick={() => router.push('/roles?status=active')}
+              >
                 <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Open Positions</span>
                 <span className="text-lg font-bold text-slate-900 dark:text-white">{openRoles}</span>
               </div>
-              <div className="flex justify-between items-center p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <div
+                className="flex cursor-pointer justify-between items-center p-3 rounded-lg bg-slate-50 transition-colors hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                onClick={() => router.push('/candidates')}
+              >
                 <span className="text-sm font-medium text-slate-600 dark:text-slate-300">In Interview</span>
                 <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{inInterview}</span>
               </div>
-              <div className="flex justify-between items-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
+              <div
+                className="flex cursor-pointer justify-between items-center p-3 rounded-lg bg-emerald-50 border border-emerald-100 transition-colors hover:bg-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:hover:bg-emerald-900/30"
+                onClick={() => router.push('/candidates')}
+              >
                 <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Hiring Pipeline</span>
                 <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{activePipeline}</span>
               </div>
 
               <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Time to Fill (rata-rata)</span>
+                  <span
+                    className="cursor-pointer text-sm font-medium text-slate-600 hover:underline dark:text-slate-300"
+                    onClick={() => router.push('/roles?status=active')}
+                  >
+                    Time to Fill (rata-rata)
+                  </span>
                   {!editingSla && (
                     <button
                       type="button"
@@ -502,7 +516,10 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-rows-2 gap-4 flex-1">
-              <div className="flex flex-col justify-center items-center p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div
+                className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-slate-100 bg-white p-4 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60"
+                onClick={() => router.push('/employees?empType=PKWTT')}
+              >
                 <span className="text-slate-500 text-sm font-medium mb-1">Karyawan Tetap (PKWTT)</span>
                 <div className="flex items-center gap-2">
                   <span className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -514,7 +531,10 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col justify-center items-center p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 bg-amber-50/50 dark:bg-amber-900/10">
+              <div
+                className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-amber-100 bg-amber-50/50 p-4 transition-colors hover:bg-amber-100/60 dark:border-amber-900/30 dark:bg-amber-900/10 dark:hover:bg-amber-900/20"
+                onClick={() => router.push('/employees?empType=PKWT')}
+              >
                 <span className="text-amber-700 dark:text-amber-500 text-sm font-medium mb-1">Karyawan Kontrak (PKWT)</span>
                 <div className="flex items-center gap-2">
                   <span className="text-3xl font-bold text-amber-600 dark:text-amber-400">{pkwtCount}</span>

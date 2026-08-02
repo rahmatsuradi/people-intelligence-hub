@@ -45,7 +45,11 @@ export default function CoreEmployeesPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => getActiveCompanyId());
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("ALL");
-  const [selectedEmpTypeFilter, setSelectedEmpTypeFilter] = useState<string>("ALL");
+  const [selectedEmpTypeFilter, setSelectedEmpTypeFilter] = useState<string>(() => {
+    if (typeof window === "undefined") return "ALL";
+    const p = new URLSearchParams(window.location.search).get("empType");
+    return p === "PKWTT" || p === "PKWT" ? p : "ALL";
+  });
 
   // Add Employee Modal State
   const [showAddModal, setShowAddModal] = useState(false);
