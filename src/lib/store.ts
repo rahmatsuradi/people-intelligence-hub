@@ -290,7 +290,17 @@ function readJson<T>(key: string, fallback: T): T {
       if (!raw || needsVersionReseed) {
         isSeedingDemo = true;
         try { loadDemoData(); } finally { isSeedingDemo = false; }
-        if (isValora) localStorage.setItem(versionKey, String(DEMO_SEED_VERSION));
+        if (isValora) {
+          localStorage.setItem(versionKey, String(DEMO_SEED_VERSION));
+          // syncFromSupabase() treats "cloud has any rows" as authoritative
+          // and overwrites local data with them — with no version/freshness
+          // check. The cloud demo project still had the pre-broadcast-domain
+          // rows (nothing before this pushed the new dataset up), so it was
+          // silently reverting this exact reseed a few seconds after every
+          // load. Push the corrected dataset up so the cloud stops disagreeing
+          // with local. Fire-and-forget: readJson() must stay synchronous.
+          pushValoraDemoDataToCloud().catch(() => {});
+        }
         raw = localStorage.getItem(tKey);
       }
     }
@@ -1247,6 +1257,32 @@ export function loadDemoData(): void {
 }
 
 /* ─── Cloud sync ─── */
+
+/** Replaces Valora TV's demo rows in the cloud with the current local demo
+ *  dataset, so syncFromSupabase()'s "cloud wins if it has data" rule stops
+ *  clobbering a fresh local reseed with a stale pre-migration snapshot.
+ *  Demo rows are identified the same way clearDemoData() already does
+ *  (id prefix / hiring_manager prefix) — deleting them is safe by design on
+ *  this public synthetic-demo deployment (see CLAUDE.md section 6). */
+async function pushValoraDemoDataToCloud(): Promise<void> {
+  if (!supabase) return;
+  // Captured before any network round-trip: this is the correct, freshly
+  // reseeded local dataset. syncFromSupabase() runs independently (from
+  // AppShell) and could race this push, reading the not-yet-deleted stale
+  // cloud rows and overwriting local with them in the meantime. Re-asserting
+  // these exact values after the push settles closes that window instead of
+  // leaving local at whatever syncFromSupabase() last wrote.
+  const reqs = getJobReqs();
+  const cands = getCandidates();
+  await Promise.all([
+    supabase.from('candidates').delete().like('id', 'C-DEMO-%'),
+    supabase.from('job_reqs').delete().like('hiring_manager', 'Demo:%'),
+  ]);
+  if (reqs.length) await supabase.from('job_reqs').upsert(reqs.map(reqToRow), { onConflict: 'user_id,id' });
+  if (cands.length) await supabase.from('candidates').upsert(cands.map(candidateToRow), { onConflict: 'user_id,id' });
+  writeJson(JOBREQS_KEY, reqs);
+  writeJson(CANDIDATES_KEY, cands);
+}
 
 export async function syncFromSupabase(): Promise<void> {
   if (!supabase) return;
