@@ -34,7 +34,17 @@ import {
 } from "@/lib/employer-branding-store";
 import { addCalendarEntry, type NewCalendarEntry } from "@/lib/content-calendar-store";
 import CalendarEntryModal from "./editorial/calendar-entry-modal";
+import { getActiveCompanyProfile } from "@/lib/payroll/company-profile";
 import { useCallback, useState, type ChangeEvent } from "react";
+
+// Maps the active tenant's industry to this form's dropdown label, so the
+// company already selected in the header doesn't have to be re-typed here.
+// Still fully editable — this only sets the default, e.g. for one-off
+// research on a company other than the active tenant.
+const TENANT_INDUSTRY_LABEL: Record<string, string> = {
+  broadcast: "Media & Penyiaran",
+  garment: "Garmen & Tekstil",
+};
 
 /* ─── Platform badge colors ─── */
 
@@ -73,9 +83,11 @@ const STATUS_OPTIONS: { value: SavedContentIdea["status"]; label: string; color:
 /* ─── Main Page ─── */
 
 export default function EmployerBrandingPage() {
-  // Form state
-  const [companyName, setCompanyName] = useState("");
-  const [industry, setIndustry] = useState("");
+  // Form state — company name/industry default from the active tenant
+  // (already selected in the header) but stay fully editable for one-off
+  // research on a different company.
+  const [companyName, setCompanyName] = useState(() => getActiveCompanyProfile().name);
+  const [industry, setIndustry] = useState(() => TENANT_INDUSTRY_LABEL[getActiveCompanyProfile().industry] ?? "");
   const [employeeCount, setEmployeeCount] = useState("");
   const [companyValues, setCompanyValues] = useState("");
   const [targetAudience, setTargetAudience] = useState("all");

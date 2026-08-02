@@ -350,16 +350,13 @@ export default function CoreEmployeesPage() {
                   {filteredRows.map((r) => (
                     <tr
                       key={r.id}
-                      className="border-b border-slate-100 last:border-0 hover:bg-blue-50/40 dark:border-slate-800/60 dark:hover:bg-slate-800/40 transition-colors"
+                      onClick={() => { setSelectedEmpDetail(r); setActiveEmpTab("profile"); }}
+                      className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-blue-50/40 dark:border-slate-800/60 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       <td className="px-5 py-4 font-bold text-slate-900 dark:text-white">
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedEmpDetail(r); setActiveEmpTab("profile"); }}
-                          className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left"
-                        >
+                        <span className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
                           {r.full_name}
-                        </button>
+                        </span>
                       </td>
                       <td className="px-5 py-4 text-slate-700 dark:text-slate-200 font-bold">{r.position ?? "—"}</td>
                       <td className="px-5 py-4 text-slate-600 dark:text-slate-300 font-medium">{r.department ?? "—"}</td>
@@ -375,7 +372,8 @@ export default function CoreEmployeesPage() {
                       <td className="px-5 py-4 text-center">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             const current = isStatutoryEnabled(r.id, r.full_name);
                             setStatutoryToggle(r.id, !current);
                             setTogglesVersion((v) => v + 1);
@@ -399,7 +397,7 @@ export default function CoreEmployeesPage() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => { setSelectedEmpDetail(r); setActiveEmpTab("profile"); }}
+                          onClick={(e) => { e.stopPropagation(); setSelectedEmpDetail(r); setActiveEmpTab("profile"); }}
                           className="h-8 px-2.5 text-xs"
                         >
                           Detail

@@ -330,6 +330,21 @@ export default function DashboardPage() {
     setEditingSla(false);
   };
 
+  // totalHeadcount only resolves after loadDashboardStats() completes (which
+  // may hit Supabase over the network) — gate the whole page behind it so no
+  // card ever flashes a wrong "0%"/"— Orang"/"data belum tersedia" state
+  // before the real numbers land, same pattern as every other page built
+  // this session.
+  if (totalHeadcount === null) {
+    return (
+      <AppShell activeNavId="dashboard" title="Executive Dashboard" subtitle="Memuat data...">
+        <div className="flex h-64 items-center justify-center">
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell
       activeNavId="dashboard"

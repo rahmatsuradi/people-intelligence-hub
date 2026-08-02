@@ -175,6 +175,7 @@ export const CAMPAIGN_GOALS = [
 
 export const INDUSTRIES = [
   "Garmen & Tekstil",
+  "Media & Penyiaran",
   "Teknologi",
   "Manufaktur",
   "Perbankan & Keuangan",
