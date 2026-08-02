@@ -11,7 +11,7 @@ import { getEnpsRounds, computeEnps } from "@/lib/engagement-store";
 import { getCachedInsight, setCachedInsight, type CachedInsight } from "@/lib/executive-insight-store";
 import type { ExecutiveMetrics } from "@/lib/executive-insight-ai";
 import { getSlaTargetDays, setSlaTargetDays } from "@/lib/recruitment-sla-store";
-import { computeYtdTurnover, type TurnoverMetrics, type EmployeeLifecycle } from "@/lib/turnover";
+import { computeYtdTurnover, type TurnoverMetrics } from "@/lib/turnover";
 
 const MGMT_TITLE_RE = /Direktur|VP|Kepala|Manajer|Produser|Pemimpin|Redaktur|Supervisor|Lead|Chief/i;
 
@@ -162,9 +162,16 @@ export default function DashboardPage() {
       setEnpsBreakdown({ promoters: latest.promoters, passives: latest.passives, detractors: latest.detractors, respondentCount: latest.respondentCount });
     }
 
+    // Turnover Rate — lifecycle fields (join_date/employment_status/exit_date/exit_type)
+    // only exist on the local demo array, not on the real pi_employees Supabase
+    // table (which ensureDemoEmployeesExist seeds with a fixed join_date and no
+    // exit tracking at all). So this always reads the local generator directly,
+    // independent of which source wins below for headcount/PKWTT.
+    setTurnover(computeYtdTurnover(getActiveCompanyEmployees()));
+
     async function loadDashboardStats() {
       try {
-        const applyEmps = (emps: ({ department?: string | null; position?: string | null; employment_type?: string | null } & EmployeeLifecycle)[]) => {
+        const applyEmps = (emps: { department?: string | null; position?: string | null; employment_type?: string | null }[]) => {
           setTotalHeadcount(emps.length);
           const mgmt = emps.filter((e) => MGMT_TITLE_RE.test((e.department || "") + " " + (e.position || ""))).length;
           setMgmtCount(mgmt);
@@ -172,7 +179,6 @@ export default function DashboardPage() {
           const tetap = emps.filter((e) => /PKWTT/i.test(e.employment_type || "")).length;
           setPkwttCount(tetap);
           setPkwtCount(emps.length - tetap);
-          setTurnover(computeYtdTurnover(emps));
         };
         if (isSupabaseConfigured && supabase) {
           await ensureDemoEmployeesExist(supabase);
