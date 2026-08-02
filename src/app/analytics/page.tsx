@@ -7,12 +7,18 @@ import {
   PIPELINE_STAGES,
   STAGE_LABELS,
   type CandidateRecord,
+  type JobRequisition,
   type PipelineStage,
 } from "@/lib/store";
 import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
 import { computeOvertimeLoad } from "@/lib/overtime-load";
 import { getHrbpAction, recordHrbpAction, clearHrbpAction, type HrbpActionKey, type HrbpActionRecord } from "@/lib/hrbp-action-store";
+import { getSlaTargetDays } from "@/lib/recruitment-sla-store";
+
+function daysBetween(a: string, b: string): number {
+  return Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000));
+}
 
 interface DemoEmployee {
   full_name: string;
@@ -89,9 +95,10 @@ const BADGE_TONE: Record<"success" | "warning" | "danger", string> = {
   danger: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
 };
 
-function StatCard({ label, value, sub, colorClass = "text-slate-900 dark:text-white", badge }: {
+function StatCard({ label, value, sub, colorClass = "text-slate-900 dark:text-white", badge, note }: {
   label: string; value: string | number; sub?: string; colorClass?: string;
   badge?: { text: string; tone: "success" | "warning" | "danger" };
+  note?: string;
 }) {
   return (
     <Card>
@@ -105,6 +112,7 @@ function StatCard({ label, value, sub, colorClass = "text-slate-900 dark:text-wh
       </div>
       <p className={cn("mt-2 text-3xl font-bold tabular-nums", colorClass)}>{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
+      {note && <p className="mt-1.5 text-[11px] font-semibold text-violet-600 dark:text-violet-400">✨ {note}</p>}
     </Card>
   );
 }
@@ -166,7 +174,7 @@ function BarRow({ label, sub, count, pct, barClass }: {
 export default function AnalyticsPage() {
   const [candidates, setCandidates] = useState<CandidateRecord[]>([]);
   const [employees, setEmployees] = useState<DemoEmployee[]>([]);
-  const [openRoles, setOpenRoles] = useState<number>(0);
+  const [activeJobReqs, setActiveJobReqs] = useState<JobRequisition[]>([]);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<"workforce" | "simulator" | "recruitment">("workforce");
@@ -184,7 +192,7 @@ export default function AnalyticsPage() {
     const refresh = () => {
       setCandidates(getCandidates());
       setEmployees(getActiveCompanyEmployees());
-      setOpenRoles(getJobReqs().filter((r) => r.status === "active").length);
+      setActiveJobReqs(getJobReqs().filter((r) => r.status === "active"));
       const comp = getActiveCompanyProfile();
       setCompanyProfile(comp);
       setHrbpActions({
@@ -233,11 +241,11 @@ export default function AnalyticsPage() {
     // Formasi organisasi = karyawan aktif + posisi yang masih dibuka (bukan
     // headcountTarget statis, yang kebetulan sama persis dengan jumlah
     // karyawan yang di-seed sehingga selalu tampak 100% terisi).
-    const orgStructureTarget = total + openRoles;
+    const orgStructureTarget = total + activeJobReqs.length;
     const fulfillmentPct = orgStructureTarget > 0 ? Math.round((total / orgStructureTarget) * 1000) / 10 : 100;
 
     return { total, permanentCount, contractCount, permanentPct, departments, totalBaseSalary, avgBaseSalary, orgStructureTarget, fulfillmentPct };
-  }, [employees, openRoles]);
+  }, [employees, activeJobReqs]);
 
   const overtimeLoad = useMemo(
     () =>
@@ -339,8 +347,30 @@ export default function AnalyticsPage() {
       }))
       .sort((a, b) => b.candidates - a.candidates);
 
-    return { total, hired, avgScore, offerAccept, withCv: withCv.length, stageCounts, cumulative, maxStage, conversionRates, sources, recs, bins, maxBin, departments };
-  }, [candidates]);
+    // Time-to-Fill — usia hari ini untuk tiap requisition aktif (sama seperti
+    // Overview dashboard), supaya tab ATS ini juga menunjukkan kaitan langsung
+    // antara lambatnya pipeline dengan lowongan yang lama kosong.
+    const now = new Date().toISOString();
+    const reqAges = activeJobReqs.map((r) => ({ title: r.title, days: daysBetween(r.createdAt, now) }));
+    const avgTimeToFillDays = reqAges.length > 0 ? Math.round(reqAges.reduce((s, r) => s + r.days, 0) / reqAges.length) : null;
+    const bottleneckReq = reqAges.length > 0 ? [...reqAges].sort((a, b) => b.days - a.days)[0] : null;
+    const slaTargetDays = getSlaTargetDays(companyProfile?.id ?? "");
+
+    // Kandidat yang sudah lolos kurasi AI (rekomendasi Hire/Strong Hire) untuk
+    // posisi bottleneck spesifik — dicocokkan dari position kandidat vs judul
+    // requisition, bukan angka yang diketik manual.
+    const bottleneckKeyword = bottleneckReq?.title.split(" - ")[0].trim().toLowerCase() ?? "";
+    const aiCuratedForBottleneck = bottleneckReq
+      ? candidates.filter((c) => {
+          const pos = c.position?.toLowerCase() ?? "";
+          const matchesRole = bottleneckKeyword.length > 0 && (pos.includes(bottleneckKeyword) || bottleneckKeyword.includes(pos));
+          const isRecommended = c.cvAnalysis?.recommendation === "Strong Hire" || c.cvAnalysis?.recommendation === "Hire";
+          return matchesRole && isRecommended;
+        })
+      : [];
+
+    return { total, hired, avgScore, offerAccept, withCv: withCv.length, stageCounts, cumulative, maxStage, conversionRates, sources, recs, bins, maxBin, departments, avgTimeToFillDays, bottleneckReq, slaTargetDays, aiCuratedForBottleneck };
+  }, [candidates, activeJobReqs, companyProfile]);
 
   if (!loaded) {
     return (
@@ -450,7 +480,7 @@ export default function AnalyticsPage() {
             <StatCard
               label="Total Headcount (Aktif)"
               value={`${workforce.total} Org`}
-              sub={`Formasi (aktif + ${openRoles} lowongan terbuka): ${workforce.orgStructureTarget} Org`}
+              sub={`Formasi (aktif + ${activeJobReqs.length} lowongan terbuka): ${workforce.orgStructureTarget} Org`}
               colorClass="text-slate-900 dark:text-white"
               badge={{
                 text: `Fulfillment ${workforce.fulfillmentPct.toLocaleString("id-ID")}%`,
@@ -768,12 +798,17 @@ export default function AnalyticsPage() {
           ) : (
             <>
               {/* KPI Cards */}
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <StatCard label="Total Candidates" value={stats.total} sub="All time ATS records" />
                 <StatCard
                   label="Avg CV Score" value={stats.avgScore || "—"}
                   sub={`${stats.withCv} analyzed by AI`}
                   colorClass="text-blue-600 dark:text-blue-400"
+                  note={
+                    stats.bottleneckReq && stats.aiCuratedForBottleneck.length > 0
+                      ? `${stats.aiCuratedForBottleneck.length} kandidat lolos kurasi Agentic AI untuk posisi ${stats.bottleneckReq.title}`
+                      : undefined
+                  }
                 />
                 <StatCard
                   label="Hired" value={stats.hired}
@@ -784,6 +819,19 @@ export default function AnalyticsPage() {
                   label="Offer Accept Rate" value={`${stats.offerAccept}%`}
                   sub="Offered → Hired"
                   colorClass="text-violet-600 dark:text-violet-400"
+                />
+                <StatCard
+                  label="Avg Time-to-Fill"
+                  value={stats.avgTimeToFillDays !== null ? `${stats.avgTimeToFillDays} Hari` : "—"}
+                  sub={stats.bottleneckReq ? `Bottleneck: ${stats.bottleneckReq.title} (${stats.bottleneckReq.days} hari)` : "Tidak ada lowongan aktif"}
+                  colorClass="text-red-600 dark:text-red-400"
+                  badge={
+                    stats.avgTimeToFillDays !== null
+                      ? stats.avgTimeToFillDays > stats.slaTargetDays
+                        ? { text: `⚠️ Melebihi SLA ${stats.slaTargetDays} Hari`, tone: "danger" }
+                        : { text: `✓ Dalam SLA ${stats.slaTargetDays} Hari`, tone: "success" }
+                      : undefined
+                  }
                 />
               </div>
 
