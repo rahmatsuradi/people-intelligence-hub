@@ -12,6 +12,7 @@ import {
 import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
 import { computeOvertimeLoad } from "@/lib/overtime-load";
+import { getHrbpAction, recordHrbpAction, clearHrbpAction, type HrbpActionKey, type HrbpActionRecord } from "@/lib/hrbp-action-store";
 
 interface DemoEmployee {
   full_name: string;
@@ -86,6 +87,34 @@ function StatCard({ label, value, sub, colorClass = "text-slate-900 dark:text-wh
   );
 }
 
+function RoiBadge({ text }: { text: string }) {
+  return (
+    <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+      {text}
+    </span>
+  );
+}
+
+function ActionButton({ label, executedLabel, record, onClick }: {
+  label: string; executedLabel: string; record: HrbpActionRecord | null; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
+        record
+          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
+          : "bg-red-600 text-white hover:bg-red-700"
+      )}
+    >
+      {record
+        ? `✓ ${executedLabel} · ${new Date(record.executedAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}`
+        : label}
+    </button>
+  );
+}
+
 function BarRow({ label, sub, count, pct, barClass }: {
   label: string; sub?: string; count: number; pct: number; barClass: string;
 }) {
@@ -123,19 +152,41 @@ export default function AnalyticsPage() {
   // Simulator state
   const [breakingNewsHours, setBreakingNewsHours] = useState<number>(8); // 0 to 24 hours
   const [selectedDivisionSim, setSelectedDivisionSim] = useState<string>("Redaksi & Pemberitaan");
+  const [hrbpActions, setHrbpActions] = useState<Record<HrbpActionKey, HrbpActionRecord | null>>({
+    deploy_magang: null,
+    jadwalkan_health_talk: null,
+    eksplorasi_ai_vendor: null,
+  });
 
   useEffect(() => {
     const refresh = () => {
       setCandidates(getCandidates());
       setEmployees(getActiveCompanyEmployees());
       setOpenRoles(getJobReqs().filter((r) => r.status === "active").length);
-      setCompanyProfile(getActiveCompanyProfile());
+      const comp = getActiveCompanyProfile();
+      setCompanyProfile(comp);
+      setHrbpActions({
+        deploy_magang: getHrbpAction(comp.id, "deploy_magang"),
+        jadwalkan_health_talk: getHrbpAction(comp.id, "jadwalkan_health_talk"),
+        eksplorasi_ai_vendor: getHrbpAction(comp.id, "eksplorasi_ai_vendor"),
+      });
       setLoaded(true);
     };
     refresh();
     document.addEventListener("visibilitychange", refresh);
     return () => document.removeEventListener("visibilitychange", refresh);
   }, []);
+
+  function toggleHrbpAction(key: HrbpActionKey) {
+    if (!companyProfile) return;
+    if (hrbpActions[key]) {
+      clearHrbpAction(companyProfile.id, key);
+      setHrbpActions((prev) => ({ ...prev, [key]: null }));
+    } else {
+      const record = recordHrbpAction(companyProfile.id, key, breakingNewsHours);
+      setHrbpActions((prev) => ({ ...prev, [key]: record }));
+    }
+  }
 
   const isBroadcast = companyProfile?.industry === "broadcast";
 
@@ -284,6 +335,19 @@ export default function AnalyticsPage() {
   const overtimeMultiplier = 1 + ((breakingNewsHours - 8) * 0.045); // asumsi demo: +4,5% per jam ekstra
   const simulatedMonthlyBill = Math.round(baseMonthlySalaryBill * Math.max(1, overtimeMultiplier));
   const burnoutRiskPct = Math.min(98, Math.round(22 + (breakingNewsHours - 8) * 4.8)); // kurva ilustratif
+
+  // Dampak (ROI) rekomendasi HRBP — sama seperti nilai simulator di atas: koefisien
+  // ILUSTRATIF untuk demo, tapi tetap dihitung dari state (bukan angka statis di JSX)
+  // sehingga ikut bergerak saat slider intensitas siaran digeser.
+  const MAGANG_TOTAL = 100;
+  const MAGANG_REDAKSI_PCT = 52;
+  const magangDiRedaksi = Math.round(MAGANG_TOTAL * (MAGANG_REDAKSI_PCT / 100));
+  const redaksiHeadcount = workforce.departments.find((d) => /Redaksi/i.test(d.name))?.count ?? 0;
+  const reporterWorkloadReductionPct = redaksiHeadcount > 0 ? Math.round((magangDiRedaksi / redaksiHeadcount) * 1000) / 10 : 0;
+  const magangDeployRecommended = Math.min(magangDiRedaksi, Math.round(10 + (breakingNewsHours - 8) * 2.6));
+  const overtimeSavingsFromMagang = Math.round(Math.max(0, simulatedMonthlyBill - baseMonthlySalaryBill) * 0.15); // asumsi demo: magang offset 15% kenaikan lembur
+  const sickLeaveReductionPct = Math.min(12, Math.round(burnoutRiskPct * 0.12)); // asumsi demo: intervensi K3 proporsional thd risiko burnout
+  const aiEfficiencyGainPct = Math.min(45, Math.round(20 + (breakingNewsHours - 8) * 1.5)); // asumsi demo: adopsi AI makin bernilai saat beban tinggi
 
   return (
     <AppShell activeNavId="analytics" title="Pusat Analitik & Strategi HRBP" subtitle={`Demo sintetis — data ${companyProfile?.shortName ?? "entitas aktif"}`}>
@@ -571,22 +635,39 @@ export default function AnalyticsPage() {
                 <div className="border-b border-slate-100 pb-3 dark:border-slate-800 flex justify-between items-center">
                   <div>
                     <h2 className="text-base font-bold text-slate-900 dark:text-white">Rekomendasi Strategis HRBP & Kaderisasi Magang</h2>
-                    <p className="text-xs text-slate-500">Rekomendasi berbasis aturan terhadap intensitas liputan {breakingNewsHours} jam/hari</p>
+                    <p className="text-xs text-slate-500">Rekomendasi live terhadap intensitas liputan {breakingNewsHours} jam/hari — geser slider di panel kiri untuk melihat rekomendasi berubah</p>
                   </div>
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
                     100 Peserta Magang Aktif
                   </span>
                 </div>
+                <p className="mt-2 text-[11px] text-slate-400">
+                  📖 Badge dampak (ROI) di bawah adalah estimasi ilustratif untuk demo — koefisien yang sama dengan proyeksi lembur &amp; risiko burnout di atas, bukan model AI/aktuaria.
+                </p>
 
                 <div className="mt-4 space-y-3">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4 border border-slate-200 dark:border-slate-700">
                     <div className="flex items-start gap-3">
                       <span className="text-lg">🎓</span>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Aktivasi Talent Pool Magang Nasional (Program Magang Valora 2025)</h3>
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                          Dalam skenario demo ini terdapat <strong className="text-red-600 dark:text-red-400">100 mahasiswa magang terpilih</strong> dari PTN/PTS (52% ditempatkan di Divisi News/Redaksi). Saat siaran intensitas tinggi, tim HRBP merekomendasikan pengerahan talenta magang untuk mendukung riset naskah berita, pengindeksan materi newsroom, dan asisten liputan lapangan guna meringankan beban reporter senior.
+                          Dalam skenario demo ini terdapat <strong className="text-red-600 dark:text-red-400">100 mahasiswa magang terpilih</strong> dari PTN/PTS ({magangDiRedaksi}% ditempatkan di Divisi News/Redaksi). Pada intensitas siaran saat ini, HRBP merekomendasikan pengerahan{" "}
+                          <strong className="text-red-600 dark:text-red-400">{magangDeployRecommended} dari {magangDiRedaksi} magang Redaksi</strong>{" "}
+                          untuk mendukung riset naskah berita, pengindeksan materi newsroom, dan asisten liputan lapangan guna meringankan beban reporter senior.
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <RoiBadge text={`Prediksi Penghematan Lembur: Rp ${(overtimeSavingsFromMagang / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 0 })} Jt/bln`} />
+                          <RoiBadge text={`Beban Kerja Reporter Redaksi: -${reporterWorkloadReductionPct.toLocaleString("id-ID")}%`} />
+                        </div>
+                        <div className="mt-3">
+                          <ActionButton
+                            label="Deploy Magang ke Newsroom"
+                            executedLabel="Dieksekusi"
+                            record={hrbpActions.deploy_magang}
+                            onClick={() => toggleHrbpAction("deploy_magang")}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -594,13 +675,24 @@ export default function AnalyticsPage() {
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4 border border-slate-200 dark:border-slate-700">
                     <div className="flex items-start gap-3">
                       <span className="text-lg">🩺</span>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Intervensi Kesehatan & K3 (Klinik On-Site Valora Tower)</h3>
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                           {breakingNewsHours > 16
                             ? "🚨 INSTRUKSI KRUSIAL HRBP: Dengan risiko burnout mencapai " + burnoutRiskPct + "%, aktifkan dokter jaga 24 jam di Klinik On-Site studio Valora dan fasilitas medis kantor pusat Valora Tower. Wajibkan pemeriksaan tekanan darah bagi kamerawan ENG dan anchor sebelum bertugas."
                             : "Tim HRBP secara berkala menjalankan sesi 'Health Talk' (pencegahan kelelahan mata buram & ergonomi studio) serta pelatihan kesiapsiagaan darurat APAR sesuai standar Kemnaker RI."}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <RoiBadge text={`Estimasi Penurunan Risiko Sick Leave: -${sickLeaveReductionPct.toLocaleString("id-ID")}%`} />
+                        </div>
+                        <div className="mt-3">
+                          <ActionButton
+                            label="Jadwalkan Health Talk"
+                            executedLabel="Terjadwal"
+                            record={hrbpActions.jadwalkan_health_talk}
+                            onClick={() => toggleHrbpAction("jadwalkan_health_talk")}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -608,11 +700,22 @@ export default function AnalyticsPage() {
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4 border border-slate-200 dark:border-slate-700">
                     <div className="flex items-start gap-3">
                       <span className="text-lg">🤖</span>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Implementasi "Agentic AI" dalam Alur Kerja Redaksi</h3>
                         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                           Untuk menjaga efisiensi biaya operasional, HRBP mendorong adopsi *AI Practical Tools* untuk transkripsi wawancara otomatis, *prompter indexing*, dan *vocal training analysis*, sehingga reporter dapat fokus pada investigasi dan verifikasi kebenaran berita di lapangan.
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <RoiBadge text={`Peningkatan Efisiensi Produksi Berita: +${aiEfficiencyGainPct.toLocaleString("id-ID")}%`} />
+                        </div>
+                        <div className="mt-3">
+                          <ActionButton
+                            label="Eksplorasi Vendor AI"
+                            executedLabel="Dijadwalkan"
+                            record={hrbpActions.eksplorasi_ai_vendor}
+                            onClick={() => toggleHrbpAction("eksplorasi_ai_vendor")}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
