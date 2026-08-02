@@ -278,13 +278,13 @@ export function AppShell({
       items: [
         { id: "performance", label: "Performance (PMS)", href: "/performance" },
         { id: "succession", label: "Succession Planning", href: "/talent/succession" },
-        { id: "od", label: "Org. Development", href: "/talent/od", soon: true },
+        { id: "od", label: "Org. Development", href: "/talent/od" },
       ],
     },
     {
       label: "Learning & Development",
       items: [
-        { id: "courses", label: "Training & Courses", href: "/learning/courses", soon: true },
+        { id: "courses", label: "Training & Courses", href: "/learning/courses" },
         { id: "competency", label: "Competency Matrix", href: "/learning/competency" },
       ],
     },
