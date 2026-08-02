@@ -249,6 +249,27 @@ function generateValorisTv754Employees() {
       const nik = `317101${(10 + (idCounter % 20)).toString().padStart(2, "0")}08${(70 + (idCounter % 25)).toString().padStart(2, "0")}${idCounter.toString().padStart(4, "0")}`;
       const npwp = `09.${100 + (idCounter % 899)}.${200 + (idCounter % 799)}.${idCounter % 9}-${(idCounter % 90).toString().padStart(3, "0")}.000`;
 
+      // Employee lifecycle (join/exit) — seeded deterministically, not random per run,
+      // so the demo is reproducible. join_date spread 2021-2025; every 50th employee
+      // (15 people, spread across all 6 divisions) is marked resigned/terminated with
+      // an exit_date in Q1/Q2 2026, so Turnover Rate has real sample data to compute.
+      const joinYear = 2021 + (idCounter % 5);
+      const joinMonth = 1 + (idCounter % 12);
+      const joinDay = 1 + (idCounter % 28);
+      const join_date = `${joinYear}-${String(joinMonth).padStart(2, "0")}-${String(joinDay).padStart(2, "0")}`;
+
+      const isExitSample = idCounter % 50 === 0;
+      const exitIndex = idCounter / 50; // 1..15 when isExitSample
+      const employment_status = isExitSample ? (exitIndex % 4 === 0 ? "terminated" : "resigned") : "active";
+      const exit_type = isExitSample ? (exitIndex % 3 === 0 ? "involuntary" : "voluntary") : null;
+      const exitMonth = isExitSample ? 1 + ((exitIndex - 1) % 6) : null; // Jan-Jun 2026
+      const exit_date = isExitSample ? `2026-${String(exitMonth).padStart(2, "0")}-${String(5 + (idCounter % 20)).padStart(2, "0")}` : null;
+      const voluntaryReasons = ["Pindah domisili", "Kompensasi di tempat lain", "Peluang karir lain", "Kembali studi"];
+      const involuntaryReasons = ["Restrukturisasi organisasi", "Evaluasi kinerja", "Pelanggaran disiplin"];
+      const exit_reason = isExitSample
+        ? (exit_type === "involuntary" ? involuntaryReasons[exitIndex % involuntaryReasons.length] : voluntaryReasons[exitIndex % voluntaryReasons.length])
+        : null;
+
       emps.push({
         id,
         full_name: fullName,
@@ -259,7 +280,12 @@ function generateValorisTv754Employees() {
         department: div.name,
         position,
         bank_account: bank,
-        upah_pokok: salary
+        upah_pokok: salary,
+        join_date,
+        employment_status,
+        exit_date,
+        exit_type,
+        exit_reason,
       });
 
       idCounter++;
