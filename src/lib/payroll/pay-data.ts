@@ -253,8 +253,18 @@ function generateValorisTv754Employees() {
       // so the demo is reproducible. join_date spread 2021-2025; every 50th employee
       // (15 people, spread across all 6 divisions) is marked resigned/terminated with
       // an exit_date in Q1/Q2 2026, so Turnover Rate has real sample data to compute.
-      const joinYear = 2021 + (idCounter % 5);
-      const joinMonth = 1 + (idCounter % 12);
+      // Tenure weighted toward older cohorts — a mature broadcaster hires
+      // steadily, not in a recent surge. Year and month use different
+      // multipliers so they don't correlate (which would clump every recent
+      // hire into the same calendar month). This distribution is what makes
+      // the dashboard's computed headcount-YoY land in a believable
+      // low-single-digit range instead of implying explosive growth.
+      // Month uses modulus 11 (coprime to the year table's 12) — with a
+      // shared modulus the two collapse and every hire of a given year lands
+      // in the same calendar month.
+      const joinYearTable = [2021, 2021, 2021, 2022, 2022, 2022, 2023, 2023, 2023, 2024, 2024, 2025];
+      const joinYear = joinYearTable[(idCounter * 7) % 12];
+      const joinMonth = 1 + ((idCounter * 5) % 11);
       const joinDay = 1 + (idCounter % 28);
       const join_date = `${joinYear}-${String(joinMonth).padStart(2, "0")}-${String(joinDay).padStart(2, "0")}`;
 
@@ -269,6 +279,21 @@ function generateValorisTv754Employees() {
       const exit_reason = isExitSample
         ? (exit_type === "involuntary" ? involuntaryReasons[exitIndex % involuntaryReasons.length] : voluntaryReasons[exitIndex % voluntaryReasons.length])
         : null;
+
+      // Average monthly overtime hours. Broadcast reality: field/studio crews
+      // carry heavy overtime (live events, breaking news, weekend shifts),
+      // corporate functions barely any. Synthetic input — the Rupiah cost is
+      // then computed by the real PP 35/2021 engine (computeOvertime), never
+      // hardcoded. See src/lib/overtime-load.ts.
+      const otBase: Record<string, number> = {
+        "Divisi Redaksi & Pemberitaan": 26,
+        "Divisi Operasional Studio & Broadcast": 32,
+        "Divisi Kreatif & Program Siaran TV": 22,
+        "Divisi Teknik Penyiaran & IT": 30,
+        "Divisi Human Capital & GA": 6,
+        "Divisi Keuangan & Anggaran": 5,
+      };
+      const overtime_hours_monthly = Math.max(0, (otBase[div.name] ?? 8) + ((idCounter % 9) - 4));
 
       emps.push({
         id,
@@ -286,6 +311,7 @@ function generateValorisTv754Employees() {
         exit_date,
         exit_type,
         exit_reason,
+        overtime_hours_monthly,
       });
 
       idCounter++;

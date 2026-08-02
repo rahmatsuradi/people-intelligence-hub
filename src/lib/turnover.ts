@@ -95,3 +95,34 @@ export function computeYtdTurnover(employees: EmployeeLifecycle[]): TurnoverMetr
   const periodEnd = now.toISOString().slice(0, 10);
   return computeTurnoverMetrics(employees, periodStart, periodEnd, `YTD ${year}`);
 }
+
+export interface HeadcountTrend {
+  available: boolean;
+  current: number;
+  yearAgo: number;
+  deltaPct: number;
+}
+
+/** Headcount hari ini vs 12 bulan lalu — dihitung dari join_date/exit_date,
+ *  bukan angka yang di-hardcode. */
+export function computeHeadcountYoY(employees: EmployeeLifecycle[]): HeadcountTrend {
+  const withLifecycle = employees.filter((e) => e.employment_status && e.join_date);
+  if (withLifecycle.length === 0) {
+    return { available: false, current: 0, yearAgo: 0, deltaPct: 0 };
+  }
+
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const yearAgoDate = new Date(today);
+  yearAgoDate.setFullYear(yearAgoDate.getFullYear() - 1);
+  const yearAgoStr = yearAgoDate.toISOString().slice(0, 10);
+
+  const headcountAt = (asOf: string) =>
+    withLifecycle.filter((e) => (e.join_date ?? "") <= asOf && (!e.exit_date || e.exit_date > asOf)).length;
+
+  const current = headcountAt(todayStr);
+  const yearAgo = headcountAt(yearAgoStr);
+  const deltaPct = yearAgo > 0 ? Math.round(((current - yearAgo) / yearAgo) * 1000) / 10 : 0;
+
+  return { available: true, current, yearAgo, deltaPct };
+}
