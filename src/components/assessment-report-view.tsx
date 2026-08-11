@@ -2,8 +2,8 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tampilan laporan asesmen — dipakai bersama oleh halaman laporan nyata
-   (/assessment/[sessionId], membaca snapshot dari DB) dan halaman demo
-   (/assessment/demo, menghitung langsung dari engine).
+   (/assessment/[sessionId], membaca snapshot dari DB) dan tab Contoh Hasil pada
+   halaman panduan (/assessment/panduan, menghitung langsung dari engine).
 
    Satu komponen untuk keduanya supaya yang dilihat di demo benar-benar sama
    dengan yang keluar untuk kandidat sungguhan — kalau dipisah, demo akan

@@ -1,13 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Bank item KEMAMPUAN KOGNITIF (GMA) — ditulis sendiri untuk repo ini.
 
-   MENGAPA ADA: kemampuan kognitif umum adalah prediktor kinerja kerja dengan
-   validitas tertinggi di antara metode seleksi tunggal (Schmidt & Hunter, 1998,
-   Psychological Bulletin 124(2), r ≈ .51; angka ini direvisi turun oleh
-   Sackett dkk., 2022, Journal of Applied Psychology 107(11) ke kisaran r ≈ .31
-   setelah koreksi range-restriction diperbaiki — tetap prediktor terkuat).
-   Karena itu hampir semua perusahaan multinasional memakai tes kognitif sebagai
-   tahap awal seleksi, bukan tes kepribadian saja.
+   MENGAPA ADA: kemampuan kognitif umum lama dianggap prediktor kinerja kerja
+   terkuat (Schmidt & Hunter, 1998, Psychological Bulletin 124(2), 262-274,
+   r = .51). Angka itu direvisi TURUN oleh Sackett dkk. (2022, Journal of
+   Applied Psychology 107(11), 2040-2068) menjadi r = .31 setelah koreksi
+   range-restriction yang sistematis berlebih diperbaiki; pada revisi itu
+   wawancara terstruktur (r = .42) justru menjadi prediktor tunggal terkuat.
+   Tes kognitif tetap salah satu prediktor terkuat dan tetap dipakai di tahap
+   awal seleksi -- tetapi klaim "prediktor terbaik" sudah tidak akurat lagi, dan
+   tidak boleh dipakai di repo ini.
 
    ITEM DITULIS SENDIRI. Tidak ada satu pun item yang disalin dari CFIT, IST,
    TIU/TKD, Raven's APM, Watson-Glaser, SHL Verify, atau bank soal berhak cipta

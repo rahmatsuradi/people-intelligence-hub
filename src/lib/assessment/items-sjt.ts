@@ -2,10 +2,12 @@
    Bank item SITUATIONAL JUDGEMENT TEST (SJT) — ditulis sendiri untuk repo ini.
 
    MENGAPA SJT: mengukur penilaian situasional di konteks kerja nyata. Meta-
-   analisis McDaniel dkk. (2001, Journal of Applied Psychology 86(4)) melaporkan
-   validitas prediktif SJT terhadap kinerja pada kisaran r ≈ .26, dan yang lebih
-   penting — SJT memberi tambahan prediksi DI ATAS tes kognitif dan kepribadian
-   (incremental validity), sekaligus cenderung menghasilkan perbedaan antar-
+   analisis McDaniel dkk. (2001, Journal of Applied Psychology 86(4), 730-740;
+   102 koefisien, N = 10.640) melaporkan validitas prediktif SJT terhadap
+   kinerja rho = .34 dan bersifat generalizable. Studi yang sama menemukan
+   korelasi SJT dengan kemampuan kognitif rho = .46 (79 korelasi, N = 16.984) --
+   artinya SJT ikut memuat komponen kognitif, jadi bukan pengganti tes kognitif
+   melainkan pelengkapnya. SJT juga cenderung menghasilkan perbedaan antar-
    kelompok yang lebih kecil dibanding tes kognitif murni. Itu sebabnya SJT jadi
    komponen standar seleksi di perusahaan multinasional besar.
 

@@ -81,13 +81,18 @@ export default function JobProfilesPage() {
         <div className="flex gap-3">
           <Icon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400"><SvgPath name="warning" /></Icon>
           <div className="text-sm leading-relaxed text-blue-900 dark:text-blue-200">
-            <p className="font-semibold">Status profil ini: template, bukan hasil job analysis</p>
+            <p className="font-semibold">Di sinilah tes disesuaikan dengan kebutuhan tiap posisi</p>
             <p className="mt-1">
-              Rentang target di bawah disusun dari penalaran praktik, belum dari studi yang menghubungkan skor dengan
-              kinerja pemangku jabatan di perusahaan Anda. Profil yang benar-benar sahih dibangun dengan cara: skor
-              karyawan yang sedang menjabat dikumpulkan, dibandingkan dengan penilaian kinerja mereka, lalu rentangnya
-              disetel dari data itu. Sunting angka di sini bila Anda punya dasar yang lebih baik — setiap syarat wajib
-              disertai alasan supaya keputusan seleksi bisa diaudit.
+              Tes yang sama menghasilkan kesimpulan berbeda tergantung posisinya. Nilai tinggi pada Ekstraversi adalah
+              keunggulan untuk tenaga penjualan, dan bisa jadi catatan untuk pemeriksa mutu yang harus betah bekerja
+              sendiri dan teliti. Profil di bawah menentukan aspek mana yang dinilai untuk tiap posisi, rentang yang
+              diharapkan, bobotnya, dan batas yang tidak boleh dilanggar.
+            </p>
+            <p className="mt-1.5">
+              Angka bawaannya adalah <span className="font-medium">titik awal hasil penalaran praktik</span>, belum
+              hasil penelitian pada jabatan di perusahaan Anda. Silakan disesuaikan bila Anda punya dasar yang lebih
+              baik — setiap aspek wajib disertai alasan tertulis supaya keputusan seleksi bisa dipertanggungjawabkan
+              bila suatu saat dipertanyakan.
             </p>
           </div>
         </div>
@@ -116,10 +121,11 @@ export default function JobProfilesPage() {
           </div>
           {activeNorm.provenance === "synthetic_demo" && (
             <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-              Selama norma masih sintetis, rentang sten di profil jabatan berfungsi sebagai urutan prioritas antar-kandidat,
-              bukan sebagai ambang kelulusan. Norma lokal dapat dibangun setelah terkumpul minimal {MIN_LOCAL_NORM_N} peserta
-              pada populasi yang sebanding, dan dimasukkan sebagai baris baru di <span className="font-mono">pi_assessment_norms</span> —
-              bukan menimpa baris lama, agar laporan lama tetap dapat dihitung ulang.
+              Skor kandidat selalu dibaca relatif terhadap kelompok pembanding. Pembanding yang dipakai sekarang masih
+              bersifat sementara, jadi rentang di profil ini berfungsi untuk mengurutkan kandidat satu sama lain —
+              belum sebagai batas lulus. Pembanding dari data pelamar perusahaan sendiri dapat dibangun setelah
+              terkumpul minimal {MIN_LOCAL_NORM_N} peserta pada jenis posisi yang sebanding. Pembanding lama tetap
+              disimpan agar laporan terdahulu masih bisa ditelusuri dengan angka yang sama.
             </p>
           )}
         </Card>
@@ -128,9 +134,9 @@ export default function JobProfilesPage() {
       {source === "default" && (
         <Card className="border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10">
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            Profil dibaca dari template bawaan di kode — tabel <span className="font-mono">pi_assessment_profiles</span> belum
-            terisi. Jalankan <span className="font-mono">supabase/assessment-module-schema.sql</span> lalu{" "}
-            <span className="font-mono">assessment-module-seed.sql</span> agar profil bisa disunting dan disimpan.
+            Profil di bawah masih dibaca dari daftar bawaan sistem dan belum bisa disunting, karena penyimpanan asesmen
+            belum aktif. Langkah pengaktifannya ada di bagian atas halaman{" "}
+            <Link href="/assessment" className="font-medium underline underline-offset-2">Konsol Asesmen</Link>.
           </p>
         </Card>
       )}

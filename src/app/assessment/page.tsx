@@ -133,8 +133,8 @@ export default function AssessmentConsolePage() {
       subtitle="Administrasi psikotes: undang, pantau, interpretasi"
       headerActions={
         <>
-          <Link href="/assessment/demo">
-            <Button variant="secondary">Lihat Soal &amp; Contoh</Button>
+          <Link href="/assessment/panduan">
+            <Button variant="secondary">Panduan &amp; Isi Tes</Button>
           </Link>
           <Link href="/assessment/profiles">
             <Button variant="secondary">Profil Jabatan</Button>
@@ -159,19 +159,25 @@ export default function AssessmentConsolePage() {
 
       {setupMissing && <SetupCard />}
 
-      {/* Pernyataan batasan — ditempatkan di atas, bukan di catatan kaki, karena
-          inilah yang menentukan bagaimana seluruh angka di modul ini boleh dibaca. */}
+      {/* Batasan ditempatkan di atas, bukan di catatan kaki: inilah yang
+          menentukan bagaimana seluruh angka di modul ini boleh dibaca. Ditulis
+          untuk pembaca tanpa latar psikometrik — rinciannya ada di Panduan. */}
       <Card className="border-blue-200 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10">
         <div className="flex gap-3">
           <Icon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400"><SvgPath name="warning" /></Icon>
           <div className="text-sm leading-relaxed text-blue-900 dark:text-blue-200">
-            <p className="font-semibold">Dasar instrumen &amp; batasannya</p>
+            <p className="font-semibold">Cara hasil asesmen ini boleh dipakai</p>
             <p className="mt-1">
-              Kepribadian memakai adaptasi <span className="font-medium">IPIP-BFM-50</span> (Big Five, domain publik).
-              Item kognitif dan SJT ditulis sendiri. Instrumen berlisensi (MBTI, DISC, 16PF, Papikostick, CFIT, IST)
-              tidak direproduksi di sini. Norma bawaan masih <span className="font-medium">sintetis</span> — sten dan
-              persentil sah untuk membandingkan kandidat dalam satu lowongan, belum sah sebagai ambang kelulusan
-              absolut. Hasil asesmen adalah satu sumber bukti, bukan penentu tunggal keputusan seleksi.
+              Hasil asesmen adalah <span className="font-medium">satu sumber bukti</span>, dibaca bersama CV, wawancara,
+              dan uji kerja — bukan penentu tunggal. Untuk saat ini skor sah dipakai membandingkan kandidat dalam satu
+              lowongan yang sama, dan belum sah dipakai sebagai batas lulus atau tidak lulus. Alasannya: kelompok
+              pembanding masih sementara dan akan digantikan data pelamar perusahaan sendiri setelah cukup terkumpul.
+            </p>
+            <p className="mt-1.5">
+              <Link href="/assessment/panduan" className="font-medium underline underline-offset-2">
+                Baca panduan lengkap
+              </Link>{" "}
+              — asal-usul soal, bukti ilmiah yang mendasarinya, dan apa yang belum diuji.
             </p>
           </div>
         </div>
@@ -319,9 +325,9 @@ function SetupCard() {
       const res = await fetch("/setup/assessment-module-ALL.sql");
       if (!res.ok) throw new Error(String(res.status));
       await navigator.clipboard.writeText(await res.text());
-      toast("SQL disalin. Tempel di Supabase SQL Editor, lalu Run.");
+      toast("Perintah disalin. Tempel di halaman pengaturan, lalu jalankan.");
     } catch {
-      toast("Gagal menyalin. Buka file supabase/assessment-module-ALL.sql di repo dan salin manual.", "error");
+      toast("Gagal menyalin. Hubungi yang menyiapkan sistem ini untuk mengaktifkan penyimpanan asesmen.", "error");
     } finally {
       setCopying(false);
     }
@@ -332,39 +338,35 @@ function SetupCard() {
       <div className="flex gap-3">
         <Icon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"><SvgPath name="warning" /></Icon>
         <div className="min-w-0 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
-          <p className="text-base font-semibold">Modul belum terpasang di database</p>
+          <p className="text-base font-semibold">Penyimpanan asesmen belum aktif</p>
           <p className="mt-1">
-            Tabel <span className="font-mono text-xs">pi_assessment_norms</span>,{" "}
-            <span className="font-mono text-xs">pi_assessment_profiles</span>, dan{" "}
-            <span className="font-mono text-xs">pi_assessment_sessions</span> belum ada, jadi sesi asesmen belum bisa
-            dibuat. Tombol <span className="font-medium">Undang Kandidat</span> dimatikan sampai ini beres — supaya
-            Anda tidak mengisi formulir panjang lalu gagal di akhir.
+            Sesi asesmen belum bisa dibuat karena tempat penyimpanannya belum disiapkan. Tombol{" "}
+            <span className="font-medium">Undang Kandidat</span> sengaja dimatikan agar Anda tidak mengisi formulir
+            panjang lalu gagal di akhir. Pengaktifannya sekali saja, dan hanya butuh dua tombol berikut.
           </p>
 
-          <p className="mt-3 font-semibold">Cara memasang — dua tombol di bawah ini:</p>
-          <ol className="mt-1 list-decimal space-y-1 pl-5">
-            <li>Tekan <span className="font-medium">Salin SQL</span> (gabungan schema + seed + RLS, urutannya sudah benar)</li>
-            <li>Tekan <span className="font-medium">Buka SQL Editor</span>, tempel, lalu <span className="font-medium">Run</span></li>
-            <li>Kembali ke halaman ini dan muat ulang</li>
+          <ol className="mt-3 list-decimal space-y-1 pl-5">
+            <li>Tekan <span className="font-medium">Salin Perintah Pengaktifan</span></li>
+            <li>Tekan <span className="font-medium">Buka Halaman Pengaturan</span>, tempel di kotak yang tersedia, lalu jalankan</li>
+            <li>Kembali ke sini dan tekan <span className="font-medium">Sudah — muat ulang</span></li>
           </ol>
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="primary" onClick={copySql} disabled={copying}>
-              {copying ? "Menyalin…" : "Salin SQL"}
+              {copying ? "Menyalin…" : "Salin Perintah Pengaktifan"}
             </Button>
             {sqlEditorUrl && (
               <a href={sqlEditorUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="secondary">Buka SQL Editor ↗</Button>
+                <Button variant="secondary">Buka Halaman Pengaturan ↗</Button>
               </a>
             )}
             <Button variant="secondary" onClick={() => window.location.reload()}>Sudah — muat ulang</Button>
           </div>
 
           <p className="mt-3 text-xs opacity-90">
-            Aman dijalankan ulang, dan tidak menyentuh tabel modul Hire maupun Pay. Selagi menunggu, isi soal dan contoh
-            laporannya sudah bisa dilihat di{" "}
-            <Link href="/assessment/demo" className="font-medium underline underline-offset-2">halaman demo</Link> —
-            halaman itu tidak butuh database.
+            Aman dijalankan berulang kali, dan tidak mengubah data modul lain. Selagi menunggu, isi tes dan contoh
+            laporannya sudah bisa ditelaah di{" "}
+            <Link href="/assessment/panduan" className="font-medium underline underline-offset-2">halaman panduan</Link>.
           </p>
         </div>
       </div>
@@ -458,7 +460,7 @@ function InviteModal({
       const missing = /relation .* does not exist|schema cache/i.test(error.message);
       toast(
         missing
-          ? "Tabel modul Assessment belum ada di database. Jalankan supabase/assessment-module-ALL.sql di Supabase SQL Editor lebih dulu."
+          ? "Penyimpanan asesmen belum aktif. Lihat langkah pengaktifannya di bagian atas halaman."
           : `Gagal membuat sesi: ${error.message}`,
         "error",
       );

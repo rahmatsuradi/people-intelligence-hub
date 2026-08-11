@@ -87,7 +87,7 @@ export const COGNITIVE_SCALES: ScaleDefinition[] = [
     name: "Kemampuan Kognitif Umum",
     academicName: "General Mental Ability (GMA)",
     description:
-      "Gabungan tiga sub-tes. Prediktor tunggal terkuat untuk kinerja kerja dan kecepatan belajar pekerjaan baru.",
+      "Gabungan tiga sub-tes. Salah satu prediktor terkuat untuk kinerja kerja dan kecepatan mempelajari pekerjaan baru — meski bukan yang tertinggi: revisi meta-analisis Sackett dkk. (2022) menempatkan wawancara terstruktur sedikit di atasnya.",
     higherIsGenerallyBetter: true,
   },
 ];
