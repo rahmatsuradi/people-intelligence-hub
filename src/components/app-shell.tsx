@@ -100,7 +100,7 @@ const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 2. Employer Branding
   "ai-trends": "sparkles", "editorial-plan": "calendarDays", engagement: "users",
   // 3. Talent Acquisition
-  mpp: "chart", roles: "briefcase", "talent-pool": "users", candidates: "users", "cv-analyzer": "scan", interviews: "calendar", "hiring-report": "report", "hiring-analytics": "chart",
+  mpp: "chart", roles: "briefcase", "talent-pool": "users", candidates: "users", "cv-analyzer": "scan", interviews: "calendar", assessment: "clipboard", "hiring-report": "report", "hiring-analytics": "chart",
   // 4. Core HR
   employees: "users", ir: "scale", onboarding: "arrowRight", attendance: "clock",
   // 5. Performance & Talent
@@ -260,6 +260,7 @@ export function AppShell({
         { id: "candidates", label: "Candidates", href: "/candidates", badge: badges.candidates || undefined },
         { id: "cv-analyzer", label: "CV Analyzer", href: "/cv-analyzer" },
         { id: "interviews", label: "Interview Workspace", href: "/interview" },
+        { id: "assessment", label: "Psikotes & Asesmen", href: "/assessment" },
         { id: "hiring-analytics", label: "Hiring Analytics", href: "/analytics/hiring", soon: true },
       ],
     },
