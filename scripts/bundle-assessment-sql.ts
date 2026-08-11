@@ -7,7 +7,7 @@
 // Tiga file aslinya tetap sumber kebenaran dan tetap bisa dijalankan terpisah.
 //
 // Jalankan: node node_modules/tsx/dist/cli.mjs scripts/bundle-assessment-sql.ts
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const dir = join(process.cwd(), "supabase");
@@ -44,7 +44,21 @@ const body = PARTS.map((name) => {
   return `-- ════════════════════════════════════════════════════════════\n-- BAGIAN: ${name}\n-- ════════════════════════════════════════════════════════════\n\n${content}\n`;
 }).join("\n\n");
 
+const sql = banner + body;
+
 const outPath = join(dir, "assessment-module-ALL.sql");
-writeFileSync(outPath, banner + body, "utf8");
+writeFileSync(outPath, sql, "utf8");
+
+// Salinan kedua di public/ supaya kartu setup di /assessment bisa mengambilnya
+// dan menyalinkannya ke clipboard dengan satu tombol — jauh lebih praktis
+// daripada meminta orang membuka repo dan menyalin 400+ baris dari ponsel.
+// Isinya DDL skema, sama dengan yang sudah ada di repo publik; tidak ada
+// kredensial maupun data di dalamnya.
+const publicDir = join(process.cwd(), "public", "setup");
+mkdirSync(publicDir, { recursive: true });
+const publicPath = join(publicDir, "assessment-module-ALL.sql");
+writeFileSync(publicPath, sql, "utf8");
+
 console.log(`Ditulis: ${outPath}`);
-console.log(`Gabungan dari ${PARTS.length} file, ${(banner + body).split("\n").length} baris.`);
+console.log(`Ditulis: ${publicPath} (untuk tombol "Salin SQL" di /assessment)`);
+console.log(`Gabungan dari ${PARTS.length} file, ${sql.split("\n").length} baris.`);

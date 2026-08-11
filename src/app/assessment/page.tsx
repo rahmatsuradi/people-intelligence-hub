@@ -57,6 +57,10 @@ export default function AssessmentConsolePage() {
   const [profileSource, setProfileSource] = useState<"db" | "default">("default");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Tabel modul belum ada = seluruh tulis-baca sesi pasti gagal. Ditandai
+  // eksplisit supaya tombol Undang bisa dimatikan SEBELUM HR mengisi formulir
+  // panjang dan baru gagal saat menekan simpan.
+  const [setupMissing, setSetupMissing] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [filter, setFilter] = useState<SessionStatus | "all">("all");
 
@@ -83,15 +87,14 @@ export default function AssessmentConsolePage() {
     ]);
 
     if (sessRes.error) {
-      // Pesan spesifik: tabel belum dibuat adalah kondisi yang paling mungkin
-      // terjadi dan solusinya berbeda dari error lain.
-      setError(
-        /relation .* does not exist|schema cache/i.test(sessRes.error.message)
-          ? "Tabel modul Assessment belum ada. Jalankan supabase/assessment-module-schema.sql, lalu -seed.sql dan -rls.sql di Supabase SQL Editor."
-          : `Gagal memuat sesi asesmen: ${sessRes.error.message}`,
-      );
+      // Tabel belum dibuat adalah kondisi yang paling mungkin terjadi dan
+      // solusinya berbeda dari error lain, jadi dipisahkan penanganannya.
+      const missing = /relation .* does not exist|schema cache/i.test(sessRes.error.message);
+      setSetupMissing(missing);
+      setError(missing ? "" : `Gagal memuat sesi asesmen: ${sessRes.error.message}`);
     } else {
       setError("");
+      setSetupMissing(false);
       setSessions((sessRes.data ?? []) as PiAssessmentSessionRow[]);
     }
 
@@ -136,7 +139,12 @@ export default function AssessmentConsolePage() {
           <Link href="/assessment/profiles">
             <Button variant="secondary">Profil Jabatan</Button>
           </Link>
-          <Button variant="primary" onClick={() => setInviteOpen(true)} disabled={!isSupabaseConfigured}>
+          <Button
+            variant="primary"
+            onClick={() => setInviteOpen(true)}
+            disabled={!isSupabaseConfigured || setupMissing}
+            title={setupMissing ? "Skema modul Assessment belum dipasang di database" : undefined}
+          >
             <Icon className="h-4 w-4"><SvgPath name="plus" /></Icon>
             Undang Kandidat
           </Button>
@@ -148,6 +156,8 @@ export default function AssessmentConsolePage() {
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </Card>
       )}
+
+      {setupMissing && <SetupCard />}
 
       {/* Pernyataan batasan — ditempatkan di atas, bukan di catatan kaki, karena
           inilah yang menentukan bagaimana seluruh angka di modul ini boleh dibaca. */}
@@ -287,6 +297,81 @@ export default function AssessmentConsolePage() {
   );
 }
 
+/* ─── Kartu setup ───
+   Muncul hanya bila tabel pi_assessment_* belum ada. Sengaja menyebut nama file
+   dan urutannya, bukan sekadar "hubungi admin": pemasangannya memang satu kali
+   tempel, dan menyembunyikan langkahnya cuma membuat modul terlihat rusak.
+
+   Link SQL Editor dibangun dari NEXT_PUBLIC_SUPABASE_URL (bukan di-hardcode)
+   supaya tetap benar di instance mana pun — privat maupun demo. */
+function SetupCard() {
+  const projectRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").match(/https:\/\/([a-z0-9]+)\.supabase\.co/i)?.[1];
+  const sqlEditorUrl = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/sql/new` : null;
+  const [copying, setCopying] = useState(false);
+
+  // SQL diambil dari public/setup/ (dihasilkan bundle-assessment-sql.ts) lalu
+  // disalin ke clipboard. Alternatifnya adalah meminta orang membuka repo dan
+  // menyalin 400+ baris dari ponsel — yang praktis berarti langkah ini tidak
+  // akan pernah dikerjakan.
+  const copySql = async () => {
+    setCopying(true);
+    try {
+      const res = await fetch("/setup/assessment-module-ALL.sql");
+      if (!res.ok) throw new Error(String(res.status));
+      await navigator.clipboard.writeText(await res.text());
+      toast("SQL disalin. Tempel di Supabase SQL Editor, lalu Run.");
+    } catch {
+      toast("Gagal menyalin. Buka file supabase/assessment-module-ALL.sql di repo dan salin manual.", "error");
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  return (
+    <Card className="border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10">
+      <div className="flex gap-3">
+        <Icon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"><SvgPath name="warning" /></Icon>
+        <div className="min-w-0 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+          <p className="text-base font-semibold">Modul belum terpasang di database</p>
+          <p className="mt-1">
+            Tabel <span className="font-mono text-xs">pi_assessment_norms</span>,{" "}
+            <span className="font-mono text-xs">pi_assessment_profiles</span>, dan{" "}
+            <span className="font-mono text-xs">pi_assessment_sessions</span> belum ada, jadi sesi asesmen belum bisa
+            dibuat. Tombol <span className="font-medium">Undang Kandidat</span> dimatikan sampai ini beres — supaya
+            Anda tidak mengisi formulir panjang lalu gagal di akhir.
+          </p>
+
+          <p className="mt-3 font-semibold">Cara memasang — dua tombol di bawah ini:</p>
+          <ol className="mt-1 list-decimal space-y-1 pl-5">
+            <li>Tekan <span className="font-medium">Salin SQL</span> (gabungan schema + seed + RLS, urutannya sudah benar)</li>
+            <li>Tekan <span className="font-medium">Buka SQL Editor</span>, tempel, lalu <span className="font-medium">Run</span></li>
+            <li>Kembali ke halaman ini dan muat ulang</li>
+          </ol>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="primary" onClick={copySql} disabled={copying}>
+              {copying ? "Menyalin…" : "Salin SQL"}
+            </Button>
+            {sqlEditorUrl && (
+              <a href={sqlEditorUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="secondary">Buka SQL Editor ↗</Button>
+              </a>
+            )}
+            <Button variant="secondary" onClick={() => window.location.reload()}>Sudah — muat ulang</Button>
+          </div>
+
+          <p className="mt-3 text-xs opacity-90">
+            Aman dijalankan ulang, dan tidak menyentuh tabel modul Hire maupun Pay. Selagi menunggu, isi soal dan contoh
+            laporannya sudah bisa dilihat di{" "}
+            <Link href="/assessment/demo" className="font-medium underline underline-offset-2">halaman demo</Link> —
+            halaman itu tidak butuh database.
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <Card>
@@ -368,7 +453,15 @@ function InviteModal({
     const { error } = await supabase.from("pi_assessment_sessions").insert(row);
     setSaving(false);
     if (error) {
-      toast(`Gagal membuat sesi: ${error.message}`, "error");
+      // Pesan Postgres mentah ("schema cache") tidak memberi tahu apa pun yang
+      // bisa ditindaklanjuti HR. Diterjemahkan ke langkah nyata.
+      const missing = /relation .* does not exist|schema cache/i.test(error.message);
+      toast(
+        missing
+          ? "Tabel modul Assessment belum ada di database. Jalankan supabase/assessment-module-ALL.sql di Supabase SQL Editor lebih dulu."
+          : `Gagal membuat sesi: ${error.message}`,
+        "error",
+      );
       return;
     }
     toast("Sesi asesmen dibuat. Tautan tes sudah disalin.");
