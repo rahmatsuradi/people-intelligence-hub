@@ -130,6 +130,9 @@ export default function AssessmentConsolePage() {
       subtitle="Administrasi psikotes: undang, pantau, interpretasi"
       headerActions={
         <>
+          <Link href="/assessment/demo">
+            <Button variant="secondary">Lihat Soal &amp; Contoh</Button>
+          </Link>
           <Link href="/assessment/profiles">
             <Button variant="secondary">Profil Jabatan</Button>
           </Link>
