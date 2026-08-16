@@ -97,9 +97,29 @@ Modul ketiga, aditif di atas Hire dan Pay. Mengadministrasi psikotes ke kandidat
 
 Catatan untuk uji berikutnya: jangan memeriksa kebocoran kunci dengan pencarian substring polos — kata `effectiveness` memang sah muncul sebagai nama format item (`sjt_effectiveness`). Yang diperiksa harus strukturnya: tidak ada field `"effectiveness":`, dan setiap opsi SJT terkirim sebagai teks polos.
 
+## 9b. Modul Rekrutmen — peningkatan & Konsultan HR (AI)
+
+**Riwayat tahap kandidat (fondasi metrik).** `candidates.stage_history` (jsonb, aditif lewat migration `add_stage_history_to_candidates`) mencatat `{stage, from, at}` setiap perpindahan. Tanpa kolom ini seluruh metrik kecepatan mustahil dihitung — `created_at`/`updated_at` hanya menyimpan titik awal dan akhir. Field TypeScript-nya `stageHistory?` sengaja **opsional**: kandidat lama memang tidak punya riwayat, dan itu berbeda artinya dari riwayat kosong.
+
+**Aturan yang tidak boleh dilanggar:** kandidat tanpa riwayat **dikeluarkan** dari perhitungan kecepatan dan jumlahnya dilaporkan (`basedOn`, `excludedNoHistory`, `withoutHistory`) — jangan pernah dihitung nol hari, karena itu membuat metrik terlihat paling cepat justru pada kandidat yang paling lama didiamkan. Durasi memakai **median**, bukan rata-rata.
+
+**Mesin metrik** di `src/lib/recruiting/pipeline-metrics.ts` (37 unit test): corong konversi kumulatif, kecepatan per tahap, time-to-hire, status pemenuhan per lowongan, efektivitas sumber, deteksi kandidat mandek, dan deteksi hambatan. Catatan: deteksi hambatan durasi membandingkan tiap tahap terhadap median tahap **lain** — kalau tahap yang diperiksa ikut masuk pembanding, ia menaikkan ambangnya sendiri dan menyamarkan diri.
+
+**Route:** `/analytics/hiring` (dulu placeholder, kini terisi) menampilkan masalah lebih dulu (hambatan + kandidat mandek), baru angkanya.
+
+**Konsultan HR (AI)** — `/hr-consultant` + `/api/hr-consultant`, persona di `src/lib/hr-consultant.ts` (17 unit test). Menjawab pertanyaan SDM di luar data yang ada di sistem, seperti konsultan HR berpengalaman; data pipeline perusahaan disuntikkan hanya bila pengguna mengaktifkan sakelarnya, dan isinya bisa dilihat sebelum dikirim.
+
+Pelajaran yang sudah dibayar saat membangunnya, jangan diulang:
+- Persona generik menghasilkan jawaban generik ("kurangnya pelatihan", "lingkungan kerja tidak kondusif") yang bisa ditempel ke pekerjaan apa pun. Penawarnya: bagian **"Realitas pekerjaan ini" wajib ditulis pertama**.
+- Contoh kedalaman di dalam prompt **disalin mentah** oleh model sebagai jawaban. Contohnya karena itu memakai peran yang berbeda dari pertanyaan lazim (kurir last-mile) dan diberi larangan menyalin eksplisit.
+- Larangan di prompt saja tidak cukup. Ada penjaga di server: `findGenericPhrases()` memeriksa jawaban, dan bila lolos frasa kosong, dikirim **satu** permintaan perbaikan terarah — dipakai hanya bila hasilnya benar-benar lebih baik.
+- `callGroq()` terkunci mode JSON; percakapan bebas memakai `callGroqChat()`.
+- Pesan ber-role `system` dari klien **dibuang** di route, supaya persona dan batasannya tidak bisa ditimpa dari browser.
+
 ## 10. Yang belum dikerjakan
 
 - Formulir pelaporan pajak tahunan 1721-A1.
+- **Rekrutmen:** metrik kecepatan baru akan berarti setelah cukup kandidat berjalan lewat pipeline dengan riwayat tercatat (kandidat lama tidak ikut terhitung). Belum ada: cost-per-hire, sumber biaya iklan lowongan, dan pelacakan alasan penolakan kandidat.
 - Arahkan instance produksi ke data perusahaan asli (baru dilakukan setelah kelas risiko JKK final dikonfirmasi ke BPJS, dan UMK diisi sesuai SK Gubernur/Permenaker tahun berjalan untuk wilayah yang relevan — nilai UMK di seed saat ini murni placeholder demo).
 - **Assessment** (skema/seed/RLS sudah terpasang & terverifikasi — lihat §9). Yang belum: norma lokal dari data nyata (butuh ≥ 100 peserta; lihat §12), analisis butir untuk item kognitif/SJT, uji reliabilitas & analisis faktor untuk adaptasi IPIP, pengiriman tautan tes lewat email otomatis (saat ini disalin manual — modul email belum ada), dan halaman umpan balik hasil untuk peserta.
 

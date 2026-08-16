@@ -81,6 +81,16 @@ export interface InterviewResultSnapshot {
   questionScores?: InterviewQuestionScore[];
 }
 
+/** Satu perpindahan tahap. Tanpa ini, `createdAt`/`updatedAt` hanya menyimpan
+ *  titik awal dan titik terakhir — sehingga lama kandidat tertahan di tiap tahap,
+ *  konversi antar-tahap, dan deteksi kandidat mandek semuanya mustahil dihitung. */
+export interface StageEvent {
+  stage: PipelineStage;
+  /** null pada entri pertama (kandidat baru masuk pipeline). */
+  from: PipelineStage | null;
+  at: string;
+}
+
 export interface CandidateRecord {
   id: string;
   name: string;
@@ -94,6 +104,13 @@ export interface CandidateRecord {
   notes: string;
   cvAnalysis: CvAnalysisSnapshot | null;
   interviewResults: InterviewResultSnapshot[];
+  /** OPSIONAL dengan sengaja: kandidat yang dibuat sebelum fitur ini ada memang
+   *  tidak punya riwayat, dan itu berbeda artinya dari "riwayat kosong".
+   *  Keduanya diperlakukan sebagai TIDAK DIKETAHUI oleh mesin metrik, bukan
+   *  nol hari — mengarang durasi dari data yang tidak ada akan membuat metrik
+   *  kecepatan terlihat paling bagus justru pada kandidat yang paling lama
+   *  tidak tersentuh. */
+  stageHistory?: StageEvent[];
   createdAt: string;
   updatedAt: string;
 }
@@ -160,7 +177,8 @@ function candidateToRow(c: CandidateRecord) {
     id: c.id, name: c.name, email: c.email, phone: c.phone, stage: c.stage,
     job_req_id: c.jobReqId, department: c.department, position: c.position,
     source: c.source, notes: c.notes, cv_analysis: c.cvAnalysis,
-    interview_results: c.interviewResults, created_at: c.createdAt, updated_at: c.updatedAt,
+    interview_results: c.interviewResults, stage_history: c.stageHistory ?? [],
+    created_at: c.createdAt, updated_at: c.updatedAt,
   };
 }
 
@@ -176,6 +194,7 @@ function rowToCandidate(r: Record<string, unknown>): CandidateRecord {
     notes: (r.notes as string) ?? '',
     cvAnalysis: (r.cv_analysis as CvAnalysisSnapshot | null) ?? null,
     interviewResults: (r.interview_results as InterviewResultSnapshot[]) ?? [],
+    stageHistory: (r.stage_history as StageEvent[]) ?? [],
     createdAt: r.created_at as string, updatedAt: r.updated_at as string,
   };
 }
@@ -328,8 +347,11 @@ export function moveCandidateStage(id: string, stage: PipelineStage): void {
   const c = getCandidate(id);
   if (!c) return;
   const prev = c.stage;
+  if (prev === stage) return; // bukan perpindahan -- jangan mengotori riwayat
+  const now = new Date().toISOString();
   c.stage = stage;
-  c.updatedAt = new Date().toISOString();
+  c.updatedAt = now;
+  c.stageHistory = [...(c.stageHistory ?? []), { stage, from: prev, at: now }];
   saveCandidate(c);
   addActivity({
     action: `Moved from ${STAGE_LABELS[prev]} to ${STAGE_LABELS[stage]}:`,
@@ -361,6 +383,7 @@ export function createCandidate(data: {
     notes: "",
     cvAnalysis: null,
     interviewResults: [],
+    stageHistory: [{ stage: "applied", from: null, at: now }],
     createdAt: now,
     updatedAt: now,
   };
@@ -675,6 +698,37 @@ export function getCandidatesForReq(reqId: string): CandidateRecord[] {
 
 /* ─── Demo Data ─── */
 
+/** Menyusun riwayat tahap yang masuk akal untuk DATA DEMO saja.
+ *  Data demo hanya punya createdAt dan updatedAt, sementara halaman Hiring
+ *  Analytics butuh perpindahan antar-tahap agar ada yang bisa ditampilkan.
+ *  Timestamp disebar merata di antara keduanya mengikuti jalur tahap yang wajar.
+ *  TIDAK dipakai untuk kandidat nyata — di sana riwayat dicatat saat kejadian,
+ *  bukan direkonstruksi. */
+function withDemoStageHistory(c: CandidateRecord): CandidateRecord {
+  if (c.stageHistory && c.stageHistory.length > 0) return c;
+
+  const order: PipelineStage[] = ["applied", "screened", "work_sample", "interviewed", "offered", "hired"];
+  // Kandidat ditolak: jalurnya berhenti sebelum 'hired' lalu masuk 'rejected'.
+  const path: PipelineStage[] =
+    c.stage === "rejected"
+      ? ["applied", "screened", "rejected"]
+      : order.slice(0, Math.max(1, order.indexOf(c.stage) + 1));
+
+  const start = new Date(c.createdAt).getTime();
+  const end = new Date(c.updatedAt).getTime();
+  const span = Math.max(end - start, 86_400_000); // minimal 1 hari agar durasi tidak nol
+
+  return {
+    ...c,
+    stageHistory: path.map((stage, i) => ({
+      stage,
+      from: i === 0 ? null : path[i - 1],
+      at: new Date(start + (span * i) / Math.max(1, path.length - 1)).toISOString(),
+    })),
+  };
+}
+
+
 function loadZusTextileDemoData(): void {
   const base = new Date("2026-05-15T08:00:00.000Z");
   const daysAgo = (d: number) => new Date(base.getTime() - d * 86400000).toISOString();
@@ -819,7 +873,7 @@ function loadZusTextileDemoData(): void {
   ];
 
   writeJson("hi_jobreqs", reqs);
-  writeJson("hi_candidates", candidates);
+  writeJson("hi_candidates", candidates.map(withDemoStageHistory));
   writeJson("hi_talent_pool", mockTalent);
   writeJson("hi_activity", activities);
 }
@@ -1061,12 +1115,12 @@ export function loadDemoData(): void {
     };
   });
 
-  writeJson(CANDIDATES_KEY, [...candidates, ...existingCandidates]);
+  writeJson(CANDIDATES_KEY, [...candidates.map(withDemoStageHistory), ...existingCandidates]);
   writeJson(JOBREQS_KEY, [...reqs, ...existingReqs]);
   writeJson(ACTIVITY_KEY, [...activities, ...existingActivities].slice(0, 50));
   writeJson(TALENT_POOL_KEY, [...mockTalent, ...existingTalent]);
   if (supabase) {
-    supabase.from('candidates').upsert(candidates.map(candidateToRow)).then(() => {});
+    supabase.from('candidates').upsert(candidates.map(withDemoStageHistory).map(candidateToRow)).then(() => {});
     supabase.from('job_reqs').upsert(reqs.map(reqToRow)).then(() => {});
     supabase.from('activities').upsert(activities.map(activityToRow)).then(() => {});
   }

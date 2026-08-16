@@ -71,6 +71,71 @@ export function parseDurationSeconds(s: string | null): number | null {
   return total;
 }
 
+/* ─── Percakapan bebas (bukan mode JSON) ───
+   callGroq() di bawah mengunci response_format ke JSON karena seluruh alur CV
+   memang butuh JSON. Konsultan HR sebaliknya harus menjawab dalam prosa dan
+   menjaga konteks beberapa giliran percakapan, jadi ia butuh jalur sendiri —
+   memaksakan JSON di sana akan membuat jawabannya kaku dan sulit dibaca. */
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export async function callGroqChat(
+  messages: ChatMessage[],
+  opts: { temperature?: number; maxTokens?: number; maxAttempts?: number } = {},
+): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey || apiKey.startsWith("gsk_xxx")) {
+    throw new Error("GROQ_API_KEY belum dikonfigurasi di .env.local. Dapatkan key gratis di console.groq.com");
+  }
+
+  const body = JSON.stringify({
+    model: GROQ_MODEL,
+    messages,
+    // Lebih tinggi dari alur CV (0,2): nasihat manajerial butuh keluwesan
+    // merumuskan, bukan ekstraksi data yang harus deterministik.
+    temperature: opts.temperature ?? 0.4,
+    max_tokens: opts.maxTokens ?? 2000,
+  });
+
+  const MAX_ATTEMPTS = Math.max(1, opts.maxAttempts ?? 3);
+  let lastErr = "";
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body,
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const text = data.choices?.[0]?.message?.content?.trim();
+      if (!text) throw new Error("Groq mengembalikan respons kosong.");
+      return text;
+    }
+
+    const errorText = await response.text();
+    console.error(`[groq-chat] ${response.status} (attempt ${attempt}/${MAX_ATTEMPTS}):`, errorText.slice(0, 300));
+
+    if (response.status === 401) throw new Error("GROQ_API_KEY tidak valid.");
+    if (response.status === 400) throw new Error(`Permintaan tidak valid: ${errorText.slice(0, 160)}`);
+
+    if ((response.status === 429 || response.status >= 500) && attempt < MAX_ATTEMPTS) {
+      const retryAfter = parseFloat(response.headers.get("retry-after") ?? "");
+      const backoff = Math.min(4000, Number.isFinite(retryAfter) ? retryAfter * 1000 : 2 ** attempt * 500);
+      await sleep(backoff);
+      lastErr = `Groq ${response.status}`;
+      continue;
+    }
+    throw new Error(`Groq API error ${response.status}`);
+  }
+
+  throw new Error(`Groq gagal setelah ${MAX_ATTEMPTS} percobaan (${lastErr}).`);
+}
+
 export async function callGroq(prompt: string, maxAttempts = 3): Promise<GroqCall> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || apiKey.startsWith("gsk_xxx")) {
