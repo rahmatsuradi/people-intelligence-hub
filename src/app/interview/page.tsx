@@ -24,6 +24,15 @@ import {
 import { AppShell, Icon, SvgPath, ICON_PATHS, Card, Button, Label, inputClass, cn } from "@/components/app-shell";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  aggregatePanel,
+  computeInterviewOutcome,
+  RATING_HELP,
+  RATING_LABELS,
+  VERDICT_LABELS,
+  type ScoredQuestion,
+  type Verdict,
+} from "@/lib/recruiting/interview-scoring";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Types & constants
@@ -41,6 +50,10 @@ type ScoringState = "idle" | "scoring" | "complete";
 
 interface QuestionScore {
   rating: 1 | 2 | 3 | 4 | 5 | null;
+  /** Sengaja tidak ditanyakan. Dikeluarkan dari pembagi cakupan, dan TIDAK
+   *  sama dengan nilai 1 — pertanyaan yang tak sempat ditanyakan bukan
+   *  performa terburuk kandidat. */
+  notAsked: boolean;
   notes: string;
 }
 
@@ -64,6 +77,9 @@ interface QuestionPack {
   durationMin: number;
   questions: InterviewQuestion[];
   interviewerNotes: string[];
+  /** Kompetensi yang tidak bisa ditawar untuk posisi ini. Nilai di bawah batas
+   *  pada salah satunya memblokir rekomendasi, berapa pun rata-ratanya. */
+  criticalCompetencyIds: string[];
 }
 
 interface CvPrefill {
@@ -727,15 +743,31 @@ function QuestionCard({ q, index }: { q: InterviewQuestion; index: number }) {
 
 /* --- Live Scoring --- */
 
-const RATING_LABELS: Record<number, string> = {
-  1: "No evidence", 2: "Below expectations", 3: "Meets expectations", 4: "Exceeds", 5: "Exceptional",
-};
+/** Menjembatani bentuk skor di layar ke bentuk yang dipahami mesin penilaian.
+ *  Satu-satunya tempat pemetaan ini terjadi, supaya layar skoring, hasil, dan
+ *  debrief tidak pernah menghitung dengan cara yang berbeda-beda. */
+function toScoredQuestions(pack: QuestionPack, scores: Record<string, QuestionScore>): ScoredQuestion[] {
+  return pack.questions.map((q) => ({
+    questionId: q.id,
+    competencyId: q.competencyId,
+    competencyName: q.competencyName,
+    type: q.type,
+    rating: scores[q.id]?.rating ?? null,
+    notAsked: scores[q.id]?.notAsked ?? false,
+    notes: scores[q.id]?.notes ?? "",
+  }));
+}
+
+/* Label skala kini berasal dari mesin penilaian bersama (lib/recruiting).
+   Definisi lama di sini memakai "No evidence" pada angka 1, yang mencampur
+   ketiadaan bukti ke dalam skala performa. */
 
 function ScoringPanel({
   pack,
   candidateName,
   scores,
   onScoreChange,
+  onNotAskedChange,
   elapsedSeconds,
   onComplete,
 }: {
@@ -743,14 +775,15 @@ function ScoringPanel({
   candidateName: string;
   scores: Record<string, QuestionScore>;
   onScoreChange: (id: string, rating: 1|2|3|4|5|null, notes: string) => void;
+  onNotAskedChange: (id: string, notAsked: boolean) => void;
   elapsedSeconds: number;
   onComplete: () => void;
 }) {
-  const rated = pack.questions.filter(q => scores[q.id]?.rating != null).length;
-  const avgRating = rated === 0 ? 0 :
-    Math.round(
-      pack.questions.reduce((sum, q) => sum + (scores[q.id]?.rating ?? 0), 0) / rated * 10
-    ) / 10;
+  // Cakupan dan rata-rata dihitung mesin bersama, supaya angka di layar ini
+  // persis sama dengan angka yang tersimpan di hasil dan laporan.
+  const outcome = computeInterviewOutcome(toScoredQuestions(pack, scores), pack.criticalCompetencyIds);
+  const rated = outcome.coverage.rated;
+  const avgRating = outcome.average ?? 0;
 
   const mm = String(Math.floor(elapsedSeconds / 60)).padStart(2, "0");
   const ss = String(elapsedSeconds % 60).padStart(2, "0");
@@ -762,7 +795,11 @@ function ScoringPanel({
           <p className="text-sm font-semibold text-slate-900 dark:text-white">
             Live Scoring — {candidateName || "Candidate"} · {pack.position}
           </p>
-          <p className="text-xs text-slate-500">{rated}/{pack.questions.length} rated · avg {avgRating > 0 ? avgRating.toFixed(1) : "—"}/5</p>
+          <p className="text-xs text-slate-500">
+            {rated} dari {outcome.coverage.planned} pertanyaan dinilai
+            {outcome.coverage.notAsked > 0 && ` · ${outcome.coverage.notAsked} tidak ditanya`}
+            {" · "}rata-rata {avgRating > 0 ? avgRating.toFixed(1) : "—"}/5
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
@@ -782,7 +819,7 @@ function ScoringPanel({
       </div>
 
       {pack.questions.map((q, idx) => {
-        const score = scores[q.id] ?? { rating: null, notes: "" };
+        const score = scores[q.id] ?? { rating: null, notAsked: false, notes: "" };
         const style = TYPE_STYLES[q.type];
         return (
           <div key={q.id} className={cn("rounded-xl border bg-white dark:bg-slate-900", style.border)}>
@@ -796,12 +833,27 @@ function ScoringPanel({
             </div>
             <div className="space-y-4 px-5 py-4">
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Score (1-5)</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nilai performa (1-5)</p>
+                  <button
+                    type="button"
+                    onClick={() => onNotAskedChange(q.id, !score.notAsked)}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                      score.notAsked
+                        ? "border-slate-400 bg-slate-200 text-slate-700 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-200"
+                        : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800",
+                    )}
+                  >
+                    {score.notAsked ? "✓ Tidak ditanya" : "Tandai tidak ditanya"}
+                  </button>
+                </div>
+                <div className={cn("flex flex-wrap gap-2", score.notAsked && "pointer-events-none opacity-40")}>
                   {([1, 2, 3, 4, 5] as const).map((r) => (
                     <button
                       key={r}
                       type="button"
+                      title={RATING_HELP[r]}
                       onClick={() => onScoreChange(q.id, score.rating === r ? null : r, score.notes)}
                       className={cn(
                         "flex flex-col items-center rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
@@ -852,9 +904,34 @@ function ScoringResultsPanel({
   onBack: () => void;
 }) {
   const router = useRouter();
-  const rated = pack.questions.filter(q => scores[q.id]?.rating != null);
-  const avgRating = rated.length === 0 ? 0 :
-    rated.reduce((sum, q) => sum + (scores[q.id]?.rating ?? 0), 0) / rated.length;
+  const outcome = computeInterviewOutcome(toScoredQuestions(pack, scores), pack.criticalCompetencyIds);
+  const rated = pack.questions.filter(q => scores[q.id]?.rating != null && !scores[q.id]?.notAsked);
+  const avgRating = outcome.average ?? 0;
+
+  // Penilaian pewawancara LAIN pada kit yang sama, untuk debrief panel.
+  // Dibaca dari kandidat tersimpan agar tidak bergantung pada sesi tab ini.
+  const panel = useMemo(() => {
+    if (!candidateName) return null;
+    const candidate = findCandidateByName(candidateName, pack.position);
+    if (!candidate) return null;
+    const raters = candidate.interviewResults
+      .filter((r) => r.kitId === pack.packId && Array.isArray(r.questionScores))
+      .map((r) => ({
+        interviewer: r.interviewerName ?? r.interviewer ?? "Tanpa nama",
+        completedAt: r.completedAt,
+        scores: (r.questionScores ?? []).map((qs) => ({
+          questionId: qs.questionId,
+          competencyId: qs.competencyId,
+          competencyName: qs.competencyName,
+          type: qs.type,
+          rating: (qs.rating as 1|2|3|4|5|null) ?? null,
+          notAsked: qs.notAsked ?? false,
+          notes: qs.notes,
+        })),
+      }));
+    if (raters.length < 2) return null; // debrief baru berarti bila ada pembanding
+    return aggregatePanel(raters, pack.criticalCompetencyIds);
+  }, [candidateName, pack]);
 
   const byType = INTERVIEW_TYPES.map(type => {
     const qs = pack.questions.filter(q => q.type === type && scores[q.id]?.rating != null);
@@ -863,16 +940,14 @@ function ScoringResultsPanel({
     return { type, avg, count: qs.length };
   }).filter(Boolean) as { type: InterviewType; avg: number; count: number }[];
 
-  const recommendation =
-    avgRating >= 4 ? "Strong Hire" :
-    avgRating >= 3 ? "Hire" :
-    avgRating >= 2 ? "Review" : "Reject";
+  const recommendation = VERDICT_LABELS[outcome.verdict];
 
-  const recStyles = {
-    "Strong Hire": { card: "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10", badge: "bg-emerald-600 text-white" },
-    "Hire": { card: "border-blue-200 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10", badge: "bg-blue-600 text-white" },
-    "Review": { card: "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10", badge: "bg-amber-600 text-white" },
-    "Reject": { card: "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10", badge: "bg-red-600 text-white" },
+  const recStyles: Record<Verdict, { card: string; badge: string }> = {
+    sangat_direkomendasikan: { card: "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10", badge: "bg-emerald-600 text-white" },
+    direkomendasikan: { card: "border-blue-200 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10", badge: "bg-blue-600 text-white" },
+    perlu_pertimbangan: { card: "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10", badge: "bg-amber-600 text-white" },
+    tidak_direkomendasikan: { card: "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10", badge: "bg-red-600 text-white" },
+    data_belum_cukup: { card: "border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-800/50", badge: "bg-slate-600 text-white" },
   };
 
   const mm = String(Math.floor(elapsedSeconds / 60)).padStart(2, "0");
@@ -880,10 +955,10 @@ function ScoringResultsPanel({
 
   return (
     <div className="space-y-6">
-      <div className={cn("rounded-xl border p-5", recStyles[recommendation].card)}>
+      <div className={cn("rounded-xl border p-5", recStyles[outcome.verdict].card)}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className={cn("flex h-14 w-14 items-center justify-center rounded-xl text-lg font-bold text-white", recStyles[recommendation].badge)}>
+            <div className={cn("flex h-14 w-14 items-center justify-center rounded-xl text-lg font-bold text-white", recStyles[outcome.verdict].badge)}>
               {avgRating.toFixed(1)}
             </div>
             <div>
@@ -894,8 +969,8 @@ function ScoringResultsPanel({
           </div>
           <div className="flex gap-4 text-center">
             <div>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">{rated.length}/{pack.questions.length}</p>
-              <p className="text-xs text-slate-500">Rated</p>
+              <p className="text-xl font-bold text-slate-900 dark:text-white">{outcome.coverage.rated}/{outcome.coverage.planned}</p>
+              <p className="text-xs text-slate-500">Dinilai</p>
             </div>
             <div>
               <p className="text-xl font-bold text-slate-700 dark:text-slate-300">{mm}:{ss}</p>
@@ -904,6 +979,80 @@ function ScoringResultsPanel({
           </div>
         </div>
       </div>
+
+      {/* Dasar kesimpulan — ditulis apa adanya supaya pewawancara tahu mengapa
+          sistem menyimpulkan begitu, bukan sekadar menerima labelnya. */}
+      <Card>
+        <p className="text-sm font-semibold text-slate-900 dark:text-white">Dasar kesimpulan</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{outcome.reason}</p>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Cakupan</p>
+            <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{outcome.coverage.coveragePct}%</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Tidak ditanya</p>
+            <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{outcome.coverage.notAsked}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800">
+            <p className="text-[11px] uppercase tracking-wide text-slate-400">Terlewat</p>
+            <p className={cn("mt-0.5 text-sm font-semibold", outcome.coverage.missing > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white")}>
+              {outcome.coverage.missing}
+            </p>
+          </div>
+        </div>
+
+        {outcome.criticalGaps.length > 0 && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+            <p className="text-sm font-semibold text-red-800 dark:text-red-300">Kompetensi wajib belum terpenuhi</p>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-red-700 dark:text-red-300">
+              {outcome.criticalGaps.map((g) => (
+                <li key={g.competencyId}><span className="font-medium">{g.competencyName}</span> — {g.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
+
+      {/* Debrief panel — hanya muncul bila ada pembanding */}
+      {panel && (
+        <Card>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            Debrief Panel — {panel.raterCount} pewawancara
+          </p>
+          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{panel.reason}</p>
+
+          <div className="mt-3 space-y-1.5">
+            {panel.perRater.map((r) => (
+              <div key={r.interviewer} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-900 dark:text-white">{r.interviewer}</span>
+                <span className="text-xs tabular-nums text-slate-500">
+                  {r.average === null ? "belum menilai" : `${r.average.toFixed(1)}/5`} · cakupan {r.coverage.coveragePct}% · {VERDICT_LABELS[r.verdict]}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {panel.disagreements.length > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Perlu dibahas — penilaian berbeda tajam
+              </p>
+              <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">
+                Rata-rata gabungan justru menyembunyikan perbedaan ini. Bahas bukti yang didengar masing-masing sebelum memutuskan.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {panel.disagreements.map((d) => (
+                  <li key={d.competencyId} className="text-sm text-amber-900 dark:text-amber-200">
+                    <span className="font-medium">{d.competencyName}</span> (selisih {d.spread}) — {d.note}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {byType.map(({ type, avg, count }) => {
@@ -985,6 +1134,90 @@ function ScoringResultsPanel({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Persiapan sebelum wawancara: siapa yang menilai, dan kompetensi mana yang
+ *  tidak bisa ditawar. Keduanya ditanyakan DI DEPAN, bukan setelah selesai —
+ *  menentukan kompetensi wajib setelah melihat nilai kandidat sama saja dengan
+ *  menggeser standar agar sesuai kesimpulan yang sudah terlanjur diambil. */
+function PanelSetupCard({
+  pack,
+  interviewerName,
+  onInterviewerNameChange,
+  onToggleCritical,
+  onStart,
+}: {
+  pack: QuestionPack;
+  interviewerName: string;
+  onInterviewerNameChange: (v: string) => void;
+  onToggleCritical: (competencyId: string) => void;
+  onStart: () => void;
+}) {
+  const competencies = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const q of pack.questions) if (!seen.has(q.competencyId)) seen.set(q.competencyId, q.competencyName);
+    return [...seen.entries()].map(([id, name]) => ({ id, name }));
+  }, [pack.questions]);
+
+  return (
+    <Card className="border-indigo-200 bg-indigo-50/60 dark:border-indigo-500/30 dark:bg-indigo-500/5">
+      <h3 className="text-base font-semibold text-slate-900 dark:text-white">Sebelum wawancara dimulai</h3>
+      <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+        Setiap pewawancara menilai sendiri lebih dulu, baru hasilnya dibandingkan di debrief. Berdiskusi sebelum
+        menilai membuat semua orang mengikuti suara yang paling dominan.
+      </p>
+
+      <div className="mt-4">
+        <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Nama pewawancara
+        </label>
+        <input
+          value={interviewerName}
+          onChange={(e) => onInterviewerNameChange(e.target.value)}
+          placeholder="mis. Rahmat — HR"
+          className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+        />
+        <p className="mt-1 text-xs text-slate-500">
+          Dipakai membedakan penilaian antar-pewawancara pada kit yang sama.
+        </p>
+      </div>
+
+      <div className="mt-4">
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          Kompetensi wajib <span className="font-normal text-slate-500">(opsional, klik untuk menandai)</span>
+        </p>
+        <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          Nilai di bawah 3 pada kompetensi wajib akan memblokir rekomendasi, berapa pun rata-ratanya. Pakai hanya
+          untuk yang benar-benar tidak bisa ditawar — makin banyak yang ditandai, makin sedikit kandidat yang lolos.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {competencies.map((c) => {
+            const active = pack.criticalCompetencyIds.includes(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onToggleCritical(c.id)}
+                className={cn(
+                  "rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  active
+                    ? "border-red-400 bg-red-50 text-red-700 dark:border-red-500/50 dark:bg-red-500/15 dark:text-red-300"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800",
+                )}
+              >
+                {active && "★ "}{c.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Button variant="primary" size="lg" className="mt-5" onClick={onStart}>
+        <Icon className="h-4 w-4"><SvgPath name="play" /></Icon>
+        Mulai wawancara &amp; nilai
+      </Button>
+    </Card>
   );
 }
 
@@ -1172,6 +1405,12 @@ export default function InterviewPage() {
     ...INTERVIEW_TYPES,
   ]);
   const generating = false; // kit tersusun instan dari bank soal lokal — tidak ada proses async/AI
+  // Nama pewawancara diambil dari nama pengguna yang sudah tersimpan, supaya
+  // pengisian ulang tidak menjadi hambatan yang membuat orang melewatinya.
+  const [interviewerName, setInterviewerName] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("hi_user_name") ?? "";
+  });
   const [pack, setPack] = useState<QuestionPack | null>(null);
   const [cvAnalysisData, setCvAnalysisData] = useState<CvPrefill | null>(null);
   const [scoringState, setScoringState] = useState<ScoringState>("idle");
@@ -1240,14 +1479,23 @@ export default function InterviewPage() {
   const handleStartInterview = useCallback(() => {
     if (!pack) return;
     const initial: Record<string, QuestionScore> = {};
-    pack.questions.forEach((q) => { initial[q.id] = { rating: null, notes: "" }; });
+    pack.questions.forEach((q) => { initial[q.id] = { rating: null, notAsked: false, notes: "" }; });
     setScores(initial);
     setElapsedSeconds(0);
     setScoringState("scoring");
   }, [pack]);
 
   const handleScoreChange = useCallback((id: string, rating: 1|2|3|4|5|null, notes: string) => {
-    setScores((prev) => ({ ...prev, [id]: { rating, notes } }));
+    setScores((prev) => ({ ...prev, [id]: { ...prev[id], rating, notes, notAsked: false } }));
+  }, []);
+
+  // Menandai "tidak ditanya" membuang nilainya: keduanya tidak boleh hidup
+  // bersamaan, karena nanti tidak jelas mana yang dipakai saat menghitung.
+  const handleNotAskedChange = useCallback((id: string, notAsked: boolean) => {
+    setScores((prev) => ({
+      ...prev,
+      [id]: { rating: notAsked ? null : (prev[id]?.rating ?? null), notAsked, notes: prev[id]?.notes ?? "" },
+    }));
   }, []);
 
   const handleCompleteScoring = useCallback(() => {
@@ -1262,17 +1510,23 @@ export default function InterviewPage() {
           if (!candidate) {
             candidate = createCandidate({ name, position: pos, department: cvAnalysisData?.department ?? "", source: "Interview" });
           }
-          const rated = pack.questions.filter(q => scores[q.id]?.rating != null);
-          const avgRating = rated.length === 0 ? 0 : rated.reduce((s, q) => s + (scores[q.id]?.rating ?? 0), 0) / rated.length;
-          const recommendation = avgRating >= 4 ? "Strong Hire" : avgRating >= 3 ? "Hire" : avgRating >= 2 ? "Review" : "Reject";
+          // Kesimpulan dihitung mesin bersama: cakupan diperiksa, kompetensi
+          // wajib memblokir, dan pertanyaan yang tidak ditanyakan dikeluarkan.
+          const outcome = computeInterviewOutcome(toScoredQuestions(pack, scores), pack.criticalCompetencyIds);
           const result: InterviewResultSnapshot = {
-            kitId: `KIT-${Date.now()}`,
-            avgRating,
-            recommendation,
+            // kitId memakai packId yang STABIL, bukan Date.now(). Dengan id yang
+            // berubah tiap simpan, penilaian dua pewawancara atas kit yang sama
+            // tidak akan pernah terkelompok menjadi satu panel.
+            kitId: pack.packId,
+            interviewerName: interviewerName.trim() || "Tanpa nama",
+            criticalCompetencyIds: pack.criticalCompetencyIds,
+            coveragePct: outcome.coverage.coveragePct,
+            avgRating: outcome.average ?? 0,
+            recommendation: VERDICT_LABELS[outcome.verdict],
             durationSec: elapsedSeconds,
             completedAt: new Date().toISOString(),
             questionCount: pack.questions.length,
-            ratedCount: rated.length,
+            ratedCount: outcome.coverage.rated,
             // Per-question detail: ratings and verbatim notes used to live only in
             // sessionStorage and vanished with the tab. competencyId is what lets
             // the Hiring Report join these against the CV scores.
@@ -1282,6 +1536,7 @@ export default function InterviewPage() {
               competencyName: q.competencyName,
               type: q.type,
               rating: scores[q.id]?.rating ?? null,
+              notAsked: scores[q.id]?.notAsked ?? false,
               notes: scores[q.id]?.notes ?? "",
             })),
           };
@@ -1289,7 +1544,20 @@ export default function InterviewPage() {
         }
       } catch { /* non-critical */ }
     }
-  }, [pack, scores, elapsedSeconds, cvAnalysisData]);
+  }, [pack, scores, elapsedSeconds, cvAnalysisData, interviewerName]);
+
+  const handleToggleCritical = useCallback((competencyId: string) => {
+    setPack((prev) =>
+      prev
+        ? {
+            ...prev,
+            criticalCompetencyIds: prev.criticalCompetencyIds.includes(competencyId)
+              ? prev.criticalCompetencyIds.filter((id) => id !== competencyId)
+              : [...prev.criticalCompetencyIds, competencyId],
+          }
+        : prev,
+    );
+  }, []);
 
   const handleBackToKit = useCallback(() => {
     setScoringState("idle");
@@ -1331,6 +1599,7 @@ export default function InterviewPage() {
       durationMin: Math.max(45, selectedTypes.length * 15 + questions.length * 5),
       questions,
       interviewerNotes: buildInterviewerNotes(position, seniority, selectedTypes, department, questions),
+      criticalCompetencyIds: [],
     });
   };
 
@@ -1528,7 +1797,16 @@ export default function InterviewPage() {
           {!generating && pack && scoringState === "idle" && (
             <div className="space-y-4">
               {cvAnalysisData && <CvContextCard data={cvAnalysisData} />}
-              <ResultsPanel pack={pack} onStartInterview={handleStartInterview} />
+              <>
+                <PanelSetupCard
+                  pack={pack}
+                  interviewerName={interviewerName}
+                  onInterviewerNameChange={setInterviewerName}
+                  onToggleCritical={handleToggleCritical}
+                  onStart={handleStartInterview}
+                />
+                <ResultsPanel pack={pack} onStartInterview={handleStartInterview} />
+              </>
             </div>
           )}
 
@@ -1539,6 +1817,7 @@ export default function InterviewPage() {
               scores={scores}
               onScoreChange={handleScoreChange}
               elapsedSeconds={elapsedSeconds}
+              onNotAskedChange={handleNotAskedChange}
               onComplete={handleCompleteScoring}
             />
           )}

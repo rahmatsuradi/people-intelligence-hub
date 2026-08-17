@@ -52,6 +52,10 @@ export interface InterviewQuestionScore {
   competencyName: string;
   type: string;
   rating: number | null;
+  /** true = sengaja tidak ditanyakan (waktu habis / tidak relevan). Berbeda
+   *  dari rating null yang berarti "belum dinilai", dan berbeda jauh dari
+   *  nilai 1 — pertanyaan yang tidak ditanyakan bukan performa terburuk. */
+  notAsked?: boolean;
   notes: string;
 }
 
@@ -72,6 +76,14 @@ export interface InterviewResultSnapshot {
   weaknesses?: string;
   nextSteps?: string;
   kitId: string;
+  /** Nama pewawancara. Wajib diisi sejak panel didukung: tanpa ini, dua
+   *  penilaian tidak bisa dibedakan pemiliknya dan panel mustahil dibentuk. */
+  interviewerName?: string;
+  /** Kompetensi yang ditandai wajib saat kit dibuat — disimpan bersama hasil
+   *  agar laporan lama tetap dinilai dengan aturan yang berlaku saat itu. */
+  criticalCompetencyIds?: string[];
+  /** % pertanyaan terencana yang benar-benar dinilai. */
+  coveragePct?: number;
   avgRating: number;
   recommendation: string;
   durationSec: number;
@@ -524,13 +536,19 @@ export function saveInterviewResult(
 ): void {
   const c = getCandidate(candidateId);
   if (!c) return;
-  c.interviewResults = [result, ...c.interviewResults.filter((r) => r.kitId !== result.kitId)];
+  // Kunci duplikat adalah PASANGAN kit + pewawancara. Sebelumnya hanya kitId,
+  // sehingga penilaian pewawancara kedua menimpa penilaian pewawancara pertama
+  // pada kit yang sama -- panel mustahil terbentuk tanpa disadari siapa pun.
+  const sameSlot = (r: InterviewResultSnapshot) =>
+    r.kitId === result.kitId &&
+    (r.interviewerName ?? r.interviewer ?? "") === (result.interviewerName ?? result.interviewer ?? "");
+  c.interviewResults = [result, ...c.interviewResults.filter((r) => !sameSlot(r))];
   if (c.stage === "screened" || c.stage === "applied") c.stage = "interviewed";
   c.updatedAt = new Date().toISOString();
   saveCandidate(c);
   addActivity({
     action: "Interview completed:",
-    target: `${c.name} — ${result.recommendation} (${result.avgRating.toFixed(1)}/5)`,
+    target: `${c.name} — ${result.recommendation} (${result.avgRating.toFixed(1)}/5)${result.interviewerName ? ` oleh ${result.interviewerName}` : ""}`,
     type: "interview",
   });
 }

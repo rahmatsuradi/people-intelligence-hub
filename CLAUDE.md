@@ -116,9 +116,22 @@ Pelajaran yang sudah dibayar saat membangunnya, jangan diulang:
 - `callGroq()` terkunci mode JSON; percakapan bebas memakai `callGroqChat()`.
 - Pesan ber-role `system` dari klien **dibuang** di route, supaya persona dan batasannya tidak bisa ditimpa dari browser.
 
+## 9c. Wawancara terstruktur — panel, kompetensi wajib, cakupan
+
+Mesin murni di `src/lib/recruiting/interview-scoring.ts` (26 unit test). Layar skoring, layar hasil, dan debrief semuanya menghitung lewat mesin ini — tidak ada lagi ambang yang ditulis ulang di komponen.
+
+**Empat cacat yang diperbaiki, jangan diulang:**
+- **"Tidak ditanya" bukan nilai terburuk.** Skala lama memberi label `No evidence` pada angka 1, sehingga pertanyaan yang tak sempat ditanyakan tercatat sebagai performa terburuk. Sekarang 1–5 murni performa, dan `notAsked` adalah status terpisah yang dikeluarkan dari pembagi.
+- **Cakupan wajib dilaporkan.** Melewati pertanyaan sulit dulu menaikkan rata-rata. Kesimpulan kini ditahan (`data_belum_cukup`) bila cakupan < `MIN_COVERAGE_PCT` (60%).
+- **Kompetensi wajib memblokir rekomendasi**, berapa pun rata-ratanya — pola yang sama dengan `criticalMinSten` di modul asesmen. Kompetensi wajib yang *tidak dinilai* juga memblokir: tidak ada bukti sama menghalanginya dengan bukti buruk.
+- **`kitId` dulu `KIT-${Date.now()}`** sehingga berubah tiap simpan, dan dedupe di `saveInterviewResult` memakai `kitId` saja — akibatnya penilaian pewawancara kedua **menimpa** penilaian pewawancara pertama. Kini `kitId = pack.packId` (stabil) dan kunci dedupe adalah pasangan **kit + pewawancara**.
+
+**Panel:** tiap pewawancara menilai independen lebih dulu (kartu persiapan meminta nama sebelum wawancara). `aggregatePanel()` merata-ratakan **antar-pewawancara**, bukan antar-butir — kalau butir digabung mentah, pewawancara yang menilai lebih banyak pertanyaan otomatis punya suara lebih besar. Selisih ≥ 2 tingkat pada satu kompetensi ditandai sebagai ketidaksepakatan dan **menahan kesimpulan panel**, karena rata-rata gabungan justru menyembunyikannya.
+
 ## 10. Yang belum dikerjakan
 
 - Formulir pelaporan pajak tahunan 1721-A1.
+- **Wawancara:** jembatan dari laporan asesmen ke kit wawancara belum ada; "Cultural Fit" masih dipakai sebagai kategori berskor (pintu masuk bias, sebaiknya diubah jadi keselarasan nilai berjangkar perilaku); tipe pertanyaan masih mencampur format (Behavioral) dengan domain (Technical/Leadership); sebagian label UI masih bahasa Inggris.
 - **Rekrutmen:** metrik kecepatan baru akan berarti setelah cukup kandidat berjalan lewat pipeline dengan riwayat tercatat (kandidat lama tidak ikut terhitung). Belum ada: cost-per-hire, sumber biaya iklan lowongan, dan pelacakan alasan penolakan kandidat.
 - Arahkan instance produksi ke data perusahaan asli (baru dilakukan setelah kelas risiko JKK final dikonfirmasi ke BPJS, dan UMK diisi sesuai SK Gubernur/Permenaker tahun berjalan untuk wilayah yang relevan — nilai UMK di seed saat ini murni placeholder demo).
 - **Assessment** (skema/seed/RLS sudah terpasang & terverifikasi — lihat §9). Yang belum: norma lokal dari data nyata (butuh ≥ 100 peserta; lihat §12), analisis butir untuk item kognitif/SJT, uji reliabilitas & analisis faktor untuk adaptasi IPIP, pengiriman tautan tes lewat email otomatis (saat ini disalin manual — modul email belum ada), dan halaman umpan balik hasil untuk peserta.
