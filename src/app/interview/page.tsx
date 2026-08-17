@@ -33,12 +33,19 @@ import {
   type ScoredQuestion,
   type Verdict,
 } from "@/lib/recruiting/interview-scoring";
+import {
+  analyzeEvidenceCoverage,
+  ASSESSMENT_HANDOFF_KEY,
+  deriveQuestionFormat,
+  FORMAT_LABELS,
+  type AssessmentHandoff,
+} from "@/lib/recruiting/interview-kit";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Types & constants
 ═══════════════════════════════════════════════════════════════════════════ */
 
-type InterviewType = "Behavioral" | "Technical" | "Leadership" | "Cultural Fit" | "Situational";
+type InterviewType = "Behavioral" | "Technical" | "Leadership" | "Cultural Fit" | "Situational" | "Assessment Probe";
 type Seniority =
   | "Junior"
   | "Mid-Level"
@@ -102,6 +109,23 @@ const SENIORITY_LEVELS: Seniority[] = [
   "Director",
 ];
 
+/** Label tampilan untuk tiap tipe. Nilai internalnya sengaja TIDAK diubah:
+ *  hasil wawancara lama menyimpan string tipe apa adanya, dan menggantinya akan
+ *  membuat laporan terdahulu kehilangan pengelompokannya.
+ *
+ *  "Cultural Fit" diberi label ulang menjadi keselarasan nilai & motivasi.
+ *  Menilai "kecocokan budaya" adalah pintu masuk bias kembali ke proses yang
+ *  sudah distrukturkan — yang bisa dinilai secara adil adalah keselarasan pada
+ *  nilai kerja yang dinyatakan, dengan jangkar perilaku, bukan kesan cocok. */
+const TYPE_LABELS: Record<InterviewType, string> = {
+  Behavioral: "Perilaku Masa Lalu",
+  Technical: "Teknis",
+  Leadership: "Kepemimpinan",
+  "Cultural Fit": "Keselarasan Nilai & Motivasi",
+  Situational: "Situasional",
+  "Assessment Probe": "Pendalaman Asesmen",
+};
+
 const INTERVIEW_TYPES: InterviewType[] = [
   "Behavioral",
   "Technical",
@@ -133,6 +157,11 @@ const TYPE_STYLES: Record<
     chip: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/30",
     header: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-500/5",
     border: "border-emerald-200 dark:border-emerald-500/30",
+  },
+  "Assessment Probe": {
+    chip: "bg-teal-50 text-teal-700 ring-teal-600/20 dark:bg-teal-500/10 dark:text-teal-400 dark:ring-teal-500/30",
+    header: "border-teal-200 bg-teal-50/50 dark:border-teal-500/30 dark:bg-teal-500/5",
+    border: "border-teal-200 dark:border-teal-500/30",
   },
   Situational: {
     chip: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/30",
@@ -620,12 +649,18 @@ function buildInterviewerNotes(
   const covered = [...new Set(questions.map((q) => q.competencyName))];
 
   return [
-    `Use structured interviews only (Schmidt & Hunter, 1998: r ≈ 0.51) — avoid unstructured ad-hoc questions (r ≈ 0.38).`,
-    `Calibrate to ${seniority} bar using ${frameworkLabel} competency rubrics.`,
-    `Allocate ~${Math.max(45, types.length * 15)} minutes across: ${types.join(", ")}.`,
-    `Map scores to competencies: ${covered.join(", ")}.`,
-    `For ${position} (${cluster} cluster), supplement with work samples where possible (r ≈ 0.54).`,
-    "Document verbatim quotes for scores ≥4 or any red-flag; reference checks supplementary only (r ≈ 0.26).",
+    // Angka validitas disamakan dengan modul asesmen: estimasi lama Schmidt &
+    // Hunter (1998) direvisi Sackett dkk. (2022), dan sejak revisi itu wawancara
+    // TERSTRUKTUR-lah prediktor tunggal terkuat, bukan tes kognitif. Menyebut
+    // angka berbeda di dua tempat pada aplikasi yang sama merusak kepercayaan
+    // pada keduanya.
+    "Ajukan pertanyaan yang sama untuk semua kandidat pada posisi ini. Wawancara terstruktur adalah prediktor kinerja tunggal terkuat (Sackett dkk., 2022: r ≈ .42) — jauh di atas wawancara bebas tanpa panduan.",
+    `Kalibrasikan ke standar level ${seniority} memakai rubrik kompetensi ${frameworkLabel}.`,
+    `Alokasikan sekitar ${Math.max(45, types.length * 15)} menit untuk: ${types.map((t) => TYPE_LABELS[t]).join(", ")}.`,
+    `Kompetensi yang dinilai: ${covered.join(", ")}.`,
+    `Untuk posisi ${position}, lengkapi dengan uji kerja bila memungkinkan — contoh kerja nyata lebih mendekati pekerjaan sehari-hari daripada pertanyaan apa pun.`,
+    "Catat kutipan langsung untuk setiap nilai 4 ke atas dan setiap temuan yang mengkhawatirkan. Nilai tanpa catatan tidak bisa dipertanggungjawabkan saat debrief.",
+    "Nilai segera setelah kandidat menjawab, jangan menunggu wawancara selesai — ingatan atas jawaban awal memudar dan cenderung tertarik mengikuti kesan akhir.",
   ];
 }
 
@@ -691,7 +726,7 @@ function QuestionCard({ q, index }: { q: InterviewQuestion; index: number }) {
               style.chip,
             )}
           >
-            {q.type}
+            {TYPE_LABELS[q.type]}
           </span>
           <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
             {q.competencyName}
@@ -793,7 +828,7 @@ function ScoringPanel({
       <div className="sticky top-16 z-20 flex flex-col gap-3 rounded-xl border border-indigo-200 bg-indigo-50/95 px-5 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between dark:border-indigo-500/30 dark:bg-slate-900/95">
         <div>
           <p className="text-sm font-semibold text-slate-900 dark:text-white">
-            Live Scoring — {candidateName || "Candidate"} · {pack.position}
+            Penilaian Langsung — {candidateName || "Candidate"} · {pack.position}
           </p>
           <p className="text-xs text-slate-500">
             {rated} dari {outcome.coverage.planned} pertanyaan dinilai
@@ -826,8 +861,11 @@ function ScoringPanel({
             <div className={cn("rounded-t-xl border-b px-5 py-3", style.header)}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/70 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{idx + 1}</span>
-                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset", style.chip)}>{q.type}</span>
+                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset", style.chip)}>{TYPE_LABELS[q.type]}</span>
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{q.competencyName}</span>
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  {FORMAT_LABELS[deriveQuestionFormat(q.type, q.question)]}
+                </span>
               </div>
               <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{q.question}</p>
             </div>
@@ -872,12 +910,12 @@ function ScoringPanel({
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Notes / Verbatim quote
+                  Catatan / kutipan langsung
                 </label>
                 <textarea
                   value={score.notes}
                   onChange={(e) => onScoreChange(q.id, score.rating, e.target.value)}
-                  placeholder="Record candidate's exact words or key observations..."
+                  placeholder="Tulis kata-kata persis kandidat atau pengamatan penting..."
                   rows={2}
                   className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
@@ -905,7 +943,6 @@ function ScoringResultsPanel({
 }) {
   const router = useRouter();
   const outcome = computeInterviewOutcome(toScoredQuestions(pack, scores), pack.criticalCompetencyIds);
-  const rated = pack.questions.filter(q => scores[q.id]?.rating != null && !scores[q.id]?.notAsked);
   const avgRating = outcome.average ?? 0;
 
   // Penilaian pewawancara LAIN pada kit yang sama, untuk debrief panel.
@@ -962,7 +999,7 @@ function ScoringResultsPanel({
               {avgRating.toFixed(1)}
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Interview Result</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Hasil Wawancara</p>
               <p className="mt-0.5 text-2xl font-bold text-slate-900 dark:text-white">{recommendation}</p>
               <p className="text-sm text-slate-500">{candidateName || "Candidate"} · {pack.position} · {pack.seniority}</p>
             </div>
@@ -974,7 +1011,7 @@ function ScoringResultsPanel({
             </div>
             <div>
               <p className="text-xl font-bold text-slate-700 dark:text-slate-300">{mm}:{ss}</p>
-              <p className="text-xs text-slate-500">Duration</p>
+              <p className="text-xs text-slate-500">Durasi</p>
             </div>
           </div>
         </div>
@@ -1061,7 +1098,7 @@ function ScoringResultsPanel({
           return (
             <div key={type} className={cn("rounded-xl border p-4", style.header)}>
               <div className="flex items-center justify-between">
-                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset", style.chip)}>{type}</span>
+                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset", style.chip)}>{TYPE_LABELS[type]}</span>
                 <span className="font-bold tabular-nums text-slate-900 dark:text-white">{avg.toFixed(1)}/5</span>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
@@ -1075,7 +1112,7 @@ function ScoringResultsPanel({
 
       <Card className="overflow-hidden p-0">
         <div className="border-b border-slate-200 px-5 py-3 dark:border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Score Detail</h3>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Rincian Penilaian</h3>
         </div>
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {pack.questions.map((q, idx) => {
@@ -1213,6 +1250,25 @@ function PanelSetupCard({
         </div>
       </div>
 
+      {(() => {
+        // Kompetensi yang hanya digali lewat situasi hipotetis mengukur apa yang
+        // kandidat TAHU sebaiknya dilakukan, bukan apa yang pernah ia lakukan.
+        const gaps = analyzeEvidenceCoverage(pack.questions).filter((r) => r.lacksBehavioralEvidence);
+        if (gaps.length === 0) return null;
+        return (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              {gaps.length} kompetensi belum punya pertanyaan berbasis kejadian nyata
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+              {gaps.map((g) => g.competencyName).join(", ")} — semuanya baru digali lewat pertanyaan hipotetis.
+              Tambahkan pertanyaan &quot;Ceritakan saat Anda…&quot; agar penilaiannya berpijak pada yang pernah
+              benar-benar dilakukan kandidat.
+            </p>
+          </div>
+        );
+      })()}
+
       <Button variant="primary" size="lg" className="mt-5" onClick={onStart}>
         <Icon className="h-4 w-4"><SvgPath name="play" /></Icon>
         Mulai wawancara &amp; nilai
@@ -1229,7 +1285,12 @@ function ResultsPanel({ pack, onStartInterview }: { pack: QuestionPack; onStartI
 
   const grouped = useMemo(() => {
     const map = new Map<InterviewType, InterviewQuestion[]>();
-    for (const type of INTERVIEW_TYPES) {
+    // Beriterasi atas tipe yang BENAR-BENAR ADA di kit, bukan atas daftar tipe
+    // yang bisa dicentang pengguna. "Pendalaman Asesmen" datang dari laporan
+    // asesmen dan tidak pernah dicentang -- dengan iterasi lama, pertanyaan itu
+    // masuk ke pack tetapi tidak pernah tampil di layar.
+    const presentTypes = [...new Set(pack.questions.map((q) => q.type))];
+    for (const type of presentTypes) {
       const qs = pack.questions.filter((q) => q.type === type);
       if (qs.length) map.set(type, qs);
     }
@@ -1302,7 +1363,7 @@ function ResultsPanel({ pack, onStartInterview }: { pack: QuestionPack; onStartI
                 TYPE_STYLES[t].chip,
               )}
             >
-              {t}
+              {TYPE_LABELS[t]}
             </span>
           ))}
         </div>
@@ -1318,7 +1379,7 @@ function ResultsPanel({ pack, onStartInterview }: { pack: QuestionPack; onStartI
                 style.header,
               )}
             >
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{type}</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{TYPE_LABELS[type]}</h3>
               <span className="text-xs text-slate-500">
                 {questions.length} question{questions.length !== 1 ? "s" : ""}
               </span>
@@ -1342,7 +1403,7 @@ function ResultsPanel({ pack, onStartInterview }: { pack: QuestionPack; onStartI
             <SvgPath name="document" />
           </Icon>
           <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-            Interviewer Notes
+            Catatan untuk Pewawancara
           </h3>
         </div>
         <p className="mt-0.5 text-sm text-slate-500">
@@ -1407,6 +1468,8 @@ export default function InterviewPage() {
   const generating = false; // kit tersusun instan dari bank soal lokal — tidak ada proses async/AI
   // Nama pewawancara diambil dari nama pengguna yang sudah tersimpan, supaya
   // pengisian ulang tidak menjadi hambatan yang membuat orang melewatinya.
+  // Pertanyaan pendalaman yang dikirim dari laporan asesmen, bila ada.
+  const [assessmentHandoff, setAssessmentHandoff] = useState<AssessmentHandoff | null>(null);
   const [interviewerName, setInterviewerName] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return localStorage.getItem("hi_user_name") ?? "";
@@ -1446,6 +1509,14 @@ export default function InterviewPage() {
     try {
       const stored = sessionStorage.getItem("interview_prefill");
       if (stored) setCvAnalysisData(JSON.parse(stored));
+    } catch { /* ignore */ }
+    try {
+      const handoff = sessionStorage.getItem(ASSESSMENT_HANDOFF_KEY);
+      if (handoff) {
+        const parsed = JSON.parse(handoff) as AssessmentHandoff;
+        setAssessmentHandoff(parsed);
+        if (parsed.position) setPosition(parsed.position);
+      }
     } catch { /* ignore */ }
     try {
       const saved = sessionStorage.getItem("interview_session");
@@ -1587,6 +1658,22 @@ export default function InterviewPage() {
     const now = new Date();
     const department = cvAnalysisData?.department ?? "";
     const questions = buildMockQuestions(position, seniority, selectedTypes, department);
+
+    // Pertanyaan dari asesmen ditempel DI AKHIR, dengan tipe tersendiri.
+    // Namespace kompetensinya diberi awalan 'assessment:' supaya tidak
+    // bertabrakan dengan id kompetensi framework, dan tetap terpisah saat
+    // skor per kompetensi dihitung.
+    const probeQuestions: InterviewQuestion[] = (assessmentHandoff?.probes ?? []).map((p, i) => ({
+      id: `AP${i + 1}`,
+      type: "Assessment Probe" as InterviewType,
+      competencyId: `assessment:${p.scaleId}`,
+      competencyName: p.scaleName,
+      question: p.question,
+      strongAnswer: p.rationale,
+      redFlags: ["Jawaban umum tanpa contoh nyata", "Contohnya tidak bisa diverifikasi", "Menghindari pertanyaan"],
+      rubric: [],
+    }));
+    const allQuestions = [...questions, ...probeQuestions];
     setPack({
       packId: `KIT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
       generatedAt: now.toLocaleString("en-US", {
@@ -1596,15 +1683,38 @@ export default function InterviewPage() {
       position: position.trim(),
       seniority,
       types: selectedTypes,
-      durationMin: Math.max(45, selectedTypes.length * 15 + questions.length * 5),
-      questions,
+      durationMin: Math.max(45, selectedTypes.length * 15 + allQuestions.length * 5),
+      questions: allQuestions,
       interviewerNotes: buildInterviewerNotes(position, seniority, selectedTypes, department, questions),
       criticalCompetencyIds: [],
     });
   };
 
   return (
-    <AppShell activeNavId="interview-workspace" title="Interview Workspace" subtitle="Structured question kits & scoring guides">
+    <AppShell activeNavId="interview-workspace" title="Interview Workspace" subtitle="Kit pertanyaan terstruktur & panduan penilaian">
+      {assessmentHandoff && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50/80 px-5 py-4 dark:border-teal-500/30 dark:bg-teal-500/10">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                {assessmentHandoff.probes.length} pertanyaan pendalaman dari hasil asesmen
+              </p>
+              <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                {assessmentHandoff.candidateName} · pembanding: {assessmentHandoff.normLabel}. Pertanyaan ini menguji
+                hipotesis dari skor asesmen — bukan mengonfirmasinya. Akan ditambahkan otomatis saat kit disusun.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { sessionStorage.removeItem(ASSESSMENT_HANDOFF_KEY); setAssessmentHandoff(null); }}
+            >
+              Lepas
+            </Button>
+          </div>
+        </div>
+      )}
+
       {cvAnalysisData && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-5 py-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1730,7 +1840,7 @@ export default function InterviewPage() {
                             </Icon>
                           )}
                         </span>
-                        {type}
+                        {TYPE_LABELS[type]}
                       </button>
                     );
                   })}

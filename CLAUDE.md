@@ -128,10 +128,18 @@ Mesin murni di `src/lib/recruiting/interview-scoring.ts` (26 unit test). Layar s
 
 **Panel:** tiap pewawancara menilai independen lebih dulu (kartu persiapan meminta nama sebelum wawancara). `aggregatePanel()` merata-ratakan **antar-pewawancara**, bukan antar-butir — kalau butir digabung mentah, pewawancara yang menilai lebih banyak pertanyaan otomatis punya suara lebih besar. Selisih ≥ 2 tingkat pada satu kompetensi ditandai sebagai ketidaksepakatan dan **menahan kesimpulan panel**, karena rata-rata gabungan justru menyembunyikannya.
 
+**Jembatan asesmen → wawancara (selesai).** Tombol "Pakai untuk Wawancara" di laporan asesmen memilih skala paling menonjol (`selectProbes`: sten ≤ 4 atau ≥ 8, maksimal 6, diurutkan dari yang paling jauh dari rata-rata) dan mengirimkannya lewat `sessionStorage` — pola yang sama dengan CV Analyzer → Interview, supaya tidak ada mekanisme perpindahan data kedua. Pertanyaan masuk sebagai tipe `Assessment Probe` dengan namespace kompetensi `assessment:<scaleId>` agar tidak bertabrakan dengan id framework.
+
+**Format vs domain.** Kategori lama mencampur FORMAT (`Behavioral`) dengan DOMAIN (`Technical`, `Leadership`). `analyzeEvidenceCoverage()` kini menandai kompetensi yang hanya digali lewat pertanyaan hipotetis — itu mengukur apa yang kandidat TAHU sebaiknya dilakukan, bukan apa yang pernah ia lakukan. `deriveQuestionFormat()` adalah heuristik berbasis penanda kalimat dan **default-nya situasional**, karena mengaku punya bukti perilaku yang tidak ada lebih berbahaya daripada sebaliknya.
+
+**"Cultural Fit" diberi label ulang** menjadi "Keselarasan Nilai & Motivasi" lewat `TYPE_LABELS`; nilai internalnya sengaja tidak diubah agar hasil wawancara lama tidak kehilangan pengelompokannya.
+
+**Angka validitas disamakan seluruh aplikasi.** `SELECTION_VALIDITY` dan 32 `validityCoeff` di `competency-framework.ts` diperbarui dari .51 (Schmidt & Hunter 1998) ke **.42** (Sackett dkk. 2022). Wawancara terstruktur kini prediktor tunggal terkuat, di atas tes kognitif .31. Sebelumnya modul asesmen menyebut .42 sementara modul wawancara menyebut .51 — dua angka berbeda untuk klaim yang sama di aplikasi yang sama.
+
 ## 10. Yang belum dikerjakan
 
 - Formulir pelaporan pajak tahunan 1721-A1.
-- **Wawancara:** jembatan dari laporan asesmen ke kit wawancara belum ada; "Cultural Fit" masih dipakai sebagai kategori berskor (pintu masuk bias, sebaiknya diubah jadi keselarasan nilai berjangkar perilaku); tipe pertanyaan masih mencampur format (Behavioral) dengan domain (Technical/Leadership); sebagian label UI masih bahasa Inggris.
+- **Wawancara:** bank soal masih 8 per klaster dan seluruh pertanyaan bertipe terpilih otomatis masuk — belum bisa disaring atau ditambah pertanyaan khas perusahaan.
 - **Rekrutmen:** metrik kecepatan baru akan berarti setelah cukup kandidat berjalan lewat pipeline dengan riwayat tercatat (kandidat lama tidak ikut terhitung). Belum ada: cost-per-hire, sumber biaya iklan lowongan, dan pelacakan alasan penolakan kandidat.
 - Arahkan instance produksi ke data perusahaan asli (baru dilakukan setelah kelas risiko JKK final dikonfirmasi ke BPJS, dan UMK diisi sesuai SK Gubernur/Permenaker tahun berjalan untuk wilayah yang relevan — nilai UMK di seed saat ini murni placeholder demo).
 - **Assessment** (skema/seed/RLS sudah terpasang & terverifikasi — lihat §9). Yang belum: norma lokal dari data nyata (butuh ≥ 100 peserta; lihat §12), analisis butir untuk item kognitif/SJT, uji reliabilitas & analisis faktor untuk adaptasi IPIP, pengiriman tautan tes lewat email otomatis (saat ini disalin manual — modul email belum ada), dan halaman umpan balik hasil untuk peserta.

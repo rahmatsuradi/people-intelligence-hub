@@ -15,6 +15,10 @@ export interface RubricLevel {
   description: string;
 }
 
+/* Catatan angka validitas: seluruh `validityCoeff` di berkas ini merujuk
+   wawancara terstruktur, dan diperbarui dari .51 (Schmidt & Hunter, 1998) ke
+   .42 mengikuti revisi Sackett dkk. (2022). Angka lama berasal dari koreksi
+   range-restriction yang terbukti berlebihan. */
 export interface CompetencyDefinition {
   id: string;
   pillar: CompetencyPillar;
@@ -95,26 +99,38 @@ export const PILLAR_CITATIONS: Record<string, string> = {
 };
 
 /** Predictive validity coefficients (r) — Schmidt & Hunter (1998) meta-analysis */
+/* Validitas metode seleksi terhadap kinerja kerja.
+   ANGKA DIPERBARUI ke revisi Sackett dkk. (2022, Journal of Applied Psychology
+   107(11), 2040-2068), yang memperbaiki koreksi range-restriction yang selama
+   ini berlebihan pada estimasi Schmidt & Hunter (1998).
+
+   Perubahan yang paling penting untuk platform ini: wawancara terstruktur
+   (.42) kini menjadi prediktor tunggal TERKUAT, melampaui tes kemampuan
+   kognitif (.31) yang sebelumnya dianggap teratas. Estimasi lama (.51 untuk
+   wawancara terstruktur, .54 untuk work sample) tidak dipakai lagi.
+
+   Modul asesmen memakai angka yang sama — menyebut angka berbeda di dua tempat
+   pada aplikasi yang sama merusak kepercayaan pada keduanya. */
 export const SELECTION_VALIDITY = [
   {
-    method: "Work samples",
-    validity: 0.54,
-    note: "Highest practical validity for job performance prediction",
+    method: "Wawancara terstruktur",
+    validity: 0.42,
+    note: "Prediktor tunggal terkuat — pertanyaan & rubrik yang sama untuk semua kandidat. Dasar platform ini.",
   },
   {
-    method: "Structured interviews",
-    validity: 0.51,
-    note: "Standardized questions & scoring — basis for this platform",
+    method: "Uji kerja (work sample)",
+    validity: 0.33,
+    note: "Contoh kerja nyata; paling mendekati pekerjaan sehari-hari",
   },
   {
-    method: "Unstructured interviews",
-    validity: 0.38,
-    note: "Avoid ad-hoc interviews without rubrics",
+    method: "Tes kemampuan kognitif",
+    validity: 0.31,
+    note: "Direvisi turun dari .51; tetap kuat, tetapi bukan lagi yang teratas",
   },
   {
-    method: "Reference checks",
-    validity: 0.26,
-    note: "Supplementary only; combine with structured assessment",
+    method: "Wawancara tanpa struktur",
+    validity: 0.19,
+    note: "Tanpa pertanyaan & rubrik baku — paling rawan bias kesan pertama",
   },
 ] as const;
 
@@ -152,7 +168,7 @@ export const ULRICH_COMPETENCIES: CompetencyDefinition[] = [
       "Builds trust through integrity, courageous advocacy, and data-informed influence with business leaders.",
     crossRef: "SKKNI: Hubungan Industrial",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: researchRubric("Credible Activist", [
       "Lacks ethical grounding; damages credibility with stakeholders.",
@@ -170,7 +186,7 @@ export const ULRICH_COMPETENCIES: CompetencyDefinition[] = [
       "Aligns HR and talent decisions with business strategy, market context, and organizational positioning.",
     crossRef: "SKKNI: Perencanaan SDM",
     evidenceMethod: "Structured interview + case exercise",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 78,
     rubric: researchRubric("Strategic Positioner", [
       "No link between talent actions and business outcomes.",
@@ -206,7 +222,7 @@ export const ULRICH_COMPETENCIES: CompetencyDefinition[] = [
       "Leads and sustains organizational change; manages resistance, communications, and adoption metrics.",
     crossRef: "SKKNI: Manajemen Kinerja",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 78,
     rubric: researchRubric("Change Champion", [
       "Resists or derails change initiatives.",
@@ -224,7 +240,7 @@ export const ULRICH_COMPETENCIES: CompetencyDefinition[] = [
       "Integrates HR practices across recruitment, development, rewards, and culture; innovates with measurable impact.",
     crossRef: "SKKNI: Rekrutmen & Seleksi",
     evidenceMethod: "Structured interview + work sample",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 81,
     rubric: researchRubric("HR Innovator & Integrator", [
       "Siloed HR activities; no integration across employee lifecycle.",
@@ -266,7 +282,7 @@ export const SKKNI_COMPETENCIES: CompetencyDefinition[] = [
       "Perencanaan strategis tenaga kerja, proyeksi kebutuhan, dan penyusunan rencana SDM sesuai regulasi ketenagakerjaan Indonesia.",
     crossRef: "Ulrich: Strategic Positioner",
     evidenceMethod: "Structured interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: researchRubric("Perencanaan SDM", [
       "Tidak memahami perencanaan tenaga kerja dan regulasi terkait.",
@@ -284,8 +300,8 @@ export const SKKNI_COMPETENCIES: CompetencyDefinition[] = [
     description:
       "Pelaksanaan rekrutmen berbasis kompetensi, seleksi terstruktur, dan kepatuhan terhadap prinsip kesetaraan dan non-diskriminasi.",
     crossRef: "Ulrich: HR Innovator & Integrator",
-    evidenceMethod: "Structured interview (validity r ≈ 0.51)",
-    validityCoeff: 0.51,
+    evidenceMethod: "Wawancara terstruktur (validitas r ≈ .42)",
+    validityCoeff: 0.42,
     benchmark: 85,
     rubric: researchRubric("Rekrutmen & Seleksi", [
       "Seleksi tidak terstruktur; risiko bias dan prediksi rendah (r ≈ 0.38).",
@@ -323,7 +339,7 @@ export const SKKNI_COMPETENCIES: CompetencyDefinition[] = [
       "Penetapan KPI, evaluasi kinerja, umpan balik, dan tindak lanjut peningkatan produktivitas.",
     crossRef: "Ulrich: Change Champion",
     evidenceMethod: "Structured interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 79,
     rubric: researchRubric("Manajemen Kinerja", [
       "Tidak memahami siklus manajemen kinerja.",
@@ -342,7 +358,7 @@ export const SKKNI_COMPETENCIES: CompetencyDefinition[] = [
       "Pengelolaan hubungan industrial, kepatuhan peraturan ketenagakerjaan, dan penyelesaian perselisihan sesuai hukum Indonesia.",
     crossRef: "Ulrich: Credible Activist",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: researchRubric("Hubungan Industrial", [
       "Pelanggaran prosedur atau ketidaktahuan UU Ketenagakerjaan.",
@@ -427,7 +443,7 @@ export const SFIA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Delivery & Agile Execution",
     description: "Reliably shipping working software end-to-end, including ownership after release.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 81,
     rubric: frameworkRubric([
       "Struggles to deliver; commitments routinely slip without signal.",
@@ -443,7 +459,7 @@ export const SFIA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Technical Collaboration & Communication",
     description: "Working effectively across engineering and non-engineering functions; making technical constraints legible to others.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 77,
     rubric: frameworkRubric([
       "Works in isolation; communication creates friction or confusion.",
@@ -459,7 +475,7 @@ export const SFIA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Innovation & Problem Solving",
     description: "Diagnosing root causes and introducing better approaches rather than repeating prescribed solutions.",
     evidenceMethod: "Structured behavioral interview + case",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: frameworkRubric([
       "Follows prescribed solutions; stops at the first obstacle.",
@@ -475,7 +491,7 @@ export const SFIA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Learning Agility & Tech Adaptability",
     description: "Acquiring new technical skills quickly and applying them to real work as the stack changes.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 83,
     rubric: frameworkRubric([
       "Resists new tools; relies only on long-familiar technology.",
@@ -496,7 +512,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Strategic Agility",
     description: "Seeing beyond immediate tasks to market and organisational direction, and acting on it.",
     evidenceMethod: "Structured interview + case exercise",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: frameworkRubric([
       "Purely tactical; no view beyond the current task.",
@@ -512,7 +528,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Drive for Results",
     description: "Consistently delivering measurable outcomes, including through obstacles.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 85,
     rubric: frameworkRubric([
       "Misses targets consistently; outcomes not tracked.",
@@ -528,7 +544,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Learning Agility",
     description: "Extracting transferable lessons from experience, especially from failure.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 82,
     rubric: frameworkRubric([
       "Repeats mistakes; fixed mindset; deflects responsibility.",
@@ -544,7 +560,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Interpersonal Savvy & Influence",
     description: "Building trust and moving decisions without relying on formal authority.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 78,
     rubric: frameworkRubric([
       "Creates friction; tone-deaf to people and context.",
@@ -560,7 +576,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Problem Solving & Decision Quality",
     description: "Structured analysis leading to decisions that hold up after the fact.",
     evidenceMethod: "Case exercise + structured interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 81,
     rubric: frameworkRubric([
       "Reactive; poor analysis; decisions frequently reversed.",
@@ -576,7 +592,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Manages Ambiguity & Complexity",
     description: "Functioning and leading when the situation, data, or direction is unsettled.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 79,
     rubric: frameworkRubric([
       "Paralyzed by uncertainty; waits for full clarity.",
@@ -592,7 +608,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Collaboration & Teamwork",
     description: "Working across boundaries and sharing credit to produce collective outcomes.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: frameworkRubric([
       "Siloed and competitive; withholds information.",
@@ -608,7 +624,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Communicates Effectively",
     description: "Conveying meaning clearly to different audiences, and listening well enough to be changed by it.",
     evidenceMethod: "Structured interview + presentation",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 78,
     rubric: frameworkRubric([
       "Unclear and disorganised; poor listener.",
@@ -624,7 +640,7 @@ export const LOMINGER_COMPETENCIES: CompetencyDefinition[] = [
     name: "Customer/Stakeholder Focus",
     description: "Understanding and serving the real needs of customers or internal stakeholders.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: frameworkRubric([
       "Internally focused only; unaware of customer impact.",
@@ -677,7 +693,7 @@ export const CGMA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Risk Management & Internal Control",
     description: "Identifying financial and operational risk, and designing controls that actually bind.",
     evidenceMethod: "Structured interview + case",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 80,
     rubric: frameworkRubric([
       "Unaware of risk frameworks; controls not considered.",
@@ -693,7 +709,7 @@ export const CGMA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Business Acumen & Commercial Awareness",
     description: "Connecting financial numbers to the operating reality that produced them.",
     evidenceMethod: "Structured interview + case",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 79,
     rubric: frameworkRubric([
       "Sees numbers in isolation from the business.",
@@ -725,7 +741,7 @@ export const CGMA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Ethics, Governance & Compliance",
     description: "Upholding regulatory and ethical obligations, including when it is inconvenient.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 84,
     rubric: frameworkRubric([
       "Unaware of compliance obligations; ignores irregularities.",
@@ -741,7 +757,7 @@ export const CGMA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Stakeholder Influence & Presentation",
     description: "Making financial information usable and persuasive for non-finance decision makers.",
     evidenceMethod: "Structured interview + presentation",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 77,
     rubric: frameworkRubric([
       "Cannot explain financials in plain language.",
@@ -757,7 +773,7 @@ export const CGMA_COMPETENCIES: CompetencyDefinition[] = [
     name: "Leadership & People Development",
     description: "Building the capability and retention of the finance team.",
     evidenceMethod: "Structured behavioral interview",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 78,
     rubric: frameworkRubric([
       "Individual contributor only; no development of others.",
@@ -1033,7 +1049,7 @@ export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
       "Gate guarding, visitor/vendor logging, vehicle inspection at loading docks, employee bag checks, and reconciliation of Surat Jalan against physical cargo.",
     crossRef: "SKKNI: N.80PAM00.003.2 (Melaksanakan Penjagaan)",
     evidenceMethod: "Situational Judgment Test + observation",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 72,
     rubric: operationalRubric([
       "Allows unauthorised access; no visitor logging; fails to check Surat Jalan or cargo.",
@@ -1052,7 +1068,7 @@ export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
       "Executing guard tour with checkpoint scanning, identifying vulnerabilities at loading bays and perimeter, monitoring CCTV, and immediate hazard reporting.",
     crossRef: "SKKNI: N.80PAM00.005.2 (Melaksanakan Patroli)",
     evidenceMethod: "Observation + patrol log review",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 70,
     rubric: operationalRubric([
       "Skips patrol checkpoints; misses obvious security vulnerabilities; no log entries.",
@@ -1071,7 +1087,7 @@ export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
       "First response to fire, medical emergency, or security incidents; crime scene preservation (TPTKP — police line, status quo, witness documentation); fire suppression with APAR.",
     crossRef: "SKKNI: N.80PAM00.012.2 (TPTKP), N.80PAM00.006.2 (Pengamanan TKP)",
     evidenceMethod: "Situational Judgment Test + drill observation",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 72,
     rubric: operationalRubric([
       "Panics or freezes in emergencies; contaminates crime scenes; no first aid knowledge.",
@@ -1090,7 +1106,7 @@ export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
       "Managing confrontational situations with emotional individuals, de-escalating verbal or physical conflicts between workers or outsiders, maintaining professional composure.",
     crossRef: "SKKNI Gada Madya: N.80PAM00.020.2 (Menangani Konflik)",
     evidenceMethod: "Situational Judgment Test",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 70,
     rubric: operationalRubric([
       "Escalates situations through aggression or inaction; loses composure under pressure.",
@@ -1127,7 +1143,7 @@ export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
       "Maintaining physical fitness for security duties (patrol stamina, emergency sprint, restraint capability), staying alert during long shifts, and professional bearing.",
     crossRef: "SKKNI: N.80PAM00.001.2 (Persiapan Pelaksanaan Tugas)",
     evidenceMethod: "Physical fitness test (Tes Kesamaptaan) + observation",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 68,
     rubric: operationalRubric([
       "Poor fitness; falls asleep on duty; unprofessional appearance or behaviour.",
@@ -1146,7 +1162,7 @@ export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
       "Holding valid KTA Satpam and Gada Pratama/Madya certificate, understanding legal authority limits, acting within the law (UU 2/2002), and maintaining integrity.",
     crossRef: "Perpol No. 4/2020 (Pengamanan Swakarsa)",
     evidenceMethod: "Knowledge test + integrity assessment",
-    validityCoeff: 0.51,
+    validityCoeff: 0.42,
     benchmark: 70,
     rubric: operationalRubric([
       "No valid KTA or Gada certification; unaware of legal authority limits; integrity concerns.",
