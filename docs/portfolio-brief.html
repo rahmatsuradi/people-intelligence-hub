@@ -1,0 +1,791 @@
+<title>Berkas Portofolio People Intelligence</title>
+<style>
+  :root {
+    --paper:      #f4f6f7;
+    --surface:    #ffffff;
+    --surface-2:  #eef1f3;
+    --ink:        #16232d;
+    --ink-soft:   #3d4f5c;
+    --muted:      #61727e;
+    --rule:       #d5dce1;
+    --rule-soft:  #e4e9ec;
+    --accent:     #9c3a2d;
+    --accent-ink: #7d2c21;
+    --accent-bg:  #f3e5e2;
+    --ok:         #2d6a4f;
+    --ok-bg:      #e2efe8;
+    --warn:       #8a5a12;
+    --warn-bg:    #f6ecd9;
+    --shadow:     0 1px 2px rgba(22,35,45,.06), 0 8px 24px -16px rgba(22,35,45,.30);
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0f1720;
+      --surface:    #161f29;
+      --surface-2:  #1d2833;
+      --ink:        #e6ebef;
+      --ink-soft:   #bcc7d0;
+      --muted:      #8b9aa6;
+      --rule:       #2b3945;
+      --rule-soft:  #223039;
+      --accent:     #e08573;
+      --accent-ink: #f0a595;
+      --accent-bg:  #2e1e1a;
+      --ok:         #6cc296;
+      --ok-bg:      #172c23;
+      --warn:       #d8ac62;
+      --warn-bg:    #2c2416;
+      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #0f1720;
+    --surface:    #161f29;
+    --surface-2:  #1d2833;
+    --ink:        #e6ebef;
+    --ink-soft:   #bcc7d0;
+    --muted:      #8b9aa6;
+    --rule:       #2b3945;
+    --rule-soft:  #223039;
+    --accent:     #e08573;
+    --accent-ink: #f0a595;
+    --accent-bg:  #2e1e1a;
+    --ok:         #6cc296;
+    --ok-bg:      #172c23;
+    --warn:       #d8ac62;
+    --warn-bg:    #2c2416;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  @media (min-width: 1000px) {
+    .wrap { grid-template-columns: 232px minmax(0, 1fr); align-items: start; }
+    .toc { position: sticky; top: 28px; }
+  }
+
+  /* ── Masthead ─────────────────────────────────────────── */
+  .masthead {
+    grid-column: 1 / -1;
+    border-bottom: 2px solid var(--ink);
+    padding: 56px 0 22px;
+    margin-bottom: 8px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem);
+    line-height: 1.08;
+    letter-spacing: -.015em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-family: var(--serif);
+    font-size: clamp(1.02rem, 2vw, 1.18rem);
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0;
+  }
+
+  .stat-strip {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 0 0 8px;
+  }
+  .stat { background: var(--surface); padding: 14px 16px; }
+  .stat b {
+    display: block;
+    font-family: var(--mono);
+    font-size: 1.42rem;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat span {
+    display: block;
+    font-size: 11.5px;
+    color: var(--muted);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  /* ── Table of contents ────────────────────────────────── */
+  .toc { font-size: 13.5px; }
+  .toc p {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; counter-reset: toc; }
+  .toc li { counter-increment: toc; display: flex; gap: 9px; }
+  .toc li::before {
+    content: counter(toc, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--accent);
+    padding-top: 3px;
+  }
+  .toc a { color: var(--ink-soft); text-decoration: none; border-bottom: 1px solid transparent; }
+  .toc a:hover, .toc a:focus-visible { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Sections ─────────────────────────────────────────── */
+  section { scroll-margin-top: 24px; }
+  section + section { margin-top: 56px; }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: clamp(1.45rem, 3vw, 1.85rem);
+    font-weight: 600;
+    letter-spacing: -.012em;
+    line-height: 1.2;
+    margin: 0 0 6px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 1.02rem;
+    font-weight: 650;
+    letter-spacing: -.005em;
+    margin: 30px 0 8px;
+  }
+  h4 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 22px 0 8px;
+    font-weight: 600;
+  }
+  p { margin: 0 0 14px; max-width: 72ch; }
+  .lede { color: var(--ink-soft); margin-top: 14px; }
+
+  ul, ol.plain { margin: 0 0 14px; padding-left: 20px; max-width: 72ch; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--muted); }
+
+  strong { font-weight: 650; }
+  code {
+    font-family: var(--mono);
+    font-size: .855em;
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 1px 5px;
+    word-break: break-word;
+  }
+  a { color: var(--accent-ink); }
+
+  /* ── Cards ────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 18px;
+  }
+  .card > :last-child { margin-bottom: 0; }
+  .card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .card-head h3 { margin: 0; font-size: 1.1rem; }
+  .card-sub {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .tag-llm  { background: var(--accent-bg); color: var(--accent-ink); }
+  .tag-rule { background: var(--surface-2); color: var(--muted); border: 1px solid var(--rule); }
+  .tag-ok   { background: var(--ok-bg); color: var(--ok); }
+  .tag-warn { background: var(--warn-bg); color: var(--warn); }
+
+  .kv { display: grid; gap: 10px; margin: 16px 0 0; }
+  .kv > div { display: grid; grid-template-columns: 128px minmax(0,1fr); gap: 14px; align-items: start; }
+  .kv dt, .kv .k {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-top: 3px;
+  }
+  .kv .v { font-size: 14.5px; color: var(--ink-soft); }
+  @media (max-width: 560px) { .kv > div { grid-template-columns: 1fr; gap: 2px; } }
+
+  /* ── Tables ───────────────────────────────────────────── */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); margin-bottom: 18px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ── Callouts ─────────────────────────────────────────── */
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    padding: 14px 18px;
+    margin: 0 0 18px;
+    font-size: 14.5px;
+    color: var(--ink-soft);
+  }
+  .note > :last-child { margin-bottom: 0; }
+  .note b { color: var(--ink); }
+
+  /* ── Copy blocks (siap salin) ─────────────────────────── */
+  .copyblock {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--muted);
+    border-radius: 3px;
+    padding: 18px 20px;
+    margin: 0 0 18px;
+    font-size: 14.5px;
+  }
+  .copyblock p { margin-bottom: 10px; }
+  .copyblock > :last-child { margin-bottom: 0; }
+  .copyblock .meta {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .bullets li { font-size: 14.5px; }
+
+  footer {
+    grid-column: 1 / -1;
+    margin-top: 64px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Berkas portofolio · disusun dari kode, bukan dari ingatan</p>
+    <h1>People Intelligence: apa saja yang sebenarnya kamu bangun</h1>
+    <p class="standfirst">Inventaris lengkap isi sistem — lima fitur yang benar-benar memanggil model bahasa, bagian mana yang berbasis aturan, mesin payroll yang jadi tulang punggungnya, dan angka-angka yang aman kamu klaim di CV maupun LinkedIn.</p>
+  </header>
+
+  <div class="stat-strip">
+    <div class="stat"><b>28.692</b><span>baris TS/TSX</span></div>
+    <div class="stat"><b>150</b><span>unit test lulus</span></div>
+    <div class="stat"><b>5</b><span>fitur LLM</span></div>
+    <div class="stat"><b>7</b><span>framework kompetensi</span></div>
+    <div class="stat"><b>54</b><span>kompetensi terukur</span></div>
+    <div class="stat"><b>72</b><span>commit / 8 minggu</span></div>
+  </div>
+
+  <nav class="toc" aria-label="Daftar isi">
+    <p>Daftar isi</p>
+    <ol>
+      <li><a href="#ringkas">Ringkasan satu paragraf</a></li>
+      <li><a href="#peta">Peta sistem</a></li>
+      <li><a href="#ai">Lima fitur AI, dibedah</a></li>
+      <li><a href="#bukan-ai">Yang bukan AI</a></li>
+      <li><a href="#mesin">Mesin payroll</a></li>
+      <li><a href="#rekayasa">Keputusan rekayasa</a></li>
+      <li><a href="#angka">Angka terverifikasi</a></li>
+      <li><a href="#cv">Bahan CV</a></li>
+      <li><a href="#linkedin">Draf LinkedIn</a></li>
+      <li><a href="#wawancara">Bekal wawancara</a></li>
+      <li><a href="#drift">Dokumen yang perlu diperbarui</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="ringkas">
+      <h2>Ringkasan satu paragraf</h2>
+      <p class="lede">Kalau ada yang bertanya "ini sebenarnya apa?", ini jawabannya:</p>
+      <div class="copyblock">
+        <p><strong>People Intelligence</strong> adalah platform HR end-to-end untuk konteks Indonesia — dari rekrutmen sampai payroll — yang dibangun sendiri oleh seorang praktisi HR. Di dalamnya ada lima fitur berbasis model bahasa (analisis CV multi-framework, analisis massal, intake lamaran publik, ringkasan eksekutif diagnostik, dan generator konten employer branding), plus mesin payroll murni TypeScript yang menghitung BPJS, PPh 21 metode TER, rekonsiliasi pajak Desember, THR, lembur, sampai Formulir 1721-A1 — dengan setiap tarif diverifikasi dari peraturan resmi dan diuji lewat 150 unit test ber-kunci-jawaban.</p>
+      </div>
+      <p>Yang membuatnya menonjol bukan "ada AI-nya" — hampir semua orang bisa memanggil API model sekarang. Yang menonjol adalah <strong>disiplin di sekelilingnya</strong>: prompt yang dilarang mengarang angka, jalur cadangan deterministik supaya fitur tidak pernah mati, tarif statutori disimpan sebagai data berversi alih-alih angka di dalam kode, dan pemisahan tegas antara yang dihitung mesin dan yang dinilai manusia.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="peta">
+      <h2>Peta sistem</h2>
+      <p>Delapan seksi navigasi, ±26 halaman, 6 API route. Dua modul awal (Hire dan Pay) sudah tumbuh jadi platform HR yang cukup utuh.</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Seksi</th><th>Isi</th><th>Sifat</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Dashboard &amp; Insights</strong></td><td>Overview, HR Analytics (3 tab: Workforce, Simulator, Recruitment), Hiring Report</td><td>1 fitur LLM + agregasi data</td></tr>
+            <tr><td><strong>Employer Branding &amp; Culture</strong></td><td>AI Content Generator, Trend &amp; Ide Konten, Editorial Plan, Employee Engagement (eNPS)</td><td>1 fitur LLM + 3 berbasis aturan</td></tr>
+            <tr><td><strong>Talent Acquisition</strong></td><td>Manpower Planning, Open Roles, Talent Pool, Candidates, CV Analyzer (satuan + massal), Interview Workspace, Hiring Analytics</td><td>3 fitur LLM</td></tr>
+            <tr><td><strong>Core HR &amp; IR</strong></td><td>Employee Directory, Industrial Relations (log kasus + tracker PP/PKB), Onboarding, Attendance + Kiosk</td><td>Operasional, input HR</td></tr>
+            <tr><td><strong>Performance &amp; Talent</strong></td><td>Performance Management (9-box), Succession Planning, Organization Development (org chart, job grading)</td><td>Berbasis aturan</td></tr>
+            <tr><td><strong>Learning &amp; Development</strong></td><td>Training &amp; Courses (LMS-lite), Competency Matrix</td><td>Input HR</td></tr>
+            <tr><td><strong>Payroll &amp; Rewards</strong></td><td>Payroll Run, Laporan Pajak &amp; BPJS, Formulir 1721-A1</td><td>Mesin hitung murni + 150 test</td></tr>
+            <tr><td><strong>Settings &amp; Integrations</strong></td><td>Job Portal, Social Media API</td><td>Placeholder (ditandai "soon")</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Tumpukan teknologi</h4>
+      <div class="kv">
+        <div><span class="k">Framework</span><span class="v">Next.js 16.2.6 (App Router, Turbopack), React 19.2.4, TypeScript, Tailwind CSS v4</span></div>
+        <div><span class="k">Data &amp; Auth</span><span class="v">Supabase (Postgres + Row Level Security, akses dibatasi role <code>authenticated</code>)</span></div>
+        <div><span class="k">Model AI</span><span class="v">Llama 3.3 70B lewat Groq API — JSON mode, temperature per kasus pakai</span></div>
+        <div><span class="k">Pendukung</span><span class="v">unpdf (ekstraksi teks PDF), nodemailer (SMTP), Vitest 4, Vercel + Vercel Cron</span></div>
+        <div><span class="k">Multi-tenant</span><span class="v">Dua entitas demo (stasiun TV &amp; garmen) dengan key penyimpanan ber-prefix tenant dan penjaga anti-kontaminasi antar-tenant</span></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="ai">
+      <h2>Lima fitur AI, dibedah</h2>
+      <p class="lede">Ini bagian yang paling sering ditanya orang. Untuk tiap fitur: apa yang dilakukan, teknik apa yang dipakai, dan kalimat apa yang aman kamu pakai untuk menjelaskannya.</p>
+
+      <!-- 1 -->
+      <div class="card">
+        <div class="card-head">
+          <h3>1. CV Analyzer multi-framework</h3>
+          <span class="tag tag-llm">Llama 3.3 70B</span>
+        </div>
+        <p class="card-sub">src/lib/cv-analyzer-ai.ts · src/lib/competency-framework.ts · /api/analyze-cv</p>
+        <p>Upload PDF CV → teks diekstrak → AI menilai kandidat terhadap framework kompetensi yang <strong>dipilih otomatis sesuai posisi dan departemen</strong>, lalu mengembalikan skor per kompetensi, kutipan bukti dari CV, risk flag, 5 pertanyaan wawancara STAR, dan rekomendasi akhir (Strong Hire / Hire / Review / Reject).</p>
+
+        <h4>Yang membuatnya bukan wrapper biasa</h4>
+        <ul>
+          <li><strong>Router 7 klaster.</strong> Fungsi <code>detectCluster()</code> memetakan posisi + departemen ke salah satu dari 7 framework: Ulrich + SKKNI 149/2020 (HR), SFIA v8 (tech), Lominger/Korn Ferry (business), CGMA (finance), SKKNI Penyiaran 133/2019, SKKNI Jurnalistik 246/2020, dan SKKNI Satpam 259/2018. Total 54 kompetensi dengan benchmark dan rubrik 1–5 masing-masing. Kata kunci operasional (kameraman, reporter, satpam) sengaja dicek <em>lebih dulu</em> dari kata kunci white-collar supaya posisi lapangan tidak salah dinilai pakai framework manajerial.</li>
+          <li><strong>Prompt dihasilkan dari sumber tunggal.</strong> Definisi kompetensi dan benchmark tidak ditulis ulang di dalam string prompt — prompt di-<em>generate</em> dari <code>competency-framework.ts</code> yang juga dipakai UI dan Interview Workspace. Artinya benchmark yang tampil di layar tidak mungkin berbeda dari yang dikirim ke model.</li>
+          <li><strong>Validasi keluaran.</strong> <code>parseAnalysisResponse()</code> membersihkan code fence, memotong JSON dari teks liar, lalu menjepit setiap skor ke rentang sah (0–100, level 1–5). Kalau semuanya gagal, <code>buildFallbackResult()</code> mengembalikan struktur valid berisi pesan error — UI tidak pernah crash karena jawaban model yang aneh.</li>
+          <li><strong>Ada rantai audit.</strong> Tiap kompetensi wajib disertai <code>evidenceQuote</code> — kutipan langsung maksimal 15 kata dari CV, atau eksplisit "Tidak ditemukan bukti eksplisit". Penilai manusia bisa memeriksa dasar skornya, bukan disuruh percaya begitu saja.</li>
+        </ul>
+      </div>
+
+      <!-- 2 -->
+      <div class="card">
+        <div class="card-head">
+          <h3>2. Analisis CV massal dengan pengendalian kuota</h3>
+          <span class="tag tag-llm">Llama 3.3 70B</span>
+        </div>
+        <p class="card-sub">src/app/cv-analyzer/bulk/page.tsx</p>
+        <p>Unggah sampai <strong>200 PDF sekaligus</strong> (atau satu folder), semuanya dianalisis, hasilnya jadi shortlist berperingkat. Nama kandidat diekstrak oleh AI dari isi CV — pengguna tidak perlu mengetik satu per satu.</p>
+
+        <h4>Masalah teknis yang diselesaikan di sini</h4>
+        <p>Groq free tier membatasi ±12.000 token per menit. Kalau 200 CV dikirim beruntun, sebagian besar akan ditolak. Solusinya: implementasi <strong>token bucket di sisi klien</strong> — estimasi kebutuhan token per CV, laju pengisian ulang ±200 token/detik, jeda 600 ms antar-CV saat kuota aman, hingga 5 percobaan per CV, membaca header <code>retry-after</code> dari Groq bila ada, dan gagal cepat (bukan menggantung) kalau diminta menunggu lebih dari 90 detik — dengan tombol "Retry failed" untuk sisa yang belum berhasil.</p>
+        <div class="note"><p><b>Kalimat siap pakai:</b> "Saya menerapkan rate limiting berbasis token bucket di sisi klien supaya pemrosesan batch 200 CV tetap berjalan di dalam kuota API gratis, tanpa gagal massal."</p></div>
+      </div>
+
+      <!-- 3 -->
+      <div class="card">
+        <div class="card-head">
+          <h3>3. Intake lamaran publik dengan penilaian di sisi server</h3>
+          <span class="tag tag-llm">Llama 3.3 70B</span>
+        </div>
+        <p class="card-sub">/apply/[jobReqId] · /api/apply</p>
+        <p>Halaman lamaran publik tanpa login. Kandidat mengunggah CV; server mengekstrak teks, menjalankan analisis yang sama seperti dashboard, lalu menyimpannya sebagai kandidat + entri aktivitas memakai service-role key (karena RLS hanya mengizinkan role <code>authenticated</code>).</p>
+        <p>Keputusan desain yang layak disebut: <strong>klien hanya menerima JSON sukses/gagal minimal</strong> — skor, rekomendasi, dan seluruh isi analisis tidak pernah dikirim balik ke pelamar. Penilaian internal tetap internal.</p>
+      </div>
+
+      <!-- 4 -->
+      <div class="card">
+        <div class="card-head">
+          <h3>4. Executive Insight — AI yang mendiagnosis, bukan membaca ulang angka</h3>
+          <span class="tag tag-llm">Llama 3.3 70B</span>
+        </div>
+        <p class="card-sub">src/lib/executive-insight-ai.ts · /api/executive-insight</p>
+        <p>Widget di dashboard Overview yang menulis ringkasan 3–4 kalimat untuk audiens C-level. Ini fitur dengan rekayasa prompt paling dalam di seluruh repo, dan paling enak diceritakan ke sesama orang HR.</p>
+
+        <h4>Empat lapis yang ditanam di dalam prompt</h4>
+        <ul>
+          <li><strong>Kerangka sebab-akibat.</strong> Model diberi rantai hipotesis yang sudah dikenal praktisi HR: rekrutmen lambat di posisi lapangan → kru yang ada menutup kekurangan → jam lembur melonjak → burnout → eNPS turun → turnover sukarela naik → kekosongan makin parah. Model diminta menyebut keterkaitan itu <em>hanya bila data mendukung</em>, dan dilarang memaksakannya bila tidak.</li>
+          <li><strong>Penjaga "Flaw of Averages".</strong> Rata-rata Time-to-Fill bisa terlihat sehat padahal menyembunyikan satu posisi kritis yang kosong berbulan-bulan. Prompt mewajibkan model menyoroti anomali itu secara eksplisit ketika rata-rata masih dalam target <em>tetapi</em> posisi bottleneck jauh melampauinya. Ini konsep statistik yang diterjemahkan jadi aturan operasional — bukan sekadar minta "buat ringkasan".</li>
+          <li><strong>Kuantifikasi "Cost of Delay" yang diwajibkan.</strong> Kalau data biaya lembur tersedia bersamaan dengan bottleneck rekrutmen, model <em>wajib</em> menyebut angka Rupiah dan persentase deviasi budget secara eksplisit — dilarang menulis abstrak seperti "lonjakan biaya lembur". Argumennya dibingkai sebagai: menunda pengisian posisi kritis menciptakan biaya variabel yang terukur, dan kemungkinan besar lebih mahal daripada segera mengisi posisi itu.</li>
+          <li><strong>Aturan anti-halusinasi.</strong> Hanya boleh memakai angka yang disuplai; dilarang menyebut revenue, profit, atau cost-per-hire (memang tidak tersedia); dan dilarang menyebut metrik yang statusnya "belum ada data". Metrik null tidak dikirim sebagai nol — dikirim sebagai kalimat "belum tersedia", supaya model tidak salah membaca ketiadaan data sebagai nilai nol.</li>
+        </ul>
+
+        <h4>Rekayasa di sekelilingnya</h4>
+        <ul>
+          <li><strong>Fallback deterministik.</strong> Kalau <code>GROQ_API_KEY</code> tidak diset atau Groq gagal, <code>buildFallbackSummary()</code> menyusun ringkasan berbasis template — termasuk logika Cost of Delay dan deteksi outlier yang sama. Widget tidak pernah rusak, hanya turun kualitas dengan anggun.</li>
+          <li><strong>Cache dengan versi prompt.</strong> Ringkasan di-cache berdasarkan nilai metrik. Masalahnya: kalau metrik tidak berubah, cache akan terus menyajikan hasil dari prompt lama meski promptnya sudah ditulis ulang. Konstanta <code>INSIGHT_PROMPT_VERSION</code> ikut masuk ke kunci cache untuk memaksa satu generasi baru setiap kali logika prompt berubah — bug halus yang biasanya baru ketahuan berminggu-minggu kemudian.</li>
+          <li><strong>Ketahanan jaringan.</strong> Dua percobaan dengan jeda 800 ms khusus untuk status 429 dan 5xx, temperature 0.4, <code>response_format: json_object</code>, batas 220 token keluaran.</li>
+        </ul>
+        <div class="note"><p><b>Kalimat siap pakai:</b> "Saya merancang prompt yang memaksa model mengkorelasikan antar-metrik jadi satu diagnosis sebab-akibat dan mengkuantifikasi Cost of Delay dalam Rupiah, dengan aturan ketat anti-halusinasi dan jalur cadangan deterministik kalau API-nya tidak tersedia."</p></div>
+      </div>
+
+      <!-- 5 -->
+      <div class="card">
+        <div class="card-head">
+          <h3>5. Generator konten employer branding dengan riset tren live</h3>
+          <span class="tag tag-llm">Llama 3.3 70B</span>
+        </div>
+        <p class="card-sub">src/lib/employer-branding-ai.ts (891 baris) · /api/employer-branding</p>
+        <p>Masukkan profil perusahaan, pilar konten, platform, dan tujuan kampanye → keluar 6–8 ide konten lengkap dengan pembagian per-beat, arahan visual, panduan copywriting, hashtag, dan kalender editorial mingguan.</p>
+
+        <h4>Grounding: melawan halusinasi dengan data nyata</h4>
+        <ul>
+          <li><strong>Pengambilan tren live.</strong> Sebelum memanggil model, sistem menarik Google News RSS (lokal <code>hl=id&amp;gl=ID</code>) untuk tren viral, tren industri, dan tren per-platform, lalu menyuntikkan judul + URL asli ke dalam prompt. Model hanya boleh mengutip URL dari daftar itu — dilarang mengarang tautan. Pola ini pada dasarnya RAG sederhana.</li>
+          <li><strong>Riset perusahaan otomatis.</strong> Begitu nama perusahaan diketik, sistem mencari berita nyata tentang perusahaan itu dan mewajibkan AI <em>menyatakan lebih dulu pemahamannya</em> tentang perusahaan tersebut (<code>companyContext</code>). Kalau AI salah baca konteks, pengguna langsung tahu di baris pertama — bukan baru curiga setelah membaca 8 ide yang generik.</li>
+          <li><strong>Playbook viralitas.</strong> Tujuh prinsip engagement bersitasi (hook 2–3 detik, sinyal engagement awal, watch time di atas jumlah follower, autentik mengalahkan polished, native per platform, saves &amp; shares, CTA penutup) — ditanam ke prompt <em>dan</em> ditampilkan ke pengguna sebagai kartu edukasi.</li>
+          <li><strong>Pustaka 16 format bernama.</strong> POV, GRWM, Day in the Life, Before/After, Vox Pop Kantor, Myth vs Fact, dan seterusnya — masing-masing dengan kerangka beat dan timestamp. Lima format diambil <em>acak</em> tiap generasi supaya ide tidak selalu mengerucut ke 2–3 pola yang sama.</li>
+          <li><strong>Anti-pengulangan.</strong> Judul dari generasi sebelumnya di sesi yang sama dikirim sebagai <code>avoidTitles</code>, jadi tombol "generate lagi" benar-benar menghasilkan hal baru.</li>
+        </ul>
+
+        <h4>Manajemen anggaran token</h4>
+        <p>Ini detail yang menunjukkan kamu benar-benar men-debug sesuatu yang nyata: batas Groq untuk model/organisasi ini adalah <strong>12.000 token per request</strong> (prompt + <code>max_tokens</code> digabung, dicek sebelum generasi — error 413, bukan 429), jauh lebih ketat dari batas 8.192 token milik modelnya sendiri. Jadi <code>budgetMaxTokens()</code> menghitung jatah keluaran terhadap anggaran <em>itu</em>, dengan estimasi ±3,5 karakter per token dan margin aman 700 token. Kalau respons tetap terpotong (<code>finish_reason: "length"</code>), sistem otomatis mencoba ulang dengan jumlah ide lebih sedikit alih-alih menyerah.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="bukan-ai">
+      <h2>Yang bukan AI — dan kenapa menyebutnya justru menguntungkan</h2>
+      <p class="lede">Beberapa bagian sistem berbasis aturan, bukan model bahasa. Kejujuran di sini bukan kelemahan: menunjukkan kamu paham kapan LLM <em>tidak</em> diperlukan adalah sinyal senioritas, dan melindungi kamu kalau ada yang membuka kodenya.</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Bagian</th><th>Cara kerja sebenarnya</th><th>Sebut sebagai</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Insight 9-box di Performance</strong></td>
+              <td>Rata-rata skor KPI &amp; kompetensi → kuadran 9-box → rencana aksi dari template (Future Leader / Trusted Professional / Dilemma / PIP)</td>
+              <td>"Rule engine pemetaan 9-box"</td>
+            </tr>
+            <tr>
+              <td><strong>Halaman Trend &amp; Ide Konten</strong></td>
+              <td>Template lokal dengan interpolasi topik — tidak ada panggilan model sama sekali</td>
+              <td>"Generator template" (jangan sebut AI)</td>
+            </tr>
+            <tr>
+              <td><strong>Candidate matching</strong></td>
+              <td>Skor tumpang-tindih kata kunci antara syarat lowongan dan skill kandidat</td>
+              <td>"Keyword matching berbobot"</td>
+            </tr>
+            <tr>
+              <td><strong>Simulator what-if di Analytics</strong></td>
+              <td>Koefisien ilustratif untuk demo — sudah ditandai eksplisit di komentar kode</td>
+              <td>"Simulator skenario ilustratif"</td>
+            </tr>
+            <tr>
+              <td><strong>Fallback Executive Insight</strong></td>
+              <td>Template deterministik dengan logika bisnis yang sama</td>
+              <td>"Graceful degradation"</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p><b>Kalimat yang membalik ini jadi keunggulan:</b> "Tidak semua bagian pakai LLM. Pemetaan 9-box, matching kata kunci, dan seluruh mesin payroll sengaja deterministik — untuk perhitungan yang harus bisa diaudit dan direproduksi, model probabilistik justru pilihan yang salah."</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="mesin">
+      <h2>Mesin payroll: bagian tersulit, dan paling jarang dimiliki orang HR</h2>
+      <p class="lede">Kalau AI-nya membuat orang berhenti scroll, bagian inilah yang membuat mereka menganggapmu serius. Nyaris tidak ada kandidat HR yang punya ini di portofolionya.</p>
+
+      <h4>Fungsi murni yang diuji satu per satu</h4>
+      <p>Seluruh mesin di <code>src/lib/payroll/</code> ditulis sebagai fungsi murni — input yang sama selalu menghasilkan output yang sama, tanpa efek samping: <code>computeGross</code>, <code>computeBPJS</code>, <code>computePPh21_TER</code>, <code>computePPh21_Annual</code>, <code>computeTHR</code>, <code>computeOvertime</code>, <code>runPayroll</code>, <code>buildPayslip</code>, <code>buildForm1721A1</code>, <code>computeProgressiveTax</code>, <code>computePTKPAnnual</code>, dan fungsi masking data pribadi.</p>
+
+      <h4>Cakupan regulasi</h4>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Area</th><th>Dasar hukum yang diimplementasikan</th></tr></thead>
+          <tbody>
+            <tr><td>Struktur upah &amp; pengupahan</td><td>UU Ketenagakerjaan, PP 36/2021</td></tr>
+            <tr><td>THR prorata</td><td>Permenaker 6/2016 (masa kerja ÷ 12)</td></tr>
+            <tr><td>Lembur</td><td><strong>PP 35/2021</strong> Pasal 31–32, pembagi 1/173 — menggantikan Kepmenaker 102/2004 yang sudah dicabut</td></tr>
+            <tr><td>PPh 21 bulanan</td><td>PP 58/2023 + PMK 168/2023 (metode TER, kategori A/B/C)</td></tr>
+            <tr><td>PPh 21 Desember</td><td>Pasal 17 UU HPP (tarif progresif, rekonsiliasi tahunan)</td></tr>
+            <tr><td>Biaya jabatan</td><td>PMK 250/PMK.03/2008</td></tr>
+            <tr><td>PTKP</td><td>PMK 101/PMK.010/2016</td></tr>
+            <tr><td>BPJS Ketenagakerjaan</td><td>PP 44/2015, 45/2015, 46/2015 — JHT 5,7% · JP 3% · JKK per kelas risiko · JKM 0,3%</td></tr>
+            <tr><td>BPJS Kesehatan</td><td>Perpres 82/2018 jo. 75/2019 jo. 64/2020</td></tr>
+            <tr><td>Pelindungan data pribadi</td><td>UU 27/2022 — masking NIK, NPWP, dan nomor rekening di layer render</td></tr>
+            <tr><td>Pelaporan tahunan</td><td>Formulir 1721-A1 — sudah dibangun (engine + halaman + 7 test)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Detail yang paling kuat untuk diceritakan</h4>
+      <ul>
+        <li><strong>Tabel lembur yang benar.</strong> Banyak kalkulator payroll online masih memakai tabel Kepmenaker 102/2004 yang sudah dicabut Permenaker 23/2021. Sistem ini memakai PP 35/2021. Ini bukan detail teknis — ini bukti kamu memverifikasi ke sumber primer alih-alih menyalin dari template yang beredar.</li>
+        <li><strong>Tarif sebagai data berversi, bukan angka di dalam kode.</strong> Setiap tarif statutori disimpan per <code>effective_date</code> dan dipilih lewat <code>pickStatutoryConfigForPeriod()</code>. Ketika pemerintah mengubah tarif, yang dilakukan adalah menambah baris data — bukan mengubah kode — sehingga perhitungan periode lama tetap akurat secara retroaktif. Ini sudah terbukti nyata saat plafon upah JP BPJS naik pada Maret 2026.</li>
+        <li><strong>Rekonsiliasi Desember termasuk kasus kelebihan potong.</strong> Perhitungan tahunan bisa menghasilkan nilai negatif — pajak yang dikembalikan ke karyawan — dan kasus itu diuji secara eksplisit, bukan diasumsikan tidak akan terjadi.</li>
+        <li><strong>Slip gaji dengan pemeriksaan integritas.</strong> Slip menolak diterbitkan kalau totalnya tidak cocok dengan hasil mesin hitung. Data pribadi ter-masking otomatis di layer render.</li>
+        <li><strong>150 unit test lulus, metodologi kunci jawaban.</strong> Tiap kasus dihitung manual dari tarif resmi lebih dulu, baru dicocokkan dengan output program. Kasus yang diuji termasuk pembulatan tepat di batas plafon BPJS, transisi tarif antar-periode, dan tabel lembur lintas hari kerja/libur.</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="rekayasa">
+      <h2>Keputusan rekayasa yang layak disebut</h2>
+      <p class="lede">Hal-hal kecil yang membedakan "proyek tutorial" dari "sistem yang dipikirkan".</p>
+
+      <div class="kv">
+        <div><span class="k">Jembatan Hire→Pay</span><span class="v">Kandidat berstatus <em>hired</em> muncul di antrean onboarding. Sengaja <strong>tidak</strong> otomatis penuh: data rekrutmen tidak pernah memuat upah disepakati, PTKP, NIK, tanggal masuk, atau kelas risiko JKK — semuanya baru ada saat kontrak ditandatangani. Form menarik yang sudah diketahui, meminta sisanya. Relasi dirancang aman: unique (satu kandidat tidak bisa di-onboard dua kali) dan <code>on delete set null</code> (menghapus kandidat tidak menghapus record karyawan — orangnya tetap bekerja).</span></div>
+        <div><span class="k">Keamanan</span><span class="v">RLS aktif di semua tabel, dibatasi role <code>authenticated</code>, jadi anon key publik tidak bisa membaca atau menulis. Jalur lamaran publik memakai service-role key khusus di sisi server. Instance produksi (data asli) dipisah total dari deployment demo (data 100% sintetis).</span></div>
+        <div><span class="k">Multi-tenant</span><span class="v">Bug kontaminasi antar-tenant ditemukan dan diperbaiki: sinkronisasi cloud dijaga agar hanya berjalan saat tenant dasar aktif, supaya data satu perusahaan tidak pernah bocor ke tampilan perusahaan lain.</span></div>
+        <div><span class="k">Biaya operasional</span><span class="v">Endpoint <code>/api/keep-alive</code> dijalankan Vercel Cron harian untuk mencegah auto-pause Supabase free tier setelah 7 hari idle, dengan proteksi bearer token opsional. Seluruh sistem berjalan di free tier.</span></div>
+        <div><span class="k">Turunan lain</span><span class="v">Migrasi skema bersifat aditif dan idempoten (<code>create table if not exists</code>, tanpa <code>ALTER</code>/<code>DROP</code> pada tabel modul lain), jadi aman dijalankan ulang.</span></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="angka">
+      <h2>Angka terverifikasi</h2>
+      <p class="lede">Semua angka di bawah dihitung langsung dari repo hari ini — aman dipakai di CV. Jangan pakai angka lain kecuali kamu mengeceknya ulang.</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Metrik</th><th class="num">Nilai</th><th>Cara verifikasi</th></tr></thead>
+          <tbody>
+            <tr><td>Baris kode TypeScript/TSX</td><td class="num">28.692</td><td>112 file di <code>src/</code></td></tr>
+            <tr><td>Unit test lulus</td><td class="num">150</td><td><code>npm run test</code> — 13 file, semua hijau</td></tr>
+            <tr><td>Commit</td><td class="num">72</td><td>10 Juni – 3 Agustus 2026 (±8 minggu)</td></tr>
+            <tr><td>Halaman aplikasi</td><td class="num">±26</td><td>di 8 seksi navigasi</td></tr>
+            <tr><td>API route</td><td class="num">6</td><td>analyze-cv, apply, employer-branding, executive-insight, keep-alive, send-email</td></tr>
+            <tr><td>Fitur berbasis LLM</td><td class="num">5</td><td>semuanya memanggil Groq / Llama 3.3 70B</td></tr>
+            <tr><td>Framework kompetensi</td><td class="num">7</td><td>4 internasional + 3 SKKNI Indonesia</td></tr>
+            <tr><td>Kompetensi terukur</td><td class="num">54</td><td>HR 11 · business 9 · tech 8 · finance 8 · security 7 · broadcast 6 · editorial 5</td></tr>
+            <tr><td>Tabel database</td><td class="num">9</td><td>6 tabel <code>pi_*</code> (Pay) + 3 tabel modul Hire</td></tr>
+            <tr><td>Kapasitas batch CV</td><td class="num">200</td><td>per sesi unggah, dengan pengendalian kuota</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="cv">
+      <h2>Bahan CV</h2>
+      <p class="lede">Ambil 3–5 poin, jangan semuanya — CV yang terlalu padat justru melemahkan. Pilih yang paling relevan dengan posisi yang dilamar.</p>
+
+      <h3>Judul proyek</h3>
+      <p>Pilih satu sesuai posisi yang dituju:</p>
+      <ul class="bullets">
+        <li><strong>Untuk posisi HR generalis / HRBP:</strong> People Intelligence — Platform HR Terintegrasi (Rekrutmen, Payroll, Analitik)</li>
+        <li><strong>Untuk posisi HR Tech / HRIS:</strong> People Intelligence — HR Platform dengan Mesin Payroll Taat Regulasi &amp; Fitur Berbasis AI</li>
+        <li><strong>Untuk posisi Comp &amp; Ben:</strong> People Intelligence — Payroll &amp; Statutory Compliance Engine (BPJS, PPh 21 TER, 1721-A1)</li>
+      </ul>
+
+      <h3>Poin berbahasa Indonesia</h3>
+      <div class="copyblock">
+        <p class="meta">Salin dan sesuaikan</p>
+        <ul class="bullets">
+          <li>Merancang dan membangun sendiri platform HR end-to-end (28.000+ baris TypeScript, Next.js + Supabase) yang mencakup rekrutmen, payroll, analitik, dan employer branding untuk konteks regulasi Indonesia.</li>
+          <li>Membangun mesin payroll dengan fungsi murni yang menghitung BPJS, PPh 21 metode TER, rekonsiliasi pajak tahunan, THR prorata, lembur, dan Formulir 1721-A1 — diverifikasi dengan <strong>150 unit test ber-kunci-jawaban</strong> yang dihitung manual dari peraturan resmi lebih dulu.</li>
+          <li>Memverifikasi setiap tarif statutori ke sumber primer sebelum diimplementasikan; menemukan dan mengoreksi kesalahan umum berupa penggunaan tabel lembur Kepmenaker 102/2004 yang sudah dicabut, menggantinya dengan PP 35/2021.</li>
+          <li>Merancang tarif statutori sebagai <strong>data berversi per tanggal berlaku</strong>, bukan konstanta di dalam kode — perubahan tarif pemerintah cukup ditangani dengan menambah baris data, dan perhitungan periode lama tetap akurat secara retroaktif (terbukti saat plafon JP BPJS naik Maret 2026).</li>
+          <li>Mengembangkan 5 fitur berbasis model bahasa (Llama 3.3 70B via Groq): analisis CV multi-framework dengan routing otomatis ke 7 framework kompetensi (54 kompetensi, mencakup Ulrich, SFIA v8, Lominger, CGMA, dan 3 SKKNI Indonesia), pemrosesan batch hingga 200 CV, intake lamaran publik, ringkasan eksekutif diagnostik, dan generator konten employer branding dengan riset tren live.</li>
+          <li>Menerapkan disiplin anti-halusinasi pada seluruh fitur AI: prompt dilarang mengarang angka atau tautan, keluaran divalidasi dan dijepit ke rentang sah, dan tersedia jalur cadangan deterministik sehingga fitur tetap berfungsi saat API tidak tersedia.</li>
+          <li>Menerapkan Row Level Security, masking NIK/NPWP/rekening sesuai UU PDP 27/2022, dan pemisahan tegas antara instance data asli dan deployment demo yang sepenuhnya memakai data sintetis.</li>
+        </ul>
+      </div>
+
+      <h3>Poin berbahasa Inggris</h3>
+      <div class="copyblock">
+        <p class="meta">English version</p>
+        <ul class="bullets">
+          <li>Designed and solo-built an end-to-end HR platform (28,000+ lines of TypeScript, Next.js + Supabase) covering recruitment, payroll, analytics, and employer branding for the Indonesian regulatory context.</li>
+          <li>Built a pure-function payroll engine computing social security (BPJS), income tax under Indonesia's TER method, annual tax reconciliation, prorated religious holiday allowance, and overtime — validated by <strong>150 answer-key unit tests</strong> hand-calculated from official regulations before coding.</li>
+          <li>Verified every statutory rate against primary legal sources; identified and corrected a widespread industry error (use of a revoked 2004 overtime multiplier table) by implementing the current 2021 regulation instead.</li>
+          <li>Architected statutory rates as <strong>date-versioned data rather than hardcoded constants</strong>, so government rate changes require only a new data row while historical periods stay retroactively accurate — proven when the pension wage ceiling changed mid-year.</li>
+          <li>Shipped 5 LLM-powered features (Llama 3.3 70B via Groq): multi-framework CV analysis auto-routing across 7 competency frameworks (54 competencies spanning Ulrich, SFIA v8, Lominger, CGMA, and 3 Indonesian national standards), 200-CV batch processing with client-side token-bucket rate limiting, public application intake, diagnostic executive summaries, and trend-grounded employer branding content generation.</li>
+          <li>Applied anti-hallucination discipline across all AI features: prompts forbidden from inventing figures or links, outputs validated and clamped, and deterministic fallbacks keeping every feature functional when the API is unavailable.</li>
+          <li>Implemented Row Level Security, personal-data masking compliant with Indonesia's PDP Law 27/2022, and strict separation between the production instance and the fully synthetic public demo.</li>
+        </ul>
+      </div>
+
+      <h3>Daftar keterampilan</h3>
+      <div class="kv">
+        <div><span class="k">HR</span><span class="v">Payroll &amp; statutory compliance · PPh 21 (TER &amp; progresif) · BPJS · Struktur upah · THR &amp; lembur · Hubungan industrial · Competency framework (Ulrich, SKKNI) · Structured interview design · HR analytics · Employer branding</span></div>
+        <div><span class="k">Teknis</span><span class="v">TypeScript · Next.js (App Router) · React · Tailwind · Supabase/PostgreSQL · Row Level Security · Unit testing (Vitest) · REST API design · Prompt engineering · LLM integration &amp; grounding · Rate limiting · Vercel</span></div>
+        <div><span class="k">Silang</span><span class="v">Menerjemahkan regulasi jadi logika yang bisa diuji · Verifikasi sumber primer · Perancangan sistem yang bisa diaudit · Data privacy by design</span></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="linkedin">
+      <h2>Draf LinkedIn</h2>
+      <p class="lede">Tiga sudut pandang berbeda. Jangan diposting sekaligus — beri jeda seminggu, dan lihat mana yang paling banyak direspons. Ganti detail perusahaan sesuai kenyamanan kamu.</p>
+
+      <h3>Draf A — sudut kepatuhan (paling kuat untuk audiens HR)</h3>
+      <div class="copyblock">
+        <p class="meta">Angle: verifikasi sumber primer</p>
+        <p>Banyak kalkulator lembur yang beredar di internet masih memakai tabel Kepmenaker 102/2004.</p>
+        <p>Peraturan itu sudah dicabut oleh Permenaker 23/2021. Yang berlaku sekarang PP 35/2021.</p>
+        <p>Saya menemukan ini waktu membangun mesin payroll sendiri — dan itu mengubah cara saya bekerja. Sekarang setiap tarif yang saya pakai wajib punya sitasi ke peraturan aslinya, bukan disalin dari template yang sudah beredar.</p>
+        <p>Hasilnya jadi platform HR yang saya bangun sendiri:</p>
+        <p>→ Mesin payroll: BPJS, PPh 21 metode TER, rekonsiliasi Desember, THR prorata, lembur, sampai Formulir 1721-A1<br>→ 150 unit test — setiap kasus saya hitung manual dulu dari peraturan resmi, baru dicocokkan dengan output program<br>→ Tarif statutori disimpan sebagai data berversi per tanggal berlaku, bukan angka di dalam kode. Saat plafon JP BPJS naik Maret lalu, saya cuma menambah satu baris data. Perhitungan periode sebelumnya tetap akurat.</p>
+        <p>Pelajaran terbesarnya bukan soal ngoding. Ini: <strong>logika payroll bukan sekadar fitur, tapi klaim kepatuhan hukum.</strong> Kalau saya salah hitung, yang dirugikan karyawan yang gajinya dipotong terlalu banyak — atau perusahaan yang kena sanksi.</p>
+        <p>Saya HR, bukan software engineer. Tapi justru karena itu saya tahu persis di mana letak kesalahan yang mahal.</p>
+        <p>#HRIndonesia #Payroll #PPh21 #BPJS #HRTech #CompensationAndBenefits</p>
+      </div>
+
+      <h3>Draf B — sudut AI (paling luas jangkauannya)</h3>
+      <div class="copyblock">
+        <p class="meta">Angle: AI yang tidak boleh mengarang</p>
+        <p>Kebanyakan "AI untuk HR" cuma meneruskan pertanyaan ke ChatGPT dan berharap jawabannya benar.</p>
+        <p>Masalahnya, di HR jawaban yang terdengar meyakinkan tapi salah itu berbahaya. Kalau AI mengarang angka turnover, yang diambil manajemen adalah keputusan nyata soal orang.</p>
+        <p>Waktu membangun fitur AI di platform HR saya, aturan pertamanya justru pembatasan:</p>
+        <p>→ AI hanya boleh memakai angka yang saya suplai. Dilarang mengarang persentase, nominal, atau statistik apa pun.<br>→ Metrik yang datanya belum ada dikirim sebagai "belum tersedia" — bukan nol. Ini beda besar. Nol itu fakta; kosong itu ketidaktahuan.<br>→ Setiap skor kompetensi di analisis CV wajib disertai kutipan langsung dari CV-nya. Kalau tidak ada buktinya, AI harus bilang "tidak ditemukan bukti eksplisit". Penilai manusia bisa memeriksa dasarnya.<br>→ Kalau API-nya mati, ada jalur cadangan deterministik. Fitur turun kualitas, tapi tidak pernah rusak.</p>
+        <p>Bagian yang paling saya sukai: saya ajari AI-nya mewaspadai "Flaw of Averages".</p>
+        <p>Rata-rata Time to Fill bisa terlihat sehat — 40 hari, masih dalam target. Padahal di dalamnya ada satu posisi kritis yang sudah kosong 4 bulan. Rata-rata menyembunyikannya.</p>
+        <p>Jadi promptnya saya buat mewajibkan AI menyoroti anomali itu, lalu menghitung Cost of Delay-nya dalam Rupiah: posisi kosong sekian lama → kru yang ada menutup kekurangan → beban lembur sekian juta, sekian persen di atas budget. Bukan "ada lonjakan biaya lembur" yang abstrak, tapi angka yang bisa dibawa ke rapat direksi.</p>
+        <p>AI yang berguna di HR bukan yang paling pintar bicara. Yang paling jujur soal apa yang tidak diketahuinya.</p>
+        <p>#HRTech #ArtificialIntelligence #PeopleAnalytics #HRIndonesia</p>
+      </div>
+
+      <h3>Draf C — sudut perjalanan (paling personal)</h3>
+      <div class="copyblock">
+        <p class="meta">Angle: dari masalah pribadi jadi platform</p>
+        <p>Delapan minggu lalu saya cuma ingin satu hal: berhenti menganalisis CV satu per satu secara manual.</p>
+        <p>Yang jadi sekarang: platform HR dengan 8 modul.</p>
+        <p>Rekrutmen (CV analyzer, talent pool, interview workspace) · Core HR &amp; hubungan industrial · Performance &amp; succession · Learning &amp; development · Payroll &amp; pajak · Employer branding · HR analytics.</p>
+        <p>Beberapa hal yang saya pelajari di sepanjang jalan:</p>
+        <p><strong>1. Masalah nyata mengalahkan ide bagus.</strong> Setiap modul lahir dari sesuatu yang benar-benar mengganggu saya di pekerjaan sehari-hari — bukan dari daftar fitur yang saya bayangkan di awal.</p>
+        <p><strong>2. Yang otomatis penuh belum tentu benar.</strong> Jembatan dari rekrutmen ke payroll sengaja saya buat setengah manual. Data rekrutmen tidak pernah memuat upah yang disepakati, status PTKP, atau NIK — semuanya baru ada saat kontrak ditandatangani. Memaksakan otomatis penuh cuma akan menghasilkan data payroll yang salah.</p>
+        <p><strong>3. Latar belakang HR itu keunggulan, bukan kekurangan.</strong> Saya tidak perlu bertanya ke siapa pun kenapa THR harus prorata, atau kenapa rekonsiliasi PPh 21 Desember bisa menghasilkan angka negatif. Saya sudah mengalaminya. Yang perlu saya pelajari cuma cara menuliskannya jadi kode.</p>
+        <p>Untuk teman-teman HR yang merasa "saya bukan orang teknis": kita tahu persis masalah mana yang layak dipecahkan. Itu bagian yang paling susah diajarkan.</p>
+        <p>#HRIndonesia #HRTech #CareerGrowth #BuildInPublic</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="wawancara">
+      <h2>Bekal wawancara</h2>
+
+      <h3>Pertanyaan yang hampir pasti muncul</h3>
+      <div class="kv">
+        <div><span class="k">"AI-nya apa?"</span><span class="v">Sebutkan Llama 3.3 70B via Groq, lalu langsung ke bagian menariknya: routing 7 framework, aturan anti-halusinasi, dan fallback deterministik. Jangan berhenti di nama model.</span></div>
+        <div><span class="k">"Ini cuma wrapper API?"</span><span class="v">Tidak. Yang jadi nilai tambahnya ada di lapisan sekitarnya: pemilihan framework otomatis, prompt yang di-generate dari sumber tunggal supaya benchmark di layar dan di prompt tidak bisa berbeda, validasi keluaran, rate limiting token bucket, dan grounding ke data tren nyata.</span></div>
+        <div><span class="k">"Kamu HR, kenapa ngoding?"</span><span class="v">Karena saya tahu di mana letak kesalahan yang mahal. Engineer bisa menulis kalkulator PPh 21; yang sulit adalah tahu bahwa rekonsiliasi Desember bisa negatif, atau bahwa tabel lembur yang beredar sudah dicabut.</span></div>
+        <div><span class="k">"Sudah dipakai di produksi?"</span><span class="v">Jujur saja: demo publik memakai data 100% sintetis; instance produksi dengan data asli dipisah total dan belum diarahkan ke data perusahaan sebenarnya karena kelas risiko JKK masih perlu dikonfirmasi final ke BPJS dan UMK perlu diisi sesuai SK yang berlaku. Kehati-hatian ini justru poin plus.</span></div>
+        <div><span class="k">"Bagaimana kamu tahu hitungannya benar?"</span><span class="v">150 unit test dengan metodologi kunci jawaban — tiap kasus dihitung manual dari peraturan resmi lebih dulu, sebagian disilangkan dengan verifikasi kedua, baru dicocokkan dengan output program.</span></div>
+      </div>
+
+      <h3>Klaim yang harus dihindari</h3>
+      <ul class="bullets">
+        <li>❌ "Semua fitur pakai AI" — sebagian berbasis aturan, dan kalau ada yang membuka kodenya, ini langsung ketahuan.</li>
+        <li>❌ "Dipakai untuk memproses payroll 70+ karyawan asli" — instance produksi belum diarahkan ke data nyata.</li>
+        <li>❌ Angka engagement atau ROI dari simulator what-if — koefisiennya ilustratif, dan itu sudah ditulis di komentar kodenya sendiri.</li>
+        <li>❌ "94 unit test" — angka lama di dokumentasi. Yang benar 150.</li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <section id="drift">
+      <h2>Dokumen yang perlu diperbarui</h2>
+      <p class="lede">Tiga hal di README dan CLAUDE.md sudah tertinggal dari kondisi kode. Kalau ada perekrut yang membuka repo, ini merugikan kamu — semuanya membuat proyek terlihat <em>lebih kecil</em> dari kenyataannya.</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Tertulis</th><th>Kenyataan di kode</th><th>Dampak</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>"94 unit test"<br><span class="tag tag-warn">README + CLAUDE.md</span></td>
+              <td><strong>150 test</strong> di 13 file, semua lulus</td>
+              <td>Meremehkan cakupan pengujian sebesar 60%</td>
+            </tr>
+            <tr>
+              <td>"Formulir 1721-A1 belum dibangun"<br><span class="tag tag-warn">CLAUDE.md §9</span></td>
+              <td>Sudah selesai — <code>tax-1721-a1.ts</code>, halaman <code>/pay/laporan/1721-a1</code>, 7 unit test</td>
+              <td>Menyembunyikan fitur kepatuhan yang justru paling sulit</td>
+            </tr>
+            <tr>
+              <td>README hanya menjelaskan modul Hire &amp; Pay</td>
+              <td>Ada 6 modul lagi: Performance, Succession, OD, L&amp;D, IR, Attendance, Engagement</td>
+              <td>Pembaca mengira ini proyek 2 modul, padahal 8</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Kalau mau, saya bisa langsung memperbarui README dan CLAUDE.md supaya cocok dengan kondisi kode sekarang.</p>
+    </section>
+
+  </main>
+
+  <footer>
+    Disusun dari pembacaan langsung atas repositori <code>people-intelligence-hub</code> — struktur file, isi prompt, skema database, dan hasil eksekusi <code>npm run test</code>. Setiap angka dalam berkas ini terverifikasi pada tanggal penyusunan; klaim yang tidak dapat diverifikasi dari kode sengaja tidak dicantumkan.
+  </footer>
+
+</div>
