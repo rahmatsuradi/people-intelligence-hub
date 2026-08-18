@@ -136,10 +136,18 @@ Mesin murni di `src/lib/recruiting/interview-scoring.ts` (26 unit test). Layar s
 
 **Angka validitas disamakan seluruh aplikasi.** `SELECTION_VALIDITY` dan 32 `validityCoeff` di `competency-framework.ts` diperbarui dari .51 (Schmidt & Hunter 1998) ke **.42** (Sackett dkk. 2022). Wawancara terstruktur kini prediktor tunggal terkuat, di atas tes kognitif .31. Sebelumnya modul asesmen menyebut .42 sementara modul wawancara menyebut .51 — dua angka berbeda untuk klaim yang sama di aplikasi yang sama.
 
+**Bank soal perusahaan (selesai).** Tabel `pi_interview_questions` (migration `create_pi_interview_questions`, RLS authenticated-only) menyimpan pertanyaan yang ditulis perusahaan sendiri; pertanyaan bawaan tetap di kode karena versinya mengikuti rilis aplikasi. `cluster` null = berlaku untuk semua posisi.
+
+Aturan di `question-bank.ts` (23 unit test):
+- Pertanyaan perusahaan **melengkapi**, tidak menimpa bawaan, dan selalu ditempatkan setelahnya agar urutan bawaan tetap sama antar-kandidat.
+- Menyaring pertanyaan boleh, **tetapi tercatat**: `summarizeSelection()` menandai kompetensi yang seluruh pertanyaannya dikeluarkan (kompetensi itu jadi tidak terukur), dan `isKitTooThin()` memperingatkan bila tersisa < 4 pertanyaan.
+- Pengecualian **tidak disimpan** — menyaring permanen adalah keputusan lain yang harus disengaja, bukan efek samping satu kali wawancara.
+- `validateCustomQuestion()` **menolak** pertanyaan yang menyinggung kehamilan/status pernikahan, agama/suku/ras, usia, rencana punya anak, kondisi kesehatan/disabilitas, dan orientasi seksual. Ditolak di depan, bukan ditegur setelah dipakai mewawancarai orang. Pertanyaan tentang kesediaan menjalankan tuntutan pekerjaan tetap lolos.
+- `activePack` memisahkan kit lengkap dari kit yang benar-benar dipakai menilai, sehingga cakupan dan rata-rata dihitung atas pertanyaan yang nyata ditanyakan.
+
 ## 10. Yang belum dikerjakan
 
 - Formulir pelaporan pajak tahunan 1721-A1.
-- **Wawancara:** bank soal masih 8 per klaster dan seluruh pertanyaan bertipe terpilih otomatis masuk — belum bisa disaring atau ditambah pertanyaan khas perusahaan.
 - **Rekrutmen:** metrik kecepatan baru akan berarti setelah cukup kandidat berjalan lewat pipeline dengan riwayat tercatat (kandidat lama tidak ikut terhitung). Belum ada: cost-per-hire, sumber biaya iklan lowongan, dan pelacakan alasan penolakan kandidat.
 - Arahkan instance produksi ke data perusahaan asli (baru dilakukan setelah kelas risiko JKK final dikonfirmasi ke BPJS, dan UMK diisi sesuai SK Gubernur/Permenaker tahun berjalan untuk wilayah yang relevan — nilai UMK di seed saat ini murni placeholder demo).
 - **Assessment** (skema/seed/RLS sudah terpasang & terverifikasi — lihat §9). Yang belum: norma lokal dari data nyata (butuh ≥ 100 peserta; lihat §12), analisis butir untuk item kognitif/SJT, uji reliabilitas & analisis faktor untuk adaptasi IPIP, pengiriman tautan tes lewat email otomatis (saat ini disalin manual — modul email belum ada), dan halaman umpan balik hasil untuk peserta.

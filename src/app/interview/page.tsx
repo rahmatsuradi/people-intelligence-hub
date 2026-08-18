@@ -40,6 +40,16 @@ import {
   FORMAT_LABELS,
   type AssessmentHandoff,
 } from "@/lib/recruiting/interview-kit";
+import {
+  isKitTooThin,
+  summarizeSelection,
+  validateCustomQuestion,
+  type BankQuestion,
+  type CustomQuestionDraft,
+} from "@/lib/recruiting/question-bank";
+import { loadCustomQuestions, saveCustomQuestion } from "@/lib/recruiting/question-bank-data";
+import { getActiveCompanyId } from "@/lib/payroll/company-profile";
+import { toast } from "@/components/toast";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Types & constants
@@ -1174,6 +1184,248 @@ function ScoringResultsPanel({
   );
 }
 
+/** Pengelola isi kit: menyaring pertanyaan bawaan dan menambah pertanyaan khas
+ *  perusahaan. Bank soal bawaan berlaku umum untuk sebuah klaster jabatan; yang
+ *  tidak bisa disediakan bawaan adalah pertanyaan yang lahir dari pengalaman
+ *  perusahaan itu sendiri — kejadian yang pernah bikin repot, mesin yang cuma
+ *  ada di pabrik mereka, aturan internal yang sering dilanggar. */
+function QuestionManagerCard({
+  pack,
+  excludedIds,
+  onToggleExclude,
+  onAddCustom,
+  saving,
+}: {
+  pack: QuestionPack;
+  excludedIds: string[];
+  onToggleExclude: (id: string) => void;
+  onAddCustom: (draft: CustomQuestionDraft) => Promise<void>;
+  saving: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [problems, setProblems] = useState<string[]>([]);
+  const [draft, setDraft] = useState<CustomQuestionDraft>({
+    competencyId: "",
+    competencyName: "",
+    type: "Behavioral",
+    question: "",
+    strongAnswer: "",
+    redFlags: [],
+  });
+
+  const competencies = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const q of pack.questions) if (!seen.has(q.competencyId)) seen.set(q.competencyId, q.competencyName);
+    return [...seen.entries()].map(([id, name]) => ({ id, name }));
+  }, [pack.questions]);
+
+  const summary = useMemo(
+    () =>
+      summarizeSelection(
+        pack.questions.map((q): BankQuestion => ({
+          id: q.id,
+          type: q.type,
+          competencyId: q.competencyId,
+          competencyName: q.competencyName,
+          question: q.question,
+          strongAnswer: q.strongAnswer,
+          redFlags: q.redFlags,
+          source: q.id.startsWith("CQ-") ? "custom" : "builtin",
+        })),
+        excludedIds,
+      ),
+    [pack.questions, excludedIds],
+  );
+
+  const submit = async () => {
+    const withComp: CustomQuestionDraft = {
+      ...draft,
+      competencyName: competencies.find((c) => c.id === draft.competencyId)?.name ?? draft.competencyName,
+    };
+    const found = validateCustomQuestion(withComp);
+    setProblems(found);
+    if (found.length > 0) return;
+    await onAddCustom(withComp);
+    setDraft({ competencyId: "", competencyName: "", type: "Behavioral", question: "", strongAnswer: "", redFlags: [] });
+    setAdding(false);
+  };
+
+  const fieldCls =
+    "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-white">Isi Kit</h3>
+          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+            {summary.included} pertanyaan dipakai
+            {summary.excluded > 0 ? ` · ${summary.excluded} dikeluarkan` : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
+            {open ? "Tutup daftar" : "Pilih pertanyaan"}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setAdding((v) => !v)}>
+            + Pertanyaan perusahaan
+          </Button>
+        </div>
+      </div>
+
+      {summary.droppedCompetencies.length > 0 && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <p className="text-sm text-amber-900 dark:text-amber-200">
+            <span className="font-semibold">{summary.droppedCompetencies.map((c) => c.competencyName).join(", ")}</span>{" "}
+            tidak lagi punya satu pun pertanyaan — kompetensi itu menjadi tidak terukur sama sekali.
+          </p>
+        </div>
+      )}
+
+      {isKitTooThin(summary) && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-500/30 dark:bg-red-500/10">
+          <p className="text-sm text-red-800 dark:text-red-200">
+            Hanya {summary.included} pertanyaan tersisa. Penilaian dari sebegini sedikit bukti mudah berayun oleh satu
+            jawaban saja.
+          </p>
+        </div>
+      )}
+
+      {adding && (
+        <div className="mt-4 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Tambah pertanyaan perusahaan</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Tersimpan dan otomatis muncul pada kit berikutnya untuk klaster jabatan yang sama.
+          </p>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                Kompetensi yang dinilai
+              </label>
+              <select
+                value={draft.competencyId}
+                onChange={(e) => setDraft({ ...draft, competencyId: e.target.value })}
+                className={fieldCls}
+              >
+                <option value="">— pilih —</option>
+                {competencies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Jenis pertanyaan</label>
+              <select
+                value={draft.type}
+                onChange={(e) => setDraft({ ...draft, type: e.target.value })}
+                className={fieldCls}
+              >
+                {INTERVIEW_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Pertanyaan</label>
+            <textarea
+              value={draft.question}
+              onChange={(e) => setDraft({ ...draft, question: e.target.value })}
+              rows={2}
+              placeholder="mis. Ceritakan saat Anda menemukan cacat jahitan setelah barang siap kirim. Apa yang Anda lakukan?"
+              className={cn(fieldCls, "resize-y")}
+            />
+          </div>
+
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+              Ciri jawaban kuat{" "}
+              <span className="font-normal text-slate-400">(patokan yang sama untuk semua pewawancara)</span>
+            </label>
+            <textarea
+              value={draft.strongAnswer}
+              onChange={(e) => setDraft({ ...draft, strongAnswer: e.target.value })}
+              rows={2}
+              placeholder="mis. Menyebut tindakan konkret, siapa yang diberi tahu, dan bagaimana pengiriman diselamatkan."
+              className={cn(fieldCls, "resize-y")}
+            />
+          </div>
+
+          {problems.length > 0 && (
+            <ul className="mt-3 list-disc space-y-1 rounded-lg border border-red-200 bg-red-50 p-3 pl-8 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              {problems.map((p, i) => (
+                <li key={i}>{p}</li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="primary" size="sm" onClick={submit} disabled={saving}>
+              {saving ? "Menyimpan…" : "Simpan & tambahkan ke kit"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setAdding(false);
+                setProblems([]);
+              }}
+            >
+              Batal
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-4 space-y-1.5">
+          {pack.questions.map((q) => {
+            const excluded = excludedIds.includes(q.id);
+            const isCustom = q.id.startsWith("CQ-");
+            return (
+              <label
+                key={q.id}
+                className={cn(
+                  "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors",
+                  excluded
+                    ? "border-slate-200 bg-slate-50 opacity-50 dark:border-slate-800 dark:bg-slate-800/40"
+                    : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={!excluded}
+                  onChange={() => onToggleExclude(q.id)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm text-slate-800 dark:text-slate-200">{q.question}</span>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500">{q.competencyName}</span>
+                    <span className="text-[11px] text-slate-400">· {TYPE_LABELS[q.type]}</span>
+                    {isCustom && (
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                        pertanyaan perusahaan
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 /** Persiapan sebelum wawancara: siapa yang menilai, dan kompetensi mana yang
  *  tidak bisa ditawar. Keduanya ditanyakan DI DEPAN, bukan setelah selesai —
  *  menentukan kompetensi wajib setelah melihat nilai kandidat sama saja dengan
@@ -1470,6 +1722,13 @@ export default function InterviewPage() {
   // pengisian ulang tidak menjadi hambatan yang membuat orang melewatinya.
   // Pertanyaan pendalaman yang dikirim dari laporan asesmen, bila ada.
   const [assessmentHandoff, setAssessmentHandoff] = useState<AssessmentHandoff | null>(null);
+  // Bank soal milik perusahaan, dimuat per klaster jabatan.
+  const [customBank, setCustomBank] = useState<BankQuestion[]>([]);
+  const [savingQuestion, setSavingQuestion] = useState(false);
+  // Pertanyaan yang dikeluarkan dari kit ini saja. TIDAK disimpan: menyaring
+  // permanen adalah keputusan lain yang harus disengaja, bukan efek samping
+  // dari satu kali wawancara.
+  const [excludedIds, setExcludedIds] = useState<string[]>([]);
   const [interviewerName, setInterviewerName] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return localStorage.getItem("hi_user_name") ?? "";
@@ -1547,14 +1806,22 @@ export default function InterviewPage() {
     } catch { /* quota */ }
   }, [pack, scores, elapsedSeconds, scoringState, position, seniority]);
 
+  // Kit yang BENAR-BENAR dipakai menilai. Pertanyaan yang dikeluarkan hilang
+  // dari sini, sehingga cakupan dan rata-rata dihitung atas kit yang nyata —
+  // bukan atas kit lengkap yang sebagian tidak pernah ditanyakan.
+  const activePack = useMemo(
+    () => (pack ? { ...pack, questions: pack.questions.filter((q) => !excludedIds.includes(q.id)) } : null),
+    [pack, excludedIds],
+  );
+
   const handleStartInterview = useCallback(() => {
-    if (!pack) return;
+    if (!pack || !activePack) return;
     const initial: Record<string, QuestionScore> = {};
-    pack.questions.forEach((q) => { initial[q.id] = { rating: null, notAsked: false, notes: "" }; });
+    (activePack ?? pack).questions.forEach((q) => { initial[q.id] = { rating: null, notAsked: false, notes: "" }; });
     setScores(initial);
     setElapsedSeconds(0);
     setScoringState("scoring");
-  }, [pack]);
+  }, [pack, activePack]);
 
   const handleScoreChange = useCallback((id: string, rating: 1|2|3|4|5|null, notes: string) => {
     setScores((prev) => ({ ...prev, [id]: { ...prev[id], rating, notes, notAsked: false } }));
@@ -1572,6 +1839,7 @@ export default function InterviewPage() {
   const handleCompleteScoring = useCallback(() => {
     setScoringState("complete");
     // Persist to candidate store
+    const pack = activePack;
     if (pack) {
       try {
         const name = cvAnalysisData?.candidateName ?? "";
@@ -1615,7 +1883,64 @@ export default function InterviewPage() {
         }
       } catch { /* non-critical */ }
     }
-  }, [pack, scores, elapsedSeconds, cvAnalysisData, interviewerName]);
+  }, [activePack, scores, elapsedSeconds, cvAnalysisData, interviewerName]);
+
+  // Bank soal perusahaan dimuat ulang setiap klaster jabatan berubah, karena
+  // pertanyaan khas perusahaan disimpan per klaster.
+  useEffect(() => {
+    if (!position.trim()) return;
+    const cluster = detectCluster(position, cvAnalysisData?.department ?? "");
+    let cancelled = false;
+    loadCustomQuestions(getActiveCompanyId(), cluster).then((res) => {
+      if (cancelled) return;
+      if (res.error) toast(`Bank soal perusahaan gagal dimuat: ${res.error}`, "error");
+      setCustomBank(res.questions);
+    });
+    return () => { cancelled = true; };
+  }, [position, cvAnalysisData?.department]);
+
+  const handleToggleExclude = useCallback((id: string) => {
+    setExcludedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+
+  const handleAddCustom = useCallback(async (draft: CustomQuestionDraft) => {
+    setSavingQuestion(true);
+    try {
+      const cluster = detectCluster(position, cvAnalysisData?.department ?? "");
+      const res = await saveCustomQuestion(getActiveCompanyId(), cluster, draft);
+      if (res.error || !res.question) {
+        toast(res.error ?? "Gagal menyimpan pertanyaan.", "error");
+        return;
+      }
+      const saved = res.question;
+      setCustomBank((prev) => [...prev, saved]);
+      // Langsung masuk ke kit yang sedang terbuka, supaya tidak perlu menyusun
+      // ulang kit hanya untuk memakai pertanyaan yang baru ditulis.
+      setPack((prev) =>
+        prev
+          ? {
+              ...prev,
+              questions: [
+                ...prev.questions,
+                {
+                  id: saved.id,
+                  type: saved.type as InterviewType,
+                  competencyId: saved.competencyId,
+                  competencyName: saved.competencyName,
+                  question: saved.question,
+                  strongAnswer: saved.strongAnswer,
+                  redFlags: saved.redFlags,
+                  rubric: rubricFor(saved.competencyId),
+                },
+              ],
+            }
+          : prev,
+      );
+      toast("Pertanyaan tersimpan dan ditambahkan ke kit.");
+    } finally {
+      setSavingQuestion(false);
+    }
+  }, [position, cvAnalysisData?.department]);
 
   const handleToggleCritical = useCallback((competencyId: string) => {
     setPack((prev) =>
@@ -1652,6 +1977,7 @@ export default function InterviewPage() {
     setPack(null);
     setScoringState("idle");
     setScores({});
+    setExcludedIds([]);
 
     // Kit disusun dari bank soal terkurasi per klaster kompetensi — instan, tanpa
     // delay buatan yang menyamar sebagai proses AI.
@@ -1673,7 +1999,23 @@ export default function InterviewPage() {
       redFlags: ["Jawaban umum tanpa contoh nyata", "Contohnya tidak bisa diverifikasi", "Menghindari pertanyaan"],
       rubric: [],
     }));
-    const allQuestions = [...questions, ...probeQuestions];
+    // Pertanyaan perusahaan MELENGKAPI bank bawaan, tidak menimpanya, dan
+    // ditempatkan setelah pertanyaan bawaan agar urutan bawaan tetap sama
+    // untuk semua kandidat pada posisi yang sama.
+    const customForKit: InterviewQuestion[] = customBank
+      .filter((c) => selectedTypes.includes(c.type as InterviewType))
+      .map((c) => ({
+        id: c.id,
+        type: c.type as InterviewType,
+        competencyId: c.competencyId,
+        competencyName: c.competencyName,
+        question: c.question,
+        strongAnswer: c.strongAnswer,
+        redFlags: c.redFlags,
+        rubric: rubricFor(c.competencyId),
+      }));
+
+    const allQuestions = [...questions, ...customForKit, ...probeQuestions];
     setPack({
       packId: `KIT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
       generatedAt: now.toLocaleString("en-US", {
@@ -1908,21 +2250,28 @@ export default function InterviewPage() {
             <div className="space-y-4">
               {cvAnalysisData && <CvContextCard data={cvAnalysisData} />}
               <>
-                <PanelSetupCard
+                <QuestionManagerCard
                   pack={pack}
+                  excludedIds={excludedIds}
+                  onToggleExclude={handleToggleExclude}
+                  onAddCustom={handleAddCustom}
+                  saving={savingQuestion}
+                />
+                <PanelSetupCard
+                  pack={activePack ?? pack}
                   interviewerName={interviewerName}
                   onInterviewerNameChange={setInterviewerName}
                   onToggleCritical={handleToggleCritical}
                   onStart={handleStartInterview}
                 />
-                <ResultsPanel pack={pack} onStartInterview={handleStartInterview} />
+                <ResultsPanel pack={activePack ?? pack} onStartInterview={handleStartInterview} />
               </>
             </div>
           )}
 
           {!generating && pack && scoringState === "scoring" && (
             <ScoringPanel
-              pack={pack}
+              pack={activePack ?? pack}
               candidateName={cvAnalysisData?.candidateName ?? ""}
               scores={scores}
               onScoreChange={handleScoreChange}
@@ -1934,7 +2283,7 @@ export default function InterviewPage() {
 
           {!generating && pack && scoringState === "complete" && (
             <ScoringResultsPanel
-              pack={pack}
+              pack={activePack ?? pack}
               candidateName={cvAnalysisData?.candidateName ?? ""}
               scores={scores}
               elapsedSeconds={elapsedSeconds}
