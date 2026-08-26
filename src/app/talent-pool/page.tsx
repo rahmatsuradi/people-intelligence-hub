@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, Card, Icon, SvgPath, cn, inputClass, Button } from "@/components/app-shell";
-import { getTalentPool, loadDemoData, type TalentProfile } from "@/lib/store";
+import { getTalentPool, type TalentProfile } from "@/lib/store";
 
 function maskPhone(phone: string | null | undefined): string {
   if (!phone) return "—";
@@ -142,16 +142,8 @@ export default function TalentPoolPage() {
                   {filtered.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
-                        <p className="mb-4">No talents found matching the filters or database is empty.</p>
-                        <Button 
-                          variant="primary" 
-                          onClick={() => {
-                            loadDemoData();
-                            setTalents(getTalentPool());
-                          }}
-                        >
-                          Generate 94 Mock Data
-                        </Button>
+                        <p className="mb-1 font-medium text-slate-700 dark:text-slate-300">Belum ada talent yang cocok.</p>
+                        <p className="text-xs">Kosongkan filter, atau tambahkan talent baru lewat tombol di atas.</p>
                       </td>
                     </tr>
                   ) : filtered.map((t) => (

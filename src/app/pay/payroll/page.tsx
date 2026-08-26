@@ -10,7 +10,7 @@ import { buildPayslip } from "@/lib/payroll/payslip";
 import type { PayslipLine } from "@/lib/payroll/payslip";
 import { renderPayslipHTML } from "@/lib/payroll/payslip-html";
 import { resolveCompanyProfile, getActiveCompanyId } from "@/lib/payroll/company-profile";
-import { aggregateDecemberContext, pickStatutoryConfigForPeriod, toStatutoryConfig, ensureDemoEmployeesExist, isStatutoryEnabled, setStatutoryToggle } from "@/lib/payroll/pay-data";
+import { aggregateDecemberContext, pickStatutoryConfigForPeriod, toStatutoryConfig, isStatutoryEnabled, setStatutoryToggle } from "@/lib/payroll/pay-data";
 import type {
   DecemberAggregate, PiCompensationRow, PiEmployeeRow, PiPayrollLineRow, PiPayrollRunRow, PiStatutoryConfigRow,
 } from "@/lib/payroll/pay-data";
@@ -316,8 +316,6 @@ export default function PayrollPage() {
     setLines(null);
     setIncompleteEmployees([]);
 
-    await ensureDemoEmployeesExist(supabase);
-
     const [emp, comp, cfg] = await Promise.all([
       supabase.from("pi_employees").select("*").eq("status", "active").eq("tenant_id", getActiveCompanyId()).order("full_name"),
       supabase.from("pi_compensation").select("*"),
@@ -327,7 +325,7 @@ export default function PayrollPage() {
     if (comp.error) { setError(comp.error.message); return; }
     if (cfg.error) { setError(cfg.error.message); return; }
     if (!cfg.data?.length) { setError("pi_statutory_config kosong — jalankan seed."); return; }
-    if (!emp.data?.length) { setError("Tidak ada karyawan aktif."); return; }
+    if (!emp.data?.length) { setError("Belum ada karyawan aktif. Tambahkan karyawan dulu lewat menu Employees, atau lewat Onboarding untuk kandidat yang sudah diterima."); return; }
 
     const configRow = pickStatutoryConfigForPeriod(cfg.data as PiStatutoryConfigRow[], period);
     if (!configRow) { setError(`Tidak ada config statutori yang berlaku untuk periode ${period}.`); return; }
@@ -500,7 +498,7 @@ export default function PayrollPage() {
       {/* Company Info Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-4 text-white shadow-xl mb-4">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{activeCompany.industry === "broadcast" ? "📺" : "🧵"}</span>
+          <span className="text-2xl">{activeCompany.emoji}</span>
           <div>
             <h2 className="text-base font-bold tracking-tight text-white">{activeCompany.name}</h2>
             <p className="text-xs text-slate-400">{activeCompany.address}</p>

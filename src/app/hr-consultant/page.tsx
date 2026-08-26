@@ -56,7 +56,7 @@ export default function HrConsultantPage() {
     const reqStatus = buildReqStatus(reqs, candidates);
     return {
       companyName: company.name,
-      industry: company.industry === "broadcast" ? "Media & Broadcast" : "Manufaktur Garmen",
+      industry: company.industryLabel,
       headcount: null, // modul kepegawaian punya sumber data terpisah; jangan menebak
       pipeline: {
         totalCandidates: summary.totalCandidates,

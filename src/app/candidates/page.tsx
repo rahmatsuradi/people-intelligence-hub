@@ -1574,7 +1574,9 @@ export default function CandidatesPage() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {reqs.filter(r => r.status === "active").map((req) => {
-                const origin = typeof window !== "undefined" ? window.location.origin : "https://app.valora.tv";
+                // Tanpa window (render server) pakai origin kosong -> tautan relatif,
+                // bukan domain karangan yang kalau tersalin akan menuju ke mana-mana.
+                const origin = typeof window !== "undefined" ? window.location.origin : "";
                 const utmUrl = `${origin}/apply?req=${req.id}&utm_source=${encodeURIComponent(portalSource)}`;
                 const waText = encodeURIComponent(`Dibutuhkan segera: *${req.title}* di ${req.location}!\nDaftar langsung di sini: ${utmUrl}`);
                 return (

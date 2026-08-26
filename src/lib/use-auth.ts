@@ -25,7 +25,7 @@ export function useAuthGate() {
   });
   const [email, setEmail] = useState(() => {
     if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
-      return "admin@valoratv.com";
+      return "demo@localhost";
     }
     return "";
   });
@@ -33,7 +33,7 @@ export function useAuthGate() {
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
       setStatus("authed");
-      setEmail("admin@valoratv.com");
+      setEmail("demo@localhost");
       return;
     }
     if (!isSupabaseConfigured || !supabase) return; // no auth configured → no gate
@@ -42,7 +42,7 @@ export function useAuthGate() {
     const apply = (session: Session | null) => {
       if (!active) return;
       if (typeof window !== "undefined" && localStorage.getItem("demo_bypass") === "true") {
-        setEmail("admin@valoratv.com");
+        setEmail("demo@localhost");
         setStatus("authed");
         return;
       }

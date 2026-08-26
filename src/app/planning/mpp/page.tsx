@@ -44,9 +44,9 @@ export default function MPPPage() {
             return;
           }
         }
-        setEmpDepts(getActiveCompanyEmployees().map((e: { department?: string }) => ({ department: e.department ?? null })));
+        setEmpDepts(getActiveCompanyEmployees().map((e) => ({ department: e.department ?? null })));
       } catch {
-        setEmpDepts(getActiveCompanyEmployees().map((e: { department?: string }) => ({ department: e.department ?? null })));
+        setEmpDepts(getActiveCompanyEmployees().map((e) => ({ department: e.department ?? null })));
       }
     }
     load();

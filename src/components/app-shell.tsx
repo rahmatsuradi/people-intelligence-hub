@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCandidates, getJobReqs, syncFromSupabase } from "@/lib/store";
-import { ALL_COMPANIES, getActiveCompanyId, setActiveCompanyId, type CompanyProfile } from "@/lib/payroll/company-profile";
+import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -159,20 +159,7 @@ export function AppShell({
   const router = useRouter();
   const { status: authStatus, email: authEmail } = useAuthGate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeCompany, setActiveCompany] = useState<CompanyProfile>(() => {
-    const id = typeof window !== "undefined" ? getActiveCompanyId() : "11111111-1111-4111-8111-111111111111";
-    return ALL_COMPANIES.find((c) => c.id === id) || ALL_COMPANIES[0];
-  });
-
-  useEffect(() => {
-    const handleCompanyChange = () => {
-      const id = getActiveCompanyId();
-      const comp = ALL_COMPANIES.find((c) => c.id === id) || ALL_COMPANIES[0];
-      setActiveCompany(comp);
-    };
-    window.addEventListener("pi-company-change", handleCompanyChange);
-    return () => window.removeEventListener("pi-company-change", handleCompanyChange);
-  }, []);
+  const activeCompany: CompanyProfile = getActiveCompanyProfile();
 
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
@@ -378,33 +365,21 @@ export function AppShell({
             <h1 className="truncate text-lg font-semibold text-slate-900 dark:text-white">{title}</h1>
             {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
           </div>
-          {/* Multi-Tenant Company Selector */}
+          {/* Identitas perusahaan. Dulu ini pemilih multi-tenant; instance sekarang hanya
+              melayani satu perusahaan, jadi ditampilkan sebagai label, bukan dropdown yang
+              isinya cuma satu pilihan. */}
           <div className={cn("flex items-center gap-2", !headerActions && "ml-auto")}>
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-1.5 shadow-sm transition-all hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/80 dark:hover:bg-slate-800">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-800/80">
               <span className="text-base" aria-hidden>
-                {activeCompany.industry === "broadcast" ? "📺" : "🧵"}
+                {activeCompany.emoji}
               </span>
               <div className="flex flex-col text-left">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Perusahaan / Entity
+                  Perusahaan
                 </span>
-                <select
-                  value={activeCompany.id}
-                  onChange={(e) => {
-                    setActiveCompanyId(e.target.value);
-                    const found = ALL_COMPANIES.find((c) => c.id === e.target.value) || ALL_COMPANIES[0];
-                    setActiveCompany(found);
-                    window.location.reload();
-                  }}
-                  className="cursor-pointer bg-transparent text-xs font-bold text-slate-900 focus:outline-none dark:text-white"
-                  title="Switch Company Entity (Multi-Tenant)"
-                >
-                  {ALL_COMPANIES.map((comp) => (
-                    <option key={comp.id} value={comp.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
-                      {comp.industry === "broadcast" ? "📺 " : "🧵 "} {comp.shortName} ({comp.headcountTarget} pax)
-                    </option>
-                  ))}
-                </select>
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  {activeCompany.shortName}
+                </span>
               </div>
             </div>
           </div>
@@ -452,7 +427,7 @@ export function AppShell({
           <footer className="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
             <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:text-slate-400">
               <p>&copy; 2026 People Intelligence &middot; Platform HR Terpadu</p>
-              <p className="tabular-nums">v0.1.0 &middot; Demo portofolio &middot; Data sintetis</p>
+              <p className="tabular-nums">v0.1.0 &middot; {activeCompany.shortName}</p>
             </div>
           </footer>
         </main>

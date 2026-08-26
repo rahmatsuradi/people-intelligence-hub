@@ -11,8 +11,10 @@ const COMPANY: CompanyProfile = {
   address: "Jl. Portofolio No. 1, Jakarta",
   signerName: "Arsène Wenger",
   signerTitle: "HRGA",
-  tagline: "Demo TV & Garment",
-  industry: "broadcast",
+  tagline: "Perusahaan uji",
+  industry: "wellness",
+  industryLabel: "Uji",
+  emoji: "🧪",
   headcountTarget: 100,
 };
 

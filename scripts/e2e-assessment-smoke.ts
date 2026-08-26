@@ -20,8 +20,9 @@ import { COGNITIVE_ITEMS_BY_SUBTEST } from "../src/lib/assessment/items-cognitiv
 import { SJT_ITEMS } from "../src/lib/assessment/items-sjt";
 import { generateAccessToken, generateSessionId, defaultExpiry } from "../src/lib/assessment/assessment-data";
 import type { PiAssessmentSessionRow } from "../src/lib/assessment/assessment-data";
+import { COMPANY_LENCIR } from "../src/lib/payroll/company-profile";
 
-const TENANT_VALORA = "11111111-1111-4111-8111-111111111111";
+const TENANT_ID = COMPANY_LENCIR.id;
 const KEEP = process.argv.includes("--keep");
 const baseUrl = (process.argv.find((a) => a.startsWith("http")) ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -44,7 +45,7 @@ async function main() {
   console.log("\n[1/5] Membuat sesi asesmen");
   const { error: insErr } = await supabase.from("pi_assessment_sessions").insert({
     id: sessionId,
-    tenant_id: TENANT_VALORA,
+    tenant_id: TENANT_ID,
     candidate_name: "Uji Ujung-ke-Ujung (sintetis)",
     candidate_email: "uji@contoh.test",
     position: "Supervisor Produksi",

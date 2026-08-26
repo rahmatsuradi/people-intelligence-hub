@@ -118,23 +118,30 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 border-t border-slate-200/60 pt-5 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  localStorage.setItem("demo_bypass", "true");
-                }
-                router.replace("/");
-              }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition-all duration-200 hover:from-emerald-500 hover:to-teal-500 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>🚀 Masuk Tanpa Login (Mode Demo VALORA TV)</span>
-            </button>
-            <p className="mt-2.5 text-center text-xs text-slate-500 dark:text-slate-400">
-              Klik tombol di atas untuk masuk langsung & mencoba seluruh modul HR VALORA TV tanpa sandi.
-            </p>
-          </div>
+          {/* Pintu masuk tanpa sandi. Dulu selalu aktif karena isi aplikasi hanya data
+              demo fiktif. Instance ini memuat data karyawan sungguhan (NIK, NPWP, upah,
+              rekening), jadi tombolnya sekarang MATI kecuali dinyalakan eksplisit lewat
+              NEXT_PUBLIC_ENABLE_DEMO_BYPASS=true — mis. saat merekam demo portofolio
+              di database yang isinya bukan data asli. */}
+          {process.env.NEXT_PUBLIC_ENABLE_DEMO_BYPASS === "true" && (
+            <div className="mt-6 border-t border-slate-200/60 pt-5 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("demo_bypass", "true");
+                  }
+                  router.replace("/");
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-amber-500/25 transition-all duration-200 hover:from-amber-500 hover:to-orange-500"
+              >
+                <span>Masuk tanpa sandi (mode demo)</span>
+              </button>
+              <p className="mt-2.5 text-center text-xs text-slate-500 dark:text-slate-400">
+                Mode demo aktif. Jangan gunakan pada database yang memuat data karyawan asli.
+              </p>
+            </div>
+          )}
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">

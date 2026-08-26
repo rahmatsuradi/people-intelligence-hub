@@ -5,7 +5,7 @@ import { AppShell, Button, Card, Icon, SvgPath, cn } from "@/components/app-shel
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { maskNik, maskNpwp, maskBankAccount } from "@/lib/payroll/payslip-masking";
 import type { PiEmployeeRow, PiCompensationRow } from "@/lib/payroll/pay-data";
-import { ensureDemoEmployeesExist, isStatutoryEnabled, setStatutoryToggle, getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
+import { isStatutoryEnabled, setStatutoryToggle, getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { ALL_COMPANIES, getActiveCompanyId, getActiveCompanyProfile } from "@/lib/payroll/company-profile";
 import { getCandidate } from "@/lib/store";
 import { getReviews } from "@/lib/performance/store";
@@ -53,7 +53,7 @@ export default function CoreEmployeesPage() {
   const [formName, setFormName] = useState("");
   const [formNik, setFormNik] = useState("");
   const [formNpwp, setFormNpwp] = useState("");
-  const [formDept, setFormDept] = useState("Redaksi");
+  const [formDept, setFormDept] = useState("");
   const [formEmpType, setFormEmpType] = useState<string>("Kontrak");
   const [formPtkp, setFormPtkp] = useState("TK/0");
   const [formBank, setFormBank] = useState("");
@@ -69,7 +69,6 @@ export default function CoreEmployeesPage() {
     const activeCompId = getActiveCompanyId();
     try {
       if (isSupabaseConfigured && supabase) {
-        await ensureDemoEmployeesExist(supabase);
         const [emp, comp] = await Promise.all([
           supabase.from("pi_employees").select("*").eq("status", "active").eq("tenant_id", activeCompId).order("full_name"),
           supabase.from("pi_compensation").select("*"),
@@ -113,8 +112,11 @@ export default function CoreEmployeesPage() {
     if (!formName.trim()) return;
     setSaving(true);
     try {
-      const newId = `e1000000-0000-4000-8000-${Math.random().toString(16).slice(2, 14)}`;
-      const tenantId = rows?.[0]?.tenant_id || "11111111-1111-4111-8111-111111111111";
+      // pi_employees.id bertipe uuid. Pola lama menempelkan Math.random().toString(16)
+      // ke prefix tetap — panjangnya tidak selalu 12 digit, jadi sesekali menghasilkan
+      // uuid tidak sah yang ditolak Postgres saat simpan.
+      const newId = crypto.randomUUID();
+      const tenantId = rows?.[0]?.tenant_id || getActiveCompanyId();
 
       if (supabase) {
         await supabase.from("pi_employees").insert({
@@ -208,7 +210,7 @@ export default function CoreEmployeesPage() {
           {/* Company Info Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-4 text-white shadow-xl">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">{currentCompany.industry === "broadcast" ? "📺" : "🧵"}</span>
+              <span className="text-2xl">{currentCompany.emoji}</span>
               <div>
                 <h2 className="text-base font-bold tracking-tight text-white">{currentCompany.name}</h2>
                 <p className="text-xs text-slate-400">{currentCompany.address}</p>
@@ -700,6 +702,7 @@ export default function CoreEmployeesPage() {
                   <input
                     type="text"
                     value={formDept}
+                    placeholder="mis. Marketing, Gudang, Customer Service"
                     onChange={(e) => setFormDept(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white text-xs"
                   />

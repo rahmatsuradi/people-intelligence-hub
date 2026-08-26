@@ -1,54 +1,19 @@
 -- ============================================================
--- People Intelligence — Modul PAY · SEED SINTETIS
--- SEMUA data di bawah FIKTIF. Tidak ada data perusahaan asli.
--- Inilah yang dipakai untuk demo publik & screenshot portofolio.
--- Data asli HANYA masuk ke instance privat (DATA_MODE=production),
--- tidak pernah ke repo / tidak pernah publik.
+-- People Intelligence — Modul PAY · SEED TARIF STATUTORI
 --
--- 13 karyawan sengaja dipilih untuk menutup SEMUA jalur engine:
---   PTKP  : TK/0..TK/3, K/0..K/3 (semua 8 status)
---   Risk  : kelas I..V (semua)
---   Masa  : 1 bulan s/d ~8 tahun (uji THR prorata & penuh)
---   Upah  : UMK s/d di atas plafon BPJS
---   NPWP  : sebagian ada, sebagian kosong
--- Tanggal acuan: pertengahan 2026. Jalankan SETELAH pay-module-schema.sql
+-- File ini HANYA berisi tarif statutori (PPh 21/TER, BPJS, PTKP, biaya jabatan,
+-- lembur, UMK). Tarif = DATA ber-versi per effective_date, bukan kode — perubahan
+-- tarif pemerintah dilakukan dengan MENAMBAH baris baru, bukan mengubah baris lama,
+-- supaya perhitungan periode lampau tetap memakai tarif yang berlaku saat itu.
+--
+-- TIDAK ADA data karyawan di sini. Versi sebelumnya menyertakan 13 karyawan fiktif
+-- (nama pesepakbola, NIK/NPWP karangan) sebagai data demo; semuanya dihapus karena
+-- instance ini dipakai untuk perusahaan sungguhan. Karyawan diisi lewat aplikasi
+-- (/pay/onboarding atau /pay/employees), bukan lewat file yang ikut masuk repo —
+-- data karyawan asli tidak boleh berada di dalam repo (CLAUDE.md §6).
+--
+-- Jalankan SETELAH pay-module-schema.sql. Aman dijalankan ulang.
 -- ============================================================
-
--- Tenant demo (fiktif): 11111111-1111-4111-8111-111111111111
-
--- ── Karyawan sintetis ────────────────────────────────────────
-insert into pi_employees (id, tenant_id, full_name, nik, npwp, ptkp_status, join_date, employment_type, risk_class, department, status) values
- ('e1000000-0000-4000-8000-000000000000','11111111-1111-4111-8111-111111111111','Jürgen Klopp',   '1304050101850001','09.111.222.3-011.000','TK/0', '2023-01-01','PKWTT','I',  'Divisi Human Capital & GA',          'active'),
- ('e1000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111','Xabi Alonso',    '3201010101900001','09.111.222.3-011.000','K/2', '2022-03-01','PKWTT','II', 'Divisi Kreatif & Program Siaran TV','active'),
- ('e1000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111','Andrea Pirlo',   '3201014102950002','09.111.222.3-011.001','TK/0','2025-11-03','PKWTT','I',  'Divisi Keuangan & Anggaran',           'active'),
- ('e1000000-0000-4000-8000-000000000003','11111111-1111-4111-8111-111111111111','Francesco Totti','3201010203880003', null,                 'K/3', '2023-05-10','PKWTT','III','Divisi Teknik Penyiaran & IT',         'active'),
- ('e1000000-0000-4000-8000-000000000004','11111111-1111-4111-8111-111111111111','Zinedine Zidane','3201015504930004','09.111.222.3-011.002','TK/1','2021-01-15','PKWTT','I',  'Divisi Human Capital & GA',          'active'),
- ('e1000000-0000-4000-8000-000000000005','11111111-1111-4111-8111-111111111111','Ronaldinho',     '3201010507850005','09.111.222.3-011.003','K/0', '2020-07-01','PKWTT','II', 'Divisi Kreatif & Program Siaran TV','active'),
- ('e1000000-0000-4000-8000-000000000006','11111111-1111-4111-8111-111111111111','Paolo Maldini',  '3201016008960006', null,                 'TK/2','2024-02-20','PKWT', 'I',  'Divisi Operasional Studio & Broadcast','active'),
- ('e1000000-0000-4000-8000-000000000007','11111111-1111-4111-8111-111111111111','Carles Puyol',   '3201010109820007','09.111.222.3-011.004','K/1', '2019-09-01','PKWTT','IV', 'Divisi Operasional Studio & Broadcast','active'),
- ('e1000000-0000-4000-8000-000000000008','11111111-1111-4111-8111-111111111111','Kaká',           '3201010410800008','09.111.222.3-011.005','K/3', '2018-04-01','PKWTT','II', 'Divisi Komersial & Ad Sales',          'active'),
- ('e1000000-0000-4000-8000-000000000009','11111111-1111-4111-8111-111111111111','Samuel Etoo',    '3201010106000009', null,                 'TK/0','2026-06-01','PKWT', 'III','Divisi Kreatif & Program Siaran TV','active'),
- ('e1000000-0000-4000-8000-00000000000a','11111111-1111-4111-8111-111111111111','Didier Drogba',  '3201010112870010','09.111.222.3-011.006','TK/3','2020-12-01','PKWTT','II', 'Divisi Redaksi & Pemberitaan',       'active'),
- ('e1000000-0000-4000-8000-00000000000b','11111111-1111-4111-8111-111111111111','Sergio Ramos',   '3201010107990011', null,                 'K/1', '2025-07-01','PKWT', 'V',  'Divisi Redaksi & Pemberitaan',       'active'),
- ('e1000000-0000-4000-8000-00000000000c','11111111-1111-4111-8111-111111111111','Iker Casillas',  '3201017003010012', null,                 'TK/0','2026-03-01','PKWT', 'I',  'Divisi Operasional Studio & Broadcast','active')
-on conflict (id) do nothing;
-
--- ── Kompensasi (efektif 2026) ────────────────────────────────
-insert into pi_compensation (employee_id, upah_pokok, tunjangan_tetap, tunjangan_tidak_tetap, effective_date) values
- ('e1000000-0000-4000-8000-000000000000', 2500000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000001', 4500000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000002',15000000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000003', 3100000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000004', 6000000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000005', 8500000, '[{"name":"Tunjangan Jabatan","amount":1500000}]', '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000006', 5200000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000007', 4800000, '[{"name":"Tunjangan Jabatan","amount":800000}]',  '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000008',25000000, '[{"name":"Tunjangan Jabatan","amount":5000000}]', '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-000000000009', 4200000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-00000000000a', 6500000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-00000000000b', 4600000, '[]',                                              '[]', '2026-01-01'),
- ('e1000000-0000-4000-8000-00000000000c', 3400000, '[]',                                              '[]', '2026-01-01')
-on conflict (employee_id, effective_date) do nothing;
 
 -- ── Konfigurasi statutori (TARIF TERVERIFIKASI — PP 58/2023) ──
 -- Diverifikasi 2026-07-21 dari 2 sumber independen (klikpajak.id, hrdpintar.com),

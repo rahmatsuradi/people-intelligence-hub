@@ -16,7 +16,13 @@ Fitur Hire yang sudah berfungsi & bisa dites tidak boleh rusak:
 
 ## 2. Tentang proyek
 
-Dibangun oleh seorang praktisi HR (pengelola HR tunggal di perusahaan garmen keluarga, 70+ karyawan) sebagai portofolio sekaligus alat kerja pribadi untuk payroll dan kepatuhan statutori Indonesia.
+Dibangun oleh seorang praktisi HR sebagai alat kerja untuk payroll dan kepatuhan statutori Indonesia, sekaligus portofolio.
+
+**Perusahaan yang dilayani instance ini: Lencir Indonesia** (tempat pengelola repo bekerja) — brand beauty & wellness: minuman prebiotik, skincare/body care, dan layanan wellness center. Berdiri 2023, kategori usaha kecil. Ini **bukan** perusahaan garmen; catatan lama yang menyebut "perusahaan garmen keluarga, 70+ karyawan" sudah tidak berlaku.
+
+**Data demo lama sudah dihapus (27 Agustus 2026).** Sebelumnya repo memuat dua tenant fiktif — "Valora TV" (754 karyawan sintetis, penyiaran) dan "Zus Textile" (245 karyawan sintetis, garmen) — lengkap dengan kandidat bernama pesepakbola dan angka SDM karangan. Semuanya dibuang: aplikasi ini melayani perusahaan sungguhan, dan angka SDM palsu di layar HR lebih berbahaya daripada layar kosong. Jangan menambahkan seed contoh baru.
+
+Identitas badan hukum di `company-profile.ts` (nama PT, alamat, penanda tangan, kelas risiko JKK) **masih placeholder hasil riset sumber publik** dan wajib dikonfirmasi ke akta/NIB sebelum menerbitkan slip gaji sungguhan — ditandai dengan komentar `⚠️ BELUM DIKONFIRMASI` di file itu.
 
 ## 3. Status modul Pay
 
@@ -46,9 +52,14 @@ Ikuti pola `schema.sql` yang sudah ada (bukan folder migrations): Supabase SQL E
 
 ## 6. Kerahasiaan (dijaga sejak fondasi)
 
-- **Instance PRIVAT** (`DATA_MODE=production`): data perusahaan **asli** → Supabase project privat, lokal/internal, **tidak pernah publik / tidak pernah masuk repo**.
-- **Demo PUBLIK**: data **sintetis** (`pay-module-seed.sql`, 12 karyawan fiktif, perusahaan fiktif) → inilah yang di-deploy & di-screenshot untuk portofolio.
-- Portofolio memakai demo sintetis + metrik agregat/anonim. NIK/NPWP/rekening ter-masking di layer render (slip gaji), data mentah terenkripsi di produksi. Patuh UU PDP 27/2022.
+Instance ini melayani perusahaan sungguhan, jadi aturannya lebih ketat daripada saat masih demo:
+
+- **Data karyawan tidak pernah masuk repo.** Satu-satunya sumber karyawan adalah tabel `pi_employees` di Supabase. `pay-data.ts` tidak lagi men-generate karyawan, dan `pay-module-seed.sql` sekarang **hanya berisi tarif statutori** — bagian karyawannya dihapus.
+- **Jangan menulis ulang seed karyawan ke dalam file apa pun**, termasuk "cuma untuk contoh". Begitu data contoh tercampur dengan data asli di database, keduanya tidak bisa dipisahkan lagi dan seluruh metrik SDM jadi salah tanpa ada tandanya.
+- Kalau perlu identitas perusahaan berbeda tanpa menulisnya ke repo, pakai env: `PI_COMPANY_NAME`, `PI_COMPANY_ADDRESS`, `PI_COMPANY_SIGNER_NAME`, `PI_COMPANY_SIGNER_TITLE` (dibaca `resolveCompanyProfile`).
+- **Pintu masuk tanpa sandi sudah dimatikan.** Tombol "Masuk Tanpa Login" di `/login` kini hanya muncul bila `NEXT_PUBLIC_ENABLE_DEMO_BYPASS=true`. Jangan menyalakannya pada database yang memuat data karyawan asli — tombol itu memberi akses penuh ke NIK, NPWP, upah, dan rekening tanpa autentikasi.
+- NIK/NPWP/rekening ter-masking di layer render (slip gaji). Patuh UU PDP 27/2022.
+- Pembersihan baris demo yang terlanjur tersimpan di database: `supabase/cleanup-demo-tenants.sql` (jalankan sekali; langkah 1 menghitung, langkah 2 menghapus).
 
 ## 7. Cakupan regulasi (comp & ben Indonesia)
 
@@ -61,6 +72,8 @@ Ikuti pola `schema.sql` yang sudah ada (bukan folder migrations): Supabase SQL E
 
 - Seksi nav **"Pay"** di `navItems` pada `src/components/app-shell.tsx` (di samping "Main"/"Tools") — Onboarding, Payroll, Employees, Laporan.
 - Route di `src/app/pay/*`, tidak menyentuh route Hire.
+- **Pemilih perusahaan (multi-tenant) sudah dihapus.** `ALL_COMPANIES` kini berisi satu entri dan `getActiveCompanyId()` mengembalikan nilai tetap; header menampilkan nama perusahaan sebagai label, bukan dropdown berisi satu pilihan. Namespace tenant di localStorage (`getTenantKey`) sengaja **dipertahankan** supaya data dua tenant demo lama tidak ikut terbaca.
+- **`/analytics` tab Workforce dihitung dari data nyata** (`pi_employees` + `pi_compensation`), bukan angka tetap. Karyawan yang belum punya data upah dikeluarkan dari penjumlahan dan jumlahnya dilaporkan — pola yang sama dengan `excludedNoHistory` di metrik rekrutmen: jangan pernah menghitungnya sebagai nol, karena total beban gaji jadi terlihat lebih kecil tanpa ada tandanya. Tab "Simulator Beban Siaran" dihapus (koefisien ilustratif khusus industri penyiaran).
 - **Jembatan Hire → Pay (selesai):** `/pay/onboarding` menampilkan kandidat berstatus `hired` yang belum punya record payroll, lalu form onboarding membuat `pi_employees` + `pi_compensation` sekaligus. Tautan disimpan di `pi_employees.hired_candidate_id` (nullable — karyawan lama tidak berasal dari Hire; unique — satu kandidat tidak bisa di-onboard dua kali; `on delete set null` — kandidat dihapus dari Hire tidak boleh menghapus record karyawan).
 - Jembatan ini **sengaja tidak sepenuhnya otomatis**: data rekrutmen tidak pernah memuat upah disepakati, PTKP, NIK, tanggal masuk, tipe kontrak, dan kelas risiko JKK — semuanya wajib untuk BPJS/PPh 21 dan hanya tersedia saat kontrak ditandatangani. Form onboarding menarik otomatis yang sudah diketahui (nama, posisi, departemen) dan meminta sisanya.
 
@@ -149,7 +162,9 @@ Aturan di `question-bank.ts` (23 unit test):
 
 - Formulir pelaporan pajak tahunan 1721-A1.
 - **Rekrutmen:** metrik kecepatan baru akan berarti setelah cukup kandidat berjalan lewat pipeline dengan riwayat tercatat (kandidat lama tidak ikut terhitung). Belum ada: cost-per-hire, sumber biaya iklan lowongan, dan pelacakan alasan penolakan kandidat.
-- Arahkan instance produksi ke data perusahaan asli (baru dilakukan setelah kelas risiko JKK final dikonfirmasi ke BPJS, dan UMK diisi sesuai SK Gubernur/Permenaker tahun berjalan untuk wilayah yang relevan — nilai UMK di seed saat ini murni placeholder demo).
+- **Isi data karyawan Lencir Indonesia.** Aplikasi kini kosong secara sengaja. Sebelum payroll bisa dijalankan: konfirmasi identitas badan hukum (§2), kelas risiko JKK ke BPJS Ketenagakerjaan, dan UMK sesuai SK Gubernur wilayah kantor (nilai UMK di seed masih placeholder). Baru setelah itu karyawan diisi lewat `/pay/employees` atau `/pay/onboarding`.
+- **Kerangka kompetensi belum mencakup beauty & wellness.** `CompetencyCluster` hanya punya `hr | tech | business | finance | broadcast | editorial | security`. Peran khas Lencir — KOL/affiliate marketing, live selling, terapis wellness center, QA/regulatory BPOM, fulfillment e-commerce — belum ada klasternya dan sementara jatuh ke `business`. Bank soal wawancara juga masih bertema penyiaran/pabrik. Ini gap nyata, bukan sekadar penamaan.
+- Script `scripts/run-seed-payroll.ts` dan `scripts/generate-seed-payslips.ts` dulu bergantung pada 13 karyawan seed yang kini sudah dihapus; keduanya sekarang membaca apa pun yang ada di database.
 - **Assessment** (skema/seed/RLS sudah terpasang & terverifikasi — lihat §9). Yang belum: norma lokal dari data nyata (butuh ≥ 100 peserta; lihat §12), analisis butir untuk item kognitif/SJT, uji reliabilitas & analisis faktor untuk adaptasi IPIP, pengiriman tautan tes lewat email otomatis (saat ini disalin manual — modul email belum ada), dan halaman umpan balik hasil untuk peserta.
 
 ## 11. Verifikasi tarif — status & jadwal ulang

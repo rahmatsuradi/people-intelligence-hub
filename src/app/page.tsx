@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell, Card, Icon, SvgPath, cn } from "@/components/app-shell";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { ensureDemoEmployeesExist, getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
+import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { getActiveCompanyProfile } from "@/lib/payroll/company-profile";
 import { getJobReqs, getCandidates, getTalentPool } from "@/lib/store";
 
@@ -54,7 +54,6 @@ export default function DashboardPage() {
           setPkwtCount(emps.length - tetap);
         };
         if (isSupabaseConfigured && supabase) {
-          await ensureDemoEmployeesExist(supabase);
           const [{ data: emps }, { data: runs }] = await Promise.all([
             supabase.from("pi_employees").select("id, department, position, employment_type").eq("status", "active").eq("tenant_id", comp.id),
             supabase.from("pi_payroll_runs").select("id").eq("tenant_id", comp.id).eq("period", currentPeriod).limit(1),
