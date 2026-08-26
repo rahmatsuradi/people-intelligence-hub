@@ -20,17 +20,31 @@ export interface CompanyProfile {
   headcountTarget: number; // 0 = belum ditetapkan; headcount nyata dibaca dari pi_employees
 }
 
-// ⚠️ BELUM DIKONFIRMASI — wajib diverifikasi sebelum menerbitkan slip gaji sungguhan.
-// Nilai di bawah berasal dari sumber publik (profil perusahaan di portal karier + registri
-// perseroan), BUKAN dari dokumen resmi perusahaan. Yang harus dicek ke akta/NIB:
-//   1. Nama badan hukum pemberi kerja (entitas yang menandatangani kontrak kerja).
-//   2. Alamat terdaftar yang dipakai di slip gaji.
-//   3. Nama & jabatan penanda tangan slip.
-//   4. Kelas risiko JKK BPJS Ketenagakerjaan (menentukan tarif 0,24%–1,74%).
-// Selama masih placeholder, slip gaji yang dihasilkan belum sah dipakai.
+// Badan hukum pemegang merek LENCIR: PT Loe Cantik Kita Cuan.
+//
+// Terkonfirmasi dari tiga sumber yang saling cocok:
+//   1. Registri perseroan (Ditjen AHU, Kemenkumham) — PT. Loe Cantik Kita Cuan,
+//      nomor perseroan 1242905, berdiri 21 Maret 2022 (perubahan anggaran dasar
+//      9 September 2024), alamat terdaftar Jl. Penerangan Nomor 1-EE, Jakarta Barat.
+//   2. Registri BPOM (cekbpom.pom.go.id) — pendaftar produk bermerek LENCIR
+//      (Luxurious Shower Scrub NA11250700151, Almond Peptide Hair Mask NA11251000612,
+//      Honey Black Lip Capsule NA11251301974) tercatat atas "LOE CANTIK KITA CUAN, PT",
+//      Kota Adm Jakarta Barat.
+//   3. Profil perusahaan "Lencir Indonesia" di portal karier — alamat operasional
+//      Jl. Penerangan No. 1-EE, RT.6/RW.3, Jelambar, Grogol Petamburan, Jakarta Barat 11460.
+//
+// ⚠️ MASIH HARUS DIKONFIRMASI dari dokumen internal sebelum menerbitkan slip gaji:
+//   a. ENTITAS PEMBERI KERJA. Grup Lencir punya beberapa badan hukum — antara lain
+//      PT Lencir Kaya Sukses (klinik/wellness, kantor Surabaya), PT Lencir Tubuh Idaman,
+//      PT Lencir Idaman Wanita, dan PT Loe Cantik Gue Cuan. Pemegang merek belum tentu
+//      entitas yang menandatangani kontrak kerja karyawan. Cek kontrak kerja/slip gaji
+//      yang berlaku: nama PT di situlah yang benar untuk slip.
+//   b. NPWP perusahaan (belum ada field-nya; tambahkan bila slip mensyaratkan).
+//   c. Nama & jabatan penanda tangan slip.
+//   d. Kelas risiko JKK BPJS Ketenagakerjaan (menentukan tarif 0,24%–1,74%).
 export const COMPANY_LENCIR: CompanyProfile = {
   id: "33333333-3333-4333-8333-333333333333",
-  name: "PT Lencir Tubuh Idaman (LENCIR INDONESIA)",
+  name: "PT Loe Cantik Kita Cuan",
   shortName: "LENCIR INDONESIA",
   address: "Jl. Penerangan No. 1-EE, RT.6/RW.3, Jelambar, Grogol Petamburan, Jakarta Barat 11460",
   signerName: "—",

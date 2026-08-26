@@ -22,7 +22,9 @@ Dibangun oleh seorang praktisi HR sebagai alat kerja untuk payroll dan kepatuhan
 
 **Data demo lama sudah dihapus (27 Agustus 2026).** Sebelumnya repo memuat dua tenant fiktif — "Valora TV" (754 karyawan sintetis, penyiaran) dan "Zus Textile" (245 karyawan sintetis, garmen) — lengkap dengan kandidat bernama pesepakbola dan angka SDM karangan. Semuanya dibuang: aplikasi ini melayani perusahaan sungguhan, dan angka SDM palsu di layar HR lebih berbahaya daripada layar kosong. Jangan menambahkan seed contoh baru.
 
-Identitas badan hukum di `company-profile.ts` (nama PT, alamat, penanda tangan, kelas risiko JKK) **masih placeholder hasil riset sumber publik** dan wajib dikonfirmasi ke akta/NIB sebelum menerbitkan slip gaji sungguhan — ditandai dengan komentar `⚠️ BELUM DIKONFIRMASI` di file itu.
+**Badan hukum pemegang merek: PT Loe Cantik Kita Cuan** (nomor perseroan 1242905, berdiri 21 Maret 2022, Jl. Penerangan No. 1-EE, Jakarta Barat). Terkonfirmasi tiga arah yang saling cocok: registri Ditjen AHU Kemenkumham, registri BPOM (pendaftar produk bermerek LENCIR), dan alamat operasional di portal karier.
+
+Yang **masih** harus dikonfirmasi dari dokumen internal sebelum slip gaji diterbitkan — ditandai `⚠️ MASIH HARUS DIKONFIRMASI` di `company-profile.ts`: entitas pemberi kerja yang sebenarnya (grup Lencir punya beberapa PT — PT Lencir Kaya Sukses untuk klinik/wellness berkantor Surabaya, PT Lencir Tubuh Idaman, PT Lencir Idaman Wanita, PT Loe Cantik Gue Cuan; pemegang merek belum tentu penanda tangan kontrak kerja), NPWP perusahaan, nama/jabatan penanda tangan slip, dan kelas risiko JKK.
 
 ## 3. Status modul Pay
 
