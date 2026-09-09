@@ -8,7 +8,7 @@
 
 import { extractText, getDocumentProxy } from "unpdf";
 
-export const GROQ_MODEL = "llama-3.3-70b-versatile";
+export const GROQ_MODEL = "qwen/qwen3.8-27b";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 /* ─── Validasi: apakah teks readable? ─── */
@@ -122,6 +122,7 @@ export async function callGroqChat(
 
     if (response.status === 401) throw new Error("GROQ_API_KEY tidak valid.");
     if (response.status === 400) throw new Error(`Permintaan tidak valid: ${errorText.slice(0, 160)}`);
+    if (response.status === 404) throw new Error("Model tidak ditemukan. Periksa GROQ_MODEL di cv-groq.ts");
 
     if ((response.status === 429 || response.status >= 500) && attempt < MAX_ATTEMPTS) {
       const retryAfter = parseFloat(response.headers.get("retry-after") ?? "");
@@ -190,6 +191,7 @@ export async function callGroq(prompt: string, maxAttempts = 3): Promise<GroqCal
     // Non-retryable client errors — fail immediately
     if (response.status === 401) throw new Error("GROQ_API_KEY tidak valid. Periksa key di .env.local");
     if (response.status === 400) throw new Error(`Request tidak valid: ${errorText.slice(0, 200)}`);
+    if (response.status === 404) throw new Error("Model tidak ditemukan. Periksa GROQ_MODEL di cv-groq.ts");
 
     // Retryable: 429 (rate limit) and 5xx (server) — back off and retry
     if ((response.status === 429 || response.status >= 500) && attempt < MAX_ATTEMPTS) {

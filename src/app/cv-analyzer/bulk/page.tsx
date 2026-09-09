@@ -293,7 +293,7 @@ export default function BulkCvAnalyzerPage() {
     <AppShell
       activeNavId="cv-analyzer"
       title="Bulk CV Analysis"
-      subtitle="Upload many CVs · AI ranks them all · Groq · Llama 3.3"
+      subtitle="Upload many CVs · AI ranks them all · Groq · Qwen 3.8"
       headerActions={
         <Link href="/cv-analyzer">
           <Button variant="secondary" size="sm">

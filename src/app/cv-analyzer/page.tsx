@@ -238,7 +238,7 @@ function AnalysisReportPanel({ report, candidateName, targetPosition, department
                     {clusterBadge.label}
                   </span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    Groq · Llama 3.3
+                    Groq · Qwen 3.8
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-slate-400">{report.frameworkLabel}</p>
@@ -271,7 +271,7 @@ function AnalysisReportPanel({ report, candidateName, targetPosition, department
             <p className="mt-2 text-xs text-slate-400 italic">ℹ {report.processingNote}</p>
           )}
           <p className="mt-2 text-xs text-slate-400">
-            Processed in {(report.processingMs / 1000).toFixed(1)}s · Groq · Llama 3.3 70B · No PII stored
+            Processed in {(report.processingMs / 1000).toFixed(1)}s · Groq · Qwen 3.8 27B · No PII stored
           </p>
         </div>
       </Card>
@@ -554,7 +554,7 @@ export default function CvAnalyzerPage() {
 
   <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:8pt;color:#94a3b8">
     <span>People Intelligence · people-intelligence-hub.vercel.app</span>
-    <span>Generated: ${report.generatedAt} · Groq Llama 3.3 70B · No PII stored</span>
+    <span>Generated: ${report.generatedAt} · Groq Qwen 3.8 27B · No PII stored</span>
   </div>
 </body>
 </html>`;
@@ -668,7 +668,7 @@ export default function CvAnalyzerPage() {
   };
 
   return (
-    <AppShell activeNavId="cv-analyzer" title="CV Analyzer" subtitle="Multi-framework AI analysis · Groq · Llama 3.3"
+    <AppShell activeNavId="cv-analyzer" title="CV Analyzer" subtitle="Multi-framework AI analysis · Groq · Qwen 3.8"
       headerActions={
         <Link href="/cv-analyzer/bulk">
           <Button variant="primary" size="sm">

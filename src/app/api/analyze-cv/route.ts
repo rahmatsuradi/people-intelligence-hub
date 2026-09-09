@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    API Route: POST /api/analyze-cv
-   Model: llama-3.3-70b-versatile via Groq (free tier, no billing required)
+   Model: qwen/qwen3.8-27b via Groq (free tier, no billing required)
    
    Groq free tier: 14,400 req/day, 500,000 tokens/day — jauh lebih longgar
 ═══════════════════════════════════════════════════════════════════════════ */
