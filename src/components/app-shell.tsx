@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCandidates, getJobReqs, syncFromSupabase } from "@/lib/store";
 import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
+import { LencirWordmark } from "@/components/lencir-logo";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -161,6 +162,13 @@ export function AppShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const activeCompany: CompanyProfile = getActiveCompanyProfile();
 
+  // CATATAN: membaca localStorage di inisialisasi useState membuat render pertama
+  // di browser berbeda dari HTML server, jadi React memunculkan peringatan
+  // hydration mismatch di konsol dev. Itu disengaja untuk saat ini — pola ini yang
+  // mencegah halaman berkedip terang lebih dulu bagi pengguna mode gelap.
+  // Perbaikan yang benar butuh skrip pra-paint di <head>, dan pada Next 16 + React
+  // 19 skrip semacam itu di-hoist keluar <head> sehingga justru memunculkan error
+  // baru. Dibiarkan apa adanya sampai ada waktu menanganinya dengan benar.
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
     return (localStorage.getItem("hi_theme") as Theme) ?? "system";
@@ -334,13 +342,12 @@ export function AppShell({
       {sidebarOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
       <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-out dark:border-slate-800 dark:bg-slate-900 lg:static lg:translate-x-0", sidebarOpen ? "translate-x-0" : "-translate-x-full")} aria-label="Main navigation">
         <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
-          <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
-            <span className="text-sm font-bold tracking-tight">PI</span>
+          <Link href="/" className="min-w-0 flex-1" aria-label="Beranda">
+            <LencirWordmark className="h-4 w-auto text-slate-900 dark:text-slate-50" />
+            <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+              People Intelligence
+            </p>
           </Link>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">People Intelligence</p>
-            <p className="truncate text-xs font-medium text-blue-600 dark:text-blue-400">{activeCompany.shortName}</p>
-          </div>
           <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-slate-800" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
             <Icon className="h-5 w-5"><SvgPath name="close" /></Icon>
           </button>
@@ -365,22 +372,18 @@ export function AppShell({
             <h1 className="truncate text-lg font-semibold text-slate-900 dark:text-white">{title}</h1>
             {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
           </div>
-          {/* Identitas perusahaan. Dulu ini pemilih multi-tenant; instance sekarang hanya
-              melayani satu perusahaan, jadi ditampilkan sebagai label, bukan dropdown yang
-              isinya cuma satu pilihan. */}
-          <div className={cn("flex items-center gap-2", !headerActions && "ml-auto")}>
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-800/80">
-              <span className="text-base" aria-hidden>
-                {activeCompany.emoji}
+          {/* Badan hukum pemberi kerja. Dulu ini pemilih multi-tenant; instance sekarang
+              hanya melayani satu perusahaan. Yang ditampilkan nama PT-nya, bukan nama
+              merk — merk sudah terbaca dari wordmark di sidebar, sedangkan yang relevan
+              saat mengurus payroll dan slip gaji adalah entitas hukumnya. */}
+          <div className={cn("hidden items-center md:flex", !headerActions && "ml-auto")}>
+            <div className="border-l border-slate-200 py-1 pl-4 text-left dark:border-slate-800">
+              <span className="block text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                Badan Hukum
               </span>
-              <div className="flex flex-col text-left">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Perusahaan
-                </span>
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  {activeCompany.shortName}
-                </span>
-              </div>
+              <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+                {activeCompany.name}
+              </span>
             </div>
           </div>
           {headerActions && <div className="flex items-center gap-2">{headerActions}</div>}

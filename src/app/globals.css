@@ -2,23 +2,155 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   PALET MERK LENCIR
+
+   Diturunkan dari identitas visual brand: logo wordmark serif hitam di atas
+   putih, produk difoto di atas kanvas putih hangat dengan properti batu
+   vulkanik hitam, dan tiga warna produk — rose/burgundy (Collagen GLO+),
+   amber madu (Shower Gel), dan teal (Prebiotics).
+
+   CARA KERJA REMAP INI — baca sebelum menyunting.
+
+   Nama skala Tailwind di bawah (`slate`, `blue`, `indigo`) dipertahankan,
+   tetapi NILAINYA sudah diganti jadi warna merk:
+
+       slate-*   →  netral HANGAT (taupe), bukan abu kebiruan
+       blue-*    →  ROSE merk (warna aksi utama)
+       indigo-*  →  BURGUNDY merk (pasangan gelap untuk gradien)
+
+   Alasannya praktis: kelas warna itu terpakai ~3.500 kali di 43 route.
+   Mengganti nilainya di satu tempat mengubah seluruh aplikasi sekaligus,
+   tanpa menyunting ribuan baris JSX yang tiap suntingannya bisa salah.
+
+   Konsekuensinya: `text-blue-600` di komponen BUKAN berarti biru — itu
+   warna aksi merk. Jangan "memperbaiki" ini dengan menulis biru literal.
+   Untuk komponen baru, pakai token semantik `--color-brand-*` di bawah.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Netral hangat (menggantikan slate abu-kebiruan bawaan) ───────────── */
+  --color-slate-50:  #faf8f7;
+  --color-slate-100: #f4f1ef;
+  --color-slate-200: #e9e4e0;
+  --color-slate-300: #d7d0cb;
+  --color-slate-400: #aaa19b;
+  --color-slate-500: #7d7470;
+  --color-slate-600: #5f5754;
+  --color-slate-700: #4a4341;
+  --color-slate-800: #302b2a;
+  --color-slate-900: #1d1a19;
+  --color-slate-950: #121010;
+
+  /* ── Rose merk — warna aksi utama (dari sachet Collagen GLO+) ─────────── */
+  --color-blue-50:  #fdf2f6;
+  --color-blue-100: #fce7ef;
+  --color-blue-200: #facfdf;
+  --color-blue-300: #f5a8c4;
+  --color-blue-400: #ec739f;
+  --color-blue-500: #de4179;
+  --color-blue-600: #c7245e;
+  --color-blue-700: #a81b4d;
+  --color-blue-800: #8b1840;
+  --color-blue-900: #741837;
+  --color-blue-950: #45081d;
+
+  /* ── Burgundy merk — pasangan gelap (dari kemasan Collagen GLO+) ──────── */
+  --color-indigo-50:  #fdf2f5;
+  --color-indigo-100: #fbe4ea;
+  --color-indigo-200: #f6c8d5;
+  --color-indigo-300: #ed9db4;
+  --color-indigo-400: #de6488;
+  --color-indigo-500: #c73764;
+  --color-indigo-600: #a81f4c;
+  --color-indigo-700: #8b1a40;
+  --color-indigo-800: #711937;
+  --color-indigo-900: #5d1830;
+  --color-indigo-950: #360717;
+
+  /* ── Violet — diselaraskan agar tidak menabrak rose ───────────────────── */
+  --color-violet-50:  #fbf3f8;
+  --color-violet-100: #f7e6f1;
+  --color-violet-200: #efcde4;
+  --color-violet-300: #e2a6ce;
+  --color-violet-400: #cf74b1;
+  --color-violet-500: #b84c94;
+  --color-violet-600: #9c3378;
+  --color-violet-700: #812862;
+  --color-violet-800: #6b2352;
+  --color-violet-900: #5a2046;
+  --color-violet-950: #350a27;
+
+  /* ── Teal — dari botol Prebiotics ─────────────────────────────────────── */
+  --color-teal-50:  #eefbfa;
+  --color-teal-100: #d3f5f2;
+  --color-teal-200: #ace9e5;
+  --color-teal-300: #74d8d3;
+  --color-teal-400: #43bfb9;
+  --color-teal-500: #26a29d;
+  --color-teal-600: #1b827f;
+  --color-teal-700: #1a6867;
+  --color-teal-800: #1a5353;
+  --color-teal-900: #1a4645;
+  --color-teal-950: #082b2b;
+
+  /* ── Amber — dari Shower Gel madu ─────────────────────────────────────── */
+  --color-amber-50:  #fdf8ed;
+  --color-amber-100: #faedcc;
+  --color-amber-200: #f4d996;
+  --color-amber-300: #ecbf5e;
+  --color-amber-400: #e5a63a;
+  --color-amber-500: #d9881f;
+  --color-amber-600: #bf6717;
+  --color-amber-700: #9e4916;
+  --color-amber-800: #813a18;
+  --color-amber-900: #6b3017;
+  --color-amber-950: #3d1708;
+
+  /* ── Danger — dijaga condong ke oranye supaya jelas beda dari rose merk.
+        Kalau merah bahaya dan rose aksi terlihat mirip, tombol Hapus dan
+        tombol Simpan jadi sulit dibedakan sekilas. ───────────────────────── */
+  --color-red-50:  #fdf4f1;
+  --color-red-100: #fbe5de;
+  --color-red-200: #f7cabd;
+  --color-red-300: #efa48d;
+  --color-red-400: #e4735a;
+  --color-red-500: #d44f34;
+  --color-red-600: #bd3a21;
+  --color-red-700: #9c2e1b;
+  --color-red-800: #80281a;
+  --color-red-900: #6a2418;
+  --color-red-950: #390f0a;
+
+  /* ── Token semantik. PAKAI INI untuk komponen baru. ───────────────────── */
+  --color-brand-ink: #141212;      /* hitam wordmark & batu vulkanik */
+  --color-brand-canvas: #faf8f7;   /* putih hangat latar foto produk */
+  --color-brand-rose: #c7245e;
+  --color-brand-burgundy: #a81f4c;
+  --color-brand-amber: #d9881f;
+  --color-brand-teal: #26a29d;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf8f7;
+  --foreground: #141212;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans), sans-serif;
+  --font-serif: var(--font-serif), Georgia, serif;
   --font-mono: var(--font-mono), monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Mode gelap mengikuti kelas .dark yang dipasang AppShell dari preferensi
+   tersimpan. Media query prefers-color-scheme sengaja TIDAK dipakai di sini:
+   dulu keduanya aktif bersamaan, sehingga pengguna yang memilih tema terang
+   di aplikasi tetap mendapat latar gelap saat OS-nya gelap. */
+.dark {
+  --background: #121010;
+  --foreground: #f4f1ef;
 }
 
 body {

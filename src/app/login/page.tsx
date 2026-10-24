@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { LencirWordmark } from "@/components/lencir-logo";
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500";
@@ -62,13 +63,14 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12 dark:bg-slate-950">
       <div className="w-full max-w-sm">
-        {/* Brand */}
-        <div className="mb-8 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25">
-            <span className="text-lg font-bold tracking-tight">PI</span>
-          </div>
-          <h1 className="mt-4 text-xl font-semibold text-slate-900 dark:text-white">People Intelligence</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign in to your workspace</p>
+        {/* Brand — wordmark tampil apa adanya di atas kanvas putih hangat,
+            mengikuti cara merk ini menampilkan dirinya sendiri. */}
+        <div className="mb-10 flex flex-col items-center text-center">
+          <LencirWordmark className="h-6 w-auto text-slate-900 dark:text-slate-50" />
+          <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+            People Intelligence
+          </p>
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Masuk ke ruang kerja Anda</p>
         </div>
 
         {/* Card */}
@@ -114,7 +116,7 @@ export default function LoginPage() {
               disabled={loading}
               className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:pointer-events-none disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
             >
-              {loading ? "Please wait…" : "Sign in"}
+              {loading ? "Mohon tunggu…" : "Masuk"}
             </button>
           </form>
 
@@ -145,7 +147,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-          &copy; 2026 People Intelligence &middot; Enterprise HR Platform
+          &copy; 2026 Lencir Indonesia &middot; Platform HR Terpadu
         </p>
       </div>
     </div>

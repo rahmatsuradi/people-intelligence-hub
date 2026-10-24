@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -12,9 +12,17 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+// Serif untuk wordmark LENCIR dan judul bergaya merk. Kontras tebal-tipisnya
+// mendekati wordmark asli yang bergaya Didone.
+const cormorant = Cormorant_Garamond({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
 export const metadata: Metadata = {
-  title: "People Intelligence Hub — AI-Powered Talent & HR Ecosystem",
-  description: "An integrated HR ecosystem supporting the entire employee lifecycle from workforce planning, AI recruitment, payroll, 9-box performance, to burnout detection.",
+  title: "LENCIR — People Intelligence",
+  description: "Platform HR terpadu Lencir Indonesia: perencanaan tenaga kerja, rekrutmen, payroll & kepatuhan statutori, performance, dan asesmen.",
 };
 
 export default function RootLayout({
@@ -25,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakarta.variable} ${jetbrainsMono.variable} h-full antialiased font-sans`}
+      className={`${plusJakarta.variable} ${cormorant.variable} ${jetbrainsMono.variable} h-full antialiased font-sans`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 dark:bg-slate-950 font-sans">{children}</body>
     </html>
