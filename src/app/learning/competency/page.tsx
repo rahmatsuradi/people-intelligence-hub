@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, Card, Button, Icon, SvgPath, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { loadActiveEmployees } from "@/lib/payroll/pay-data";
+import { HR_SYNCED_EVENT } from "@/lib/hr-records";
 import { getActiveCompanyId } from "@/lib/payroll/company-profile";
 import { CLUSTER_FRAMEWORKS, type CompetencyCluster, type CompetencyDefinition } from "@/lib/competency-framework";
 import {
@@ -150,9 +151,11 @@ export default function CompetencyMatrixPage() {
     refresh();
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("pi-company-change", refresh);
+    window.addEventListener(HR_SYNCED_EVENT, refresh);
     return () => {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("pi-company-change", refresh);
+      window.removeEventListener(HR_SYNCED_EVENT, refresh);
     };
   }, []);
 

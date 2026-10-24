@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, Card, Button, Icon, SvgPath, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { loadActiveEmployees } from "@/lib/payroll/pay-data";
+import { HR_SYNCED_EVENT } from "@/lib/hr-records";
 import { getActiveCompanyId } from "@/lib/payroll/company-profile";
 import {
   getOrgRelations,
@@ -215,9 +216,11 @@ export default function OrgDevelopmentPage() {
     refresh();
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("pi-company-change", refresh);
+    window.addEventListener(HR_SYNCED_EVENT, refresh);
     return () => {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("pi-company-change", refresh);
+      window.removeEventListener(HR_SYNCED_EVENT, refresh);
     };
   }, []);
 
@@ -425,7 +428,7 @@ export default function OrgDevelopmentPage() {
                               <button type="button" onClick={() => setGradeModal({ data: g })} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800">
                                 <Icon className="h-4 w-4"><SvgPath name="pencil" /></Icon>
                               </button>
-                              <button type="button" onClick={() => { deleteJobGrade(tenantId, g.id); toast("Grade dihapus"); refresh(); }} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
+                              <button type="button" onClick={() => { if (!window.confirm("Hapus grade ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan.")) return; deleteJobGrade(tenantId, g.id); toast("Grade dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
                                 <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
                               </button>
                             </div>

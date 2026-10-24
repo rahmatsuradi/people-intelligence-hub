@@ -4,9 +4,10 @@
    rounds are HR-entered aggregate results (e.g. tallied from a paper/Google
    Form survey) rather than collected live from employees inside this app.
 
-   ⚠️ Disimpan HANYA di localStorage browser ini — belum ada salinan di cloud,
-   jadi rekan HR lain tidak melihatnya dan data hilang bila cache browser dibuang.
+   Tersimpan di cloud (pi_hr_records) lewat saveHrCollection; localStorage hanya cache.
 ═══════════════════════════════════════════════════════════════════════════ */
+
+import { saveHrCollection } from "./hr-records";
 
 export interface EnpsRound {
   id: string;
@@ -63,7 +64,7 @@ export function getEnpsRounds(tenantId: string): EnpsRound[] {
 }
 
 function saveEnpsRounds(tenantId: string, rounds: EnpsRound[]): void {
-  localStorage.setItem(ENPS_PREFIX + tenantId, JSON.stringify(rounds));
+  saveHrCollection("enps_round", tenantId, rounds);
 }
 
 export function upsertEnpsRound(tenantId: string, input: Omit<EnpsRound, "id" | "createdAt" | "updatedAt"> & { id?: string }): EnpsRound {
@@ -100,7 +101,7 @@ export function getFeedbackEntries(tenantId: string): FeedbackEntry[] {
 }
 
 function saveFeedbackEntries(tenantId: string, entries: FeedbackEntry[]): void {
-  localStorage.setItem(FEEDBACK_PREFIX + tenantId, JSON.stringify(entries));
+  saveHrCollection("feedback", tenantId, entries);
 }
 
 export function addFeedbackEntry(tenantId: string, input: Omit<FeedbackEntry, "id" | "createdAt">): FeedbackEntry {

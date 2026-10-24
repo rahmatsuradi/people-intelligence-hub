@@ -177,9 +177,21 @@ Aturan di `question-bank.ts` (23 unit test):
 - `validateCustomQuestion()` **menolak** pertanyaan yang menyinggung kehamilan/status pernikahan, agama/suku/ras, usia, rencana punya anak, kondisi kesehatan/disabilitas, dan orientasi seksual. Ditolak di depan, bukan ditegur setelah dipakai mewawancarai orang. Pertanyaan tentang kesediaan menjalankan tuntutan pekerjaan tetap lolos.
 - `activePack` memisahkan kit lengkap dari kit yang benar-benar dipakai menilai, sehingga cakupan dan rata-rata dihitung atas pertanyaan yang nyata ditanyakan.
 
+## 9d. Fitur HR di cloud — `pi_hr_records` (24 Oktober 2026)
+
+Enam fitur (eNPS & umpan balik, pelatihan, suksesi & 9-box, OD & grading, hubungan industrial, matriks kompetensi) = 14 koleksi, semuanya di satu tabel dokumen `pi_hr_records` (`supabase/hr-records-schema.sql`, PK `tenant_id + kind + record_id`, `data jsonb`, `updated_by` = akun pengubah, RLS authenticated-only). Daftar koleksi yang sah: `HR_KINDS` di `src/lib/hr-records.ts` (15 unit test).
+
+- **Pola sama dengan `store.ts`:** localStorage = cache yang dibaca sinkron; tulis lewat `saveHrCollection()` yang hanya mengirim catatan yang **berubah** (urutan array diabaikan) dan menghapus yang hilang. `syncHrRecords()` dipanggil AppShell setelah login, menimpa cache (cloud menang, termasuk saat kosong), lalu memicu `HR_SYNCED_EVENT` yang didengarkan keenam halaman + dashboard.
+- **Gagal tulis wajib terlihat** (toast). Kalau diam, perubahan itu hanya hidup di satu browser dan akan tertimpa saat sinkron berikutnya.
+- **Ambil per halaman 1.000 baris** — PostgREST memotong diam-diam di 1.000, dan matriks kompetensi (karyawan × kompetensi) mudah melewatinya.
+- **Setiap tombol hapus wajib `window.confirm`** — sejak di cloud, satu klik menghapus data seluruh tim (hapus kursus juga menghapus semua pesertanya).
+- Store baru yang menyimpan data HR: tambahkan `kind` ke `HR_KINDS` dan pakai `saveHrCollection`, jangan `localStorage.setItem` langsung.
+- Satu tabel jsonb, bukan 14 tabel bertipe, karena bentuk data fitur-fitur ini masih akan berubah. Pecah ke tabel bertipe bila dibutuhkan kueri/laporan lintas koleksi.
+- Batasan yang disadari: dua orang menyunting **catatan yang sama** bersamaan → yang terakhir menang (per catatan, bukan per koleksi).
+
 ## 10. Yang belum dikerjakan
 
-- **Enam fitur HR dari penyatuan `main` hanya menyimpan data di browser (localStorage)**, bukan di cloud: eNPS & umpan balik (`engagement-store`), pelatihan (`training-store`), suksesi & 9-box (`succession-store`), OD & grading (`org-development-store`), hubungan industrial (`ir-store`), matriks kompetensi (`competency-matrix-store`), plus kalender konten & riwayat employer branding. Akibatnya: rekan HR tidak saling melihat, dan data hilang bila cache browser dibuang. Daftar karyawannya sudah dibaca dari `pi_employees` (lewat `loadActiveEmployees()`), tetapi isian HR-nya belum. Pindahkan ke tabel Supabase `pi_*` sebelum dipakai untuk keputusan nyata.
+- Kalender konten & riwayat employer branding, target SLA rekrutmen, dan cache ringkasan eksekutif masih hanya di browser (localStorage). Enam fitur HR inti sudah di cloud — lihat §9d.
 - **Turnover & beban lembur di dashboard** butuh kolom siklus hidup (`exit_date`, `exit_type`) dan jam lembur yang belum ada di `pi_employees`; kartu-kartunya kini jujur menampilkan "belum tersedia".
 - **Endpoint AI (`/api/analyze-cv`, `/api/hr-consultant`, `/api/employer-branding`, `/api/executive-insight`) belum memeriksa login** — siapa pun yang tahu alamatnya bisa menghabiskan kuota Groq. `/api/send-email` sudah dijaga (wajib token Supabase); pola yang sama perlu diterapkan ke keempatnya.
 - 13 error lint gaya (tipe `any`, tanda kutip di JSX) dan penghitung yang diubah saat render di `talent/od` (`renderedCount`).

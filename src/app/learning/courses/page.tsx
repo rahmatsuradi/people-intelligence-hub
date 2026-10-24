@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, Card, Button, Icon, SvgPath, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { loadActiveEmployees } from "@/lib/payroll/pay-data";
+import { HR_SYNCED_EVENT } from "@/lib/hr-records";
 import { getActiveCompanyId } from "@/lib/payroll/company-profile";
 import {
   getCourses,
@@ -329,9 +330,11 @@ export default function TrainingCoursesPage() {
     refresh();
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("pi-company-change", refresh);
+    window.addEventListener(HR_SYNCED_EVENT, refresh);
     return () => {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("pi-company-change", refresh);
+      window.removeEventListener(HR_SYNCED_EVENT, refresh);
     };
   }, []);
 
@@ -460,7 +463,7 @@ export default function TrainingCoursesPage() {
                             <button type="button" onClick={() => setCourseModal({ data: c })} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800">
                               <Icon className="h-4 w-4"><SvgPath name="pencil" /></Icon>
                             </button>
-                            <button type="button" onClick={() => { deleteCourse(tenantId, c.id); toast("Pelatihan dihapus"); refresh(); }} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
+                            <button type="button" onClick={() => { if (!window.confirm("Hapus pelatihan ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan. Semua peserta pelatihan ini juga ikut terhapus.")) return; deleteCourse(tenantId, c.id); toast("Pelatihan dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
                               <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
                             </button>
                           </div>
@@ -527,7 +530,7 @@ export default function TrainingCoursesPage() {
                               <button type="button" onClick={() => setEnrollModal({ data: e })} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800">
                                 <Icon className="h-4 w-4"><SvgPath name="pencil" /></Icon>
                               </button>
-                              <button type="button" onClick={() => { deleteEnrollment(tenantId, e.id); toast("Pendaftaran dihapus"); refresh(); }} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
+                              <button type="button" onClick={() => { if (!window.confirm("Hapus pendaftaran ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan.")) return; deleteEnrollment(tenantId, e.id); toast("Pendaftaran dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
                                 <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
                               </button>
                             </div>
@@ -570,7 +573,7 @@ export default function TrainingCoursesPage() {
                         <button type="button" onClick={() => setBudgetModal({ data: b })} className="rounded p-1 text-slate-400 opacity-0 hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 dark:hover:bg-slate-800">
                           <Icon className="h-3.5 w-3.5"><SvgPath name="pencil" /></Icon>
                         </button>
-                        <button type="button" onClick={() => { deleteDepartmentBudget(tenantId, b.id); toast("Budget dihapus"); refresh(); }} className="rounded p-1 text-slate-400 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-500/10">
+                        <button type="button" onClick={() => { if (!window.confirm("Hapus budget ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan.")) return; deleteDepartmentBudget(tenantId, b.id); toast("Budget dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1 text-slate-400 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-500/10">
                           <Icon className="h-3.5 w-3.5"><SvgPath name="trash" /></Icon>
                         </button>
                       </div>

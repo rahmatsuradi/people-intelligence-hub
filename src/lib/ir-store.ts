@@ -1,9 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Industrial Relations Store — per-tenant case log + PP/PKB document tracker.
-   Follows the same tenantId-prefixed localStorage pattern as mpp-store.ts /
-   competency-matrix-store.ts. All records are HR-entered; nothing here is
-   auto-generated or inferred.
+   Tersimpan di cloud (pi_hr_records) lewat saveHrCollection; localStorage hanya
+   cache. All records are HR-entered; nothing here is auto-generated or inferred.
 ═══════════════════════════════════════════════════════════════════════════ */
+
+import { saveHrCollection } from "./hr-records";
 
 export type IRCaseCategory = "keluhan" | "indisipliner" | "phk" | "mediasi-bipartit" | "phi" | "lainnya";
 export type IRCaseStatus = "open" | "mediasi" | "selesai" | "eskalasi";
@@ -62,7 +63,7 @@ export function getIRCases(tenantId: string): IRCase[] {
 }
 
 function saveIRCases(tenantId: string, cases: IRCase[]): void {
-  localStorage.setItem(CASE_PREFIX + tenantId, JSON.stringify(cases));
+  saveHrCollection("ir_case", tenantId, cases);
 }
 
 export function upsertIRCase(tenantId: string, input: Omit<IRCase, "id" | "createdAt" | "updatedAt"> & { id?: string }): IRCase {
@@ -98,7 +99,7 @@ export function getIRDocuments(tenantId: string): IRDocument[] {
 }
 
 function saveIRDocuments(tenantId: string, docs: IRDocument[]): void {
-  localStorage.setItem(DOC_PREFIX + tenantId, JSON.stringify(docs));
+  saveHrCollection("ir_document", tenantId, docs);
 }
 
 export function upsertIRDocument(tenantId: string, input: Omit<IRDocument, "id" | "createdAt" | "updatedAt"> & { id?: string }): IRDocument {

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCandidates, getJobReqs, syncFromSupabase } from "@/lib/store";
-import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
+import { getActiveCompanyId, getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
+import { syncHrRecords } from "@/lib/hr-records";
 import { RicaRicoMark, RicaRicoWordmark } from "@/components/rica-rico-logo";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
@@ -219,6 +220,7 @@ export function AppShell({
     refresh(); // immediate from localStorage
     if (authStatus === "authed") {
       syncFromSupabase().then(refresh).catch(() => {}); // re-sync from cloud once logged in
+      syncHrRecords(getActiveCompanyId()).catch(() => {}); // halaman HR mendengarkan HR_SYNCED_EVENT
     }
     document.addEventListener("visibilitychange", refresh);
     return () => document.removeEventListener("visibilitychange", refresh);

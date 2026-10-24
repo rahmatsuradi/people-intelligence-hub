@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell, Button, Card, Label, inputClass } from "@/components/app-shell";
 import { setCompanyName, setCompanyEmail } from "@/lib/email-templates";
+import { HR_KINDS } from "@/lib/hr-records";
 
 export default function SettingsPage() {
   const [userName, setUserName] = useState("");
@@ -25,14 +26,15 @@ export default function SettingsPage() {
   }, [userName, company, companyEmail]);
 
   // Hanya membuang salinan di browser ini dari data yang PUNYA cadangan di cloud
-  // (kandidat, lowongan, aktivitas) — dimuat ulang saat halaman dibuka lagi. Kunci
-  // `hi_*` lain (eNPS, pelatihan, suksesi, dst.) hanya hidup di browser; membuangnya
-  // berarti kehilangan data. Sengaja TIDAK ada tombol hapus-semua-di-cloud: database
-  // dipakai bersama satu tim HR, jadi satu klik akan menghapus data semua orang.
+  // (kandidat, lowongan, aktivitas, dan 14 koleksi HR di HR_KINDS) — semuanya dimuat
+  // ulang saat halaman dibuka lagi. Kunci `hi_*` lain (mis. kalender konten) hanya
+  // hidup di browser, jadi tidak disentuh. Sengaja TIDAK ada tombol hapus-semua-di-cloud:
+  // database dipakai bersama satu tim HR, jadi satu klik akan menghapus data semua orang.
   const handleClearAll = useCallback(() => {
-    if (!window.confirm("Bersihkan salinan kandidat, lowongan, dan aktivitas di browser ini? Data di cloud tetap aman dan akan dimuat ulang.")) return;
+    if (!window.confirm("Bersihkan salinan data di browser ini? Data di cloud tetap aman dan akan dimuat ulang.")) return;
+    const hrPrefixes = Object.values(HR_KINDS).map((k) => k.prefix);
     Object.keys(localStorage)
-      .filter((k) => /^hi_(candidates|jobreqs|activity)(_|$)/.test(k))
+      .filter((k) => /^hi_(candidates|jobreqs|activity)(_|$)/.test(k) || hrPrefixes.some((p) => k.startsWith(p)))
       .forEach((k) => localStorage.removeItem(k));
     window.location.href = "/";
   }, []);
@@ -95,7 +97,7 @@ export default function SettingsPage() {
 
         <Card>
           <h2 className="text-base font-semibold text-red-700 dark:text-red-400">Danger zone</h2>
-          <p className="mt-1 text-sm text-slate-500">Membuang salinan kandidat, lowongan, dan aktivitas di browser ini, lalu memuat ulang dari cloud. Data di cloud tidak ikut terhapus.</p>
+          <p className="mt-1 text-sm text-slate-500">Membuang salinan data di browser ini (rekrutmen dan catatan HR), lalu memuat ulang dari cloud. Data di cloud tidak ikut terhapus.</p>
           <Button variant="danger" size="md" className="mt-4" onClick={handleClearAll}>
             Bersihkan cache browser
           </Button>

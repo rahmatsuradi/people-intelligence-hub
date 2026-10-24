@@ -4,6 +4,8 @@
    benchmarking). All HR-entered; nothing here is auto-generated or inferred.
 ═══════════════════════════════════════════════════════════════════════════ */
 
+import { saveHrCollection } from "./hr-records";
+
 /** reportsToEmployeeId = "" means top of the org (no manager assigned). */
 export type OrgRelationMap = Record<string, { reportsToEmployeeId: string; updatedAt: string }>;
 
@@ -47,7 +49,7 @@ export function setReportsTo(tenantId: string, employeeId: string, reportsToEmpl
   } else {
     all[employeeId] = { reportsToEmployeeId, updatedAt: new Date().toISOString() };
   }
-  localStorage.setItem(RELATIONS_PREFIX + tenantId, JSON.stringify(all));
+  saveHrCollection("org_relation", tenantId, all);
 }
 
 export function getJobGrades(tenantId: string): JobGrade[] {
@@ -62,7 +64,7 @@ export function getJobGrades(tenantId: string): JobGrade[] {
 }
 
 function saveJobGrades(tenantId: string, grades: JobGrade[]): void {
-  localStorage.setItem(GRADES_PREFIX + tenantId, JSON.stringify(grades));
+  saveHrCollection("job_grade", tenantId, grades);
 }
 
 export function upsertJobGrade(tenantId: string, input: Omit<JobGrade, "id" | "createdAt" | "updatedAt"> & { id?: string }): JobGrade {
@@ -103,7 +105,7 @@ export function getPositionGradeMap(tenantId: string): PositionGradeMap {
 }
 
 function savePositionGradeMap(tenantId: string, map: PositionGradeMap): void {
-  localStorage.setItem(POSITION_GRADE_PREFIX + tenantId, JSON.stringify(map));
+  saveHrCollection("position_grade", tenantId, map);
 }
 
 export function setPositionGrade(tenantId: string, position: string, gradeId: string): void {

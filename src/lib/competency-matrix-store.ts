@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Competency Matrix Store — per-tenant employee competency ratings.
-   Follows the same tenantId-prefixed localStorage pattern as mpp-store.ts.
+   Tersimpan di cloud (pi_hr_records) lewat saveHrCollection; localStorage hanya cache.
 
    These are HR-entered assessments (manager/HR rating an employee against a
    competency rubric from competency-framework.ts) — never auto-generated or
@@ -8,6 +8,8 @@
    in this app (CV/interview scores only exist for hiring-pipeline candidates),
    so this store starts empty for every employee until someone rates them.
 ═══════════════════════════════════════════════════════════════════════════ */
+
+import { saveHrCollection } from "./hr-records";
 
 export interface EmployeeCompetencyRating {
   score: number; // 1-5, matches RubricLevel.score in competency-framework.ts
@@ -51,12 +53,12 @@ export function setCompetencyRating(
     ratedAt: new Date().toISOString(),
     notes: notes.trim(),
   };
-  localStorage.setItem(STORE_PREFIX + tenantId, JSON.stringify(all));
+  saveHrCollection("competency_rating", tenantId, all);
 }
 
 export function clearCompetencyRating(tenantId: string, employeeId: string, competencyId: string): void {
   if (typeof window === "undefined") return;
   const all = getCompetencyRatings(tenantId);
   delete all[ratingKey(employeeId, competencyId)];
-  localStorage.setItem(STORE_PREFIX + tenantId, JSON.stringify(all));
+  saveHrCollection("competency_rating", tenantId, all);
 }

@@ -4,6 +4,8 @@
    nothing here is auto-generated or inferred from other modules.
 ═══════════════════════════════════════════════════════════════════════════ */
 
+import { saveHrCollection } from "./hr-records";
+
 /** 1 = rendah, 2 = sedang, 3 = tinggi — standard 9-box grid scale. */
 export interface NineBoxRating {
   employeeId: string;
@@ -79,7 +81,7 @@ export function setNineBoxRating(
     ratedAt: new Date().toISOString(),
     notes: notes.trim(),
   };
-  localStorage.setItem(NINEBOX_PREFIX + tenantId, JSON.stringify(all));
+  saveHrCollection("ninebox", tenantId, all);
 }
 
 /** Label standar 9-box grid (Korn Ferry / umum dipakai industri). */
@@ -110,7 +112,7 @@ export function getKeyPositions(tenantId: string): KeyPosition[] {
 }
 
 function saveKeyPositions(tenantId: string, positions: KeyPosition[]): void {
-  localStorage.setItem(POSITION_PREFIX + tenantId, JSON.stringify(positions));
+  saveHrCollection("key_position", tenantId, positions);
 }
 
 export function upsertKeyPosition(tenantId: string, input: Omit<KeyPosition, "id" | "createdAt" | "updatedAt"> & { id?: string }): KeyPosition {
@@ -147,7 +149,7 @@ export function getSuccessors(tenantId: string): Successor[] {
 }
 
 function saveSuccessors(tenantId: string, successors: Successor[]): void {
-  localStorage.setItem(SUCCESSOR_PREFIX + tenantId, JSON.stringify(successors));
+  saveHrCollection("successor", tenantId, successors);
 }
 
 export function upsertSuccessor(tenantId: string, input: Omit<Successor, "id" | "createdAt" | "updatedAt"> & { id?: string }): Successor {

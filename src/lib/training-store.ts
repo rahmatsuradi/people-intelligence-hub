@@ -4,6 +4,8 @@
    All HR-entered; nothing here is auto-generated or inferred.
 ═══════════════════════════════════════════════════════════════════════════ */
 
+import { saveHrCollection } from "./hr-records";
+
 export type CourseProvider = "internal" | "eksternal";
 
 export interface Course {
@@ -63,7 +65,7 @@ export function getCourses(tenantId: string): Course[] {
 }
 
 function saveCourses(tenantId: string, courses: Course[]): void {
-  localStorage.setItem(COURSE_PREFIX + tenantId, JSON.stringify(courses));
+  saveHrCollection("course", tenantId, courses);
 }
 
 export function upsertCourse(tenantId: string, input: Omit<Course, "id" | "createdAt" | "updatedAt"> & { id?: string }): Course {
@@ -100,7 +102,7 @@ export function getEnrollments(tenantId: string): Enrollment[] {
 }
 
 function saveEnrollments(tenantId: string, enrollments: Enrollment[]): void {
-  localStorage.setItem(ENROLLMENT_PREFIX + tenantId, JSON.stringify(enrollments));
+  saveHrCollection("enrollment", tenantId, enrollments);
 }
 
 export function upsertEnrollment(tenantId: string, input: Omit<Enrollment, "id" | "createdAt" | "updatedAt"> & { id?: string }): Enrollment {
@@ -136,7 +138,7 @@ export function getDepartmentBudgets(tenantId: string): DepartmentBudget[] {
 }
 
 function saveDepartmentBudgets(tenantId: string, budgets: DepartmentBudget[]): void {
-  localStorage.setItem(BUDGET_PREFIX + tenantId, JSON.stringify(budgets));
+  saveHrCollection("training_budget", tenantId, budgets);
 }
 
 export function upsertDepartmentBudget(tenantId: string, input: Omit<DepartmentBudget, "id" | "createdAt" | "updatedAt"> & { id?: string }): DepartmentBudget {

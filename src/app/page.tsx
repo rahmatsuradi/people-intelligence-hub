@@ -8,6 +8,7 @@ import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { getActiveCompanyProfile } from "@/lib/payroll/company-profile";
 import { getJobReqs, getCandidates, getTalentPool } from "@/lib/store";
 import { getEnpsRounds, computeEnps } from "@/lib/engagement-store";
+import { HR_SYNCED_EVENT } from "@/lib/hr-records";
 import { getCachedInsight, setCachedInsight, type CachedInsight } from "@/lib/executive-insight-store";
 import { INSIGHT_PROMPT_VERSION, type ExecutiveMetrics } from "@/lib/executive-insight-ai";
 import { getSlaTargetDays, setSlaTargetDays } from "@/lib/recruitment-sla-store";
@@ -178,17 +179,27 @@ export default function DashboardPage() {
     // ketimbang rata-rata rating.
     setTalentReadyPct(pool.length ? Math.round((pool.filter((t) => t.status === "Available").length / pool.length) * 100) : 0);
 
-    // eNPS — round terakhir + delta vs round sebelumnya (dihitung, bukan label statis)
-    const rounds = getEnpsRounds(comp.id);
-    const latest = rounds[rounds.length - 1];
-    if (latest) {
+    // eNPS — round terakhir + delta vs round sebelumnya (dihitung, bukan label statis).
+    // Dibaca ulang saat data HR selesai ditarik dari cloud (HR_SYNCED_EVENT).
+    const applyEnps = () => {
+      const rounds = getEnpsRounds(comp.id);
+      const latest = rounds[rounds.length - 1];
+      if (!latest) {
+        setEnpsScore(null);
+        setEnpsPeriod(null);
+        setEnpsBreakdown(null);
+        setEnpsDelta(null);
+        return;
+      }
       const latestScore = computeEnps(latest);
       setEnpsScore(latestScore);
       setEnpsPeriod(latest.period);
       setEnpsBreakdown({ promoters: latest.promoters, passives: latest.passives, detractors: latest.detractors, respondentCount: latest.respondentCount });
       const prev = rounds.length > 1 ? rounds[rounds.length - 2] : null;
       setEnpsDelta(prev ? latestScore - computeEnps(prev) : null);
-    }
+    };
+    applyEnps();
+    window.addEventListener(HR_SYNCED_EVENT, applyEnps);
 
     // Turnover / tren headcount / lembur butuh field siklus hidup (exit_date,
     // exit_type) dan jam lembur yang BELUM ada di tabel pi_employees. Generator
@@ -228,6 +239,7 @@ export default function DashboardPage() {
       }
     }
     loadDashboardStats();
+    return () => window.removeEventListener(HR_SYNCED_EVENT, applyEnps);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
