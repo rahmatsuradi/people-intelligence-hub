@@ -765,27 +765,12 @@ export async function syncFromSupabase(): Promise<void> {
     supabase.from('activities').select('*').order('time', { ascending: false }).limit(50),
   ]);
 
-  // Candidates: cloud wins if it has data; otherwise push local up (first-time migration).
-  if (candidatesRes.data?.length) {
-    writeJson(CANDIDATES_KEY, candidatesRes.data.map(rowToCandidate));
-  } else {
-    const local = getCandidates();
-    if (local.length) await supabase.from('candidates').upsert(local.map(candidateToRow));
-  }
-
-  // Job reqs
-  if (reqsRes.data?.length) {
-    writeJson(JOBREQS_KEY, reqsRes.data.map(rowToReq));
-  } else {
-    const local = getJobReqs();
-    if (local.length) await supabase.from('job_reqs').upsert(local.map(reqToRow));
-  }
-
-  // Activities
-  if (activitiesRes.data?.length) {
-    writeJson(ACTIVITY_KEY, activitiesRes.data.map(rowToActivity));
-  } else {
-    const local = getActivities();
-    if (local.length) await supabase.from('activities').upsert(local.map(activityToRow));
-  }
+  // Cloud selalu menang, termasuk saat tabelnya KOSONG — cache lokal ikut dikosongkan.
+  // Dulu tabel kosong memicu unggah isi localStorage ke cloud (migrasi sekali jalan dari
+  // era localStorage-only). Akibatnya baris yang sengaja dihapus di database hidup lagi
+  // dari browser mana pun yang masih menyimpan salinan lamanya. Bila permintaan GAGAL
+  // (res.error), cache lokal dibiarkan — gagal jaringan tidak sama dengan "cloud kosong".
+  if (!candidatesRes.error) writeJson(CANDIDATES_KEY, (candidatesRes.data ?? []).map(rowToCandidate));
+  if (!reqsRes.error) writeJson(JOBREQS_KEY, (reqsRes.data ?? []).map(rowToReq));
+  if (!activitiesRes.error) writeJson(ACTIVITY_KEY, (activitiesRes.data ?? []).map(rowToActivity));
 }
