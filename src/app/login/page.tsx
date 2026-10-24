@@ -10,7 +10,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { LencirWordmark } from "@/components/lencir-logo";
+import { RicaRicoMark, RicaRicoWordmark } from "@/components/rica-rico-logo";
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500";
@@ -63,18 +63,21 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12 dark:bg-slate-950">
       <div className="w-full max-w-sm">
-        {/* Brand — wordmark tampil apa adanya di atas kanvas putih hangat,
-            mengikuti cara merk ini menampilkan dirinya sendiri. */}
-        <div className="mb-10 flex flex-col items-center text-center">
-          <LencirWordmark className="h-6 w-auto text-slate-900 dark:text-slate-50" />
-          <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-            People Intelligence
+        {/* Brand — logo asli sebagai pusat, wordmark sambung di bawahnya. 88px adalah
+            batas atas yang masih tajam dari berkas logo 192px di layar retina. */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <RicaRicoMark size={88} className="ring-4 shadow-md shadow-blue-900/10" />
+          <RicaRicoWordmark className="mt-4 text-4xl" />
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+            Bakery &middot; People Intelligence
           </p>
-          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Masuk ke ruang kerja Anda</p>
+          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Masuk ke ruang kerja Anda</p>
         </div>
 
-        {/* Card */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        {/* Card — garis atas merah-kuning mengulang cincin merah dan tulisan kuning di logo. */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-amber-400" aria-hidden />
+          <div className="p-6">
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -144,10 +147,11 @@ export default function LoginPage() {
               </p>
             </div>
           )}
+          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-          &copy; 2026 Lencir Indonesia &middot; Platform HR Terpadu
+          &copy; 2026 Rica Rico Bakery &middot; Platform HR Terpadu
         </p>
       </div>
     </div>

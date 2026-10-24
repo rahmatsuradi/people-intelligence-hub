@@ -20,9 +20,9 @@ import { COGNITIVE_ITEMS_BY_SUBTEST } from "../src/lib/assessment/items-cognitiv
 import { SJT_ITEMS } from "../src/lib/assessment/items-sjt";
 import { generateAccessToken, generateSessionId, defaultExpiry } from "../src/lib/assessment/assessment-data";
 import type { PiAssessmentSessionRow } from "../src/lib/assessment/assessment-data";
-import { COMPANY_LENCIR } from "../src/lib/payroll/company-profile";
+import { COMPANY_RICA_RICO } from "../src/lib/payroll/company-profile";
 
-const TENANT_ID = COMPANY_LENCIR.id;
+const TENANT_ID = COMPANY_RICA_RICO.id;
 const KEEP = process.argv.includes("--keep");
 const baseUrl = (process.argv.find((a) => a.startsWith("http")) ?? "http://localhost:3000").replace(/\/$/, "");
 

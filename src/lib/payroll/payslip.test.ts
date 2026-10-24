@@ -12,7 +12,7 @@ const COMPANY: CompanyProfile = {
   signerName: "Arsène Wenger",
   signerTitle: "HRGA",
   tagline: "Perusahaan uji",
-  industry: "wellness",
+  industry: "bakery",
   industryLabel: "Uji",
   emoji: "🧪",
   headcountTarget: 100,

@@ -3,21 +3,22 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PALET MERK LENCIR
+   PALET MERK RICA RICO BAKERY
 
-   Diturunkan dari identitas visual brand: logo wordmark serif hitam di atas
-   putih, produk difoto di atas kanvas putih hangat dengan properti batu
-   vulkanik hitam, dan tiga warna produk — rose/burgundy (Collagen GLO+),
-   amber madu (Shower Gel), dan teal (Prebiotics).
+   Diturunkan dari logo: cincin MERAH, tulisan "Rica-Rico" KUNING ber-outline
+   merah, dan dua wajah anak di atas putih. Netralnya diambil dari produknya
+   sendiri — krem bagian dalam bika ambon dan cokelat kerak panggangnya — supaya
+   layar terasa hangat seperti toko kue, bukan abu-abu kantor.
 
    CARA KERJA REMAP INI — baca sebelum menyunting.
 
-   Nama skala Tailwind di bawah (`slate`, `blue`, `indigo`) dipertahankan,
-   tetapi NILAINYA sudah diganti jadi warna merk:
+   Nama skala Tailwind di bawah dipertahankan, tetapi NILAINYA diganti:
 
-       slate-*   →  netral HANGAT (taupe), bukan abu kebiruan
-       blue-*    →  ROSE merk (warna aksi utama)
-       indigo-*  →  BURGUNDY merk (pasangan gelap untuk gradien)
+       slate-*   →  netral KREM–COKELAT (mode gelap = cokelat kakao)
+       blue-*    →  MERAH Rica Rico (warna aksi utama, link, menu aktif)
+       indigo-*  →  MERAH MARUN (pasangan gelap untuk gradien)
+       amber-*   →  KUNING Rica Rico (aksen & peringatan)
+       red-*     →  BAHAYA, digeser ke merah anggur (lihat catatannya)
 
    Alasannya praktis: kelas warna itu terpakai ~3.500 kali di 43 route.
    Mengganti nilainya di satu tempat mengubah seluruh aplikasi sekaligus,
@@ -29,118 +30,94 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @theme {
-  /* ── Netral hangat (menggantikan slate abu-kebiruan bawaan) ───────────── */
-  --color-slate-50:  #faf8f7;
-  --color-slate-100: #f4f1ef;
-  --color-slate-200: #e9e4e0;
-  --color-slate-300: #d7d0cb;
-  --color-slate-400: #aaa19b;
-  --color-slate-500: #7d7470;
-  --color-slate-600: #5f5754;
-  --color-slate-700: #4a4341;
-  --color-slate-800: #302b2a;
-  --color-slate-900: #1d1a19;
-  --color-slate-950: #121010;
+  /* ── Netral krem–cokelat (krem bika ambon → kerak panggang → kakao) ───── */
+  --color-slate-50:  #fdfaf4;
+  --color-slate-100: #f8f1e6;
+  --color-slate-200: #efe4d3;
+  --color-slate-300: #dfcfb8;
+  --color-slate-400: #b29f87;
+  --color-slate-500: #85725e;
+  --color-slate-600: #665545;
+  --color-slate-700: #4e4035;
+  --color-slate-800: #342a23;
+  --color-slate-900: #221b16;
+  --color-slate-950: #15100c;
 
-  /* ── Rose merk — warna aksi utama (dari sachet Collagen GLO+) ─────────── */
-  --color-blue-50:  #fdf2f6;
-  --color-blue-100: #fce7ef;
-  --color-blue-200: #facfdf;
-  --color-blue-300: #f5a8c4;
-  --color-blue-400: #ec739f;
-  --color-blue-500: #de4179;
-  --color-blue-600: #c7245e;
-  --color-blue-700: #a81b4d;
-  --color-blue-800: #8b1840;
-  --color-blue-900: #741837;
-  --color-blue-950: #45081d;
+  /* ── Merah Rica Rico — warna aksi utama (cincin logo). 600 vs putih ≈ 5:1. */
+  --color-blue-50:  #fff3f2;
+  --color-blue-100: #ffe3e1;
+  --color-blue-200: #ffcbc8;
+  --color-blue-300: #fca5a1;
+  --color-blue-400: #f66f69;
+  --color-blue-500: #ea3d36;
+  --color-blue-600: #d4201f;
+  --color-blue-700: #b2181a;
+  --color-blue-800: #93181b;
+  --color-blue-900: #7a191c;
+  --color-blue-950: #42080a;
 
-  /* ── Burgundy merk — pasangan gelap (dari kemasan Collagen GLO+) ──────── */
-  --color-indigo-50:  #fdf2f5;
-  --color-indigo-100: #fbe4ea;
-  --color-indigo-200: #f6c8d5;
-  --color-indigo-300: #ed9db4;
-  --color-indigo-400: #de6488;
-  --color-indigo-500: #c73764;
-  --color-indigo-600: #a81f4c;
-  --color-indigo-700: #8b1a40;
-  --color-indigo-800: #711937;
-  --color-indigo-900: #5d1830;
-  --color-indigo-950: #360717;
+  /* ── Merah marun — pasangan gelap untuk gradien & avatar ──────────────── */
+  --color-indigo-50:  #fcf3f2;
+  --color-indigo-100: #f9e4e2;
+  --color-indigo-200: #f2c8c4;
+  --color-indigo-300: #e69f99;
+  --color-indigo-400: #d56b63;
+  --color-indigo-500: #bf433b;
+  --color-indigo-600: #a12d27;
+  --color-indigo-700: #852421;
+  --color-indigo-800: #6e2120;
+  --color-indigo-900: #5c1f1e;
+  --color-indigo-950: #330c0b;
 
-  /* ── Violet — diselaraskan agar tidak menabrak rose ───────────────────── */
-  --color-violet-50:  #fbf3f8;
-  --color-violet-100: #f7e6f1;
-  --color-violet-200: #efcde4;
-  --color-violet-300: #e2a6ce;
-  --color-violet-400: #cf74b1;
-  --color-violet-500: #b84c94;
-  --color-violet-600: #9c3378;
-  --color-violet-700: #812862;
-  --color-violet-800: #6b2352;
-  --color-violet-900: #5a2046;
-  --color-violet-950: #350a27;
+  /* ── Kuning Rica Rico (tulisan di logo) — aksen & status peringatan ───── */
+  --color-amber-50:  #fffbeb;
+  --color-amber-100: #fff3c2;
+  --color-amber-200: #ffe680;
+  --color-amber-300: #ffd53d;
+  --color-amber-400: #ffc414;
+  --color-amber-500: #f2a900;
+  --color-amber-600: #cc8200;
+  --color-amber-700: #a35c03;
+  --color-amber-800: #86480a;
+  --color-amber-900: #723c0e;
+  --color-amber-950: #421e03;
 
-  /* ── Teal — dari botol Prebiotics ─────────────────────────────────────── */
-  --color-teal-50:  #eefbfa;
-  --color-teal-100: #d3f5f2;
-  --color-teal-200: #ace9e5;
-  --color-teal-300: #74d8d3;
-  --color-teal-400: #43bfb9;
-  --color-teal-500: #26a29d;
-  --color-teal-600: #1b827f;
-  --color-teal-700: #1a6867;
-  --color-teal-800: #1a5353;
-  --color-teal-900: #1a4645;
-  --color-teal-950: #082b2b;
-
-  /* ── Amber — dari Shower Gel madu ─────────────────────────────────────── */
-  --color-amber-50:  #fdf8ed;
-  --color-amber-100: #faedcc;
-  --color-amber-200: #f4d996;
-  --color-amber-300: #ecbf5e;
-  --color-amber-400: #e5a63a;
-  --color-amber-500: #d9881f;
-  --color-amber-600: #bf6717;
-  --color-amber-700: #9e4916;
-  --color-amber-800: #813a18;
-  --color-amber-900: #6b3017;
-  --color-amber-950: #3d1708;
-
-  /* ── Danger — dijaga condong ke oranye supaya jelas beda dari rose merk.
-        Kalau merah bahaya dan rose aksi terlihat mirip, tombol Hapus dan
-        tombol Simpan jadi sulit dibedakan sekilas. ───────────────────────── */
-  --color-red-50:  #fdf4f1;
-  --color-red-100: #fbe5de;
-  --color-red-200: #f7cabd;
-  --color-red-300: #efa48d;
-  --color-red-400: #e4735a;
-  --color-red-500: #d44f34;
-  --color-red-600: #bd3a21;
-  --color-red-700: #9c2e1b;
-  --color-red-800: #80281a;
-  --color-red-900: #6a2418;
-  --color-red-950: #390f0a;
+  /* ── Bahaya — digeser ke MERAH ANGGUR (condong magenta). Kompromi yang
+        disengaja: warna merk sendiri sudah merah, jadi merah bahaya standar
+        akan membuat tombol Hapus dan tombol Simpan terlihat sama sekilas.
+        Pergeseran rona ini menjaga keduanya tetap bisa dibedakan; label dan
+        dialog konfirmasi tetap pembeda utamanya. ────────────────────────── */
+  --color-red-50:  #fdf2f6;
+  --color-red-100: #fbe5ed;
+  --color-red-200: #f6c9da;
+  --color-red-300: #ee9fbb;
+  --color-red-400: #e26893;
+  --color-red-500: #cf3e6d;
+  --color-red-600: #b02653;
+  --color-red-700: #921e45;
+  --color-red-800: #7a1c3c;
+  --color-red-900: #671b35;
+  --color-red-950: #3a0819;
 
   /* ── Token semantik. PAKAI INI untuk komponen baru. ───────────────────── */
-  --color-brand-ink: #141212;      /* hitam wordmark & batu vulkanik */
-  --color-brand-canvas: #faf8f7;   /* putih hangat latar foto produk */
-  --color-brand-rose: #c7245e;
-  --color-brand-burgundy: #a81f4c;
-  --color-brand-amber: #d9881f;
-  --color-brand-teal: #26a29d;
+  --color-brand-red: #d4201f;      /* cincin logo */
+  --color-brand-yellow: #ffc414;   /* tulisan "Rica-Rico" */
+  --color-brand-maroon: #a12d27;
+  --color-brand-cream: #fdfaf4;    /* bagian dalam bika ambon */
+  --color-brand-cocoa: #221b16;    /* kerak panggang / brownies */
+  --color-brand-pandan: #5f9a3c;   /* varian bika ambon pandan */
 }
 
 :root {
-  --background: #faf8f7;
-  --foreground: #141212;
+  --background: #fdfaf4;
+  --foreground: #221b16;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans), sans-serif;
-  --font-serif: var(--font-serif), Georgia, serif;
+  --font-script: var(--font-script), "Brush Script MT", cursive;
   --font-mono: var(--font-mono), monospace;
 }
 
@@ -149,8 +126,8 @@
    dulu keduanya aktif bersamaan, sehingga pengguna yang memilih tema terang
    di aplikasi tetap mendapat latar gelap saat OS-nya gelap. */
 .dark {
-  --background: #121010;
-  --foreground: #f4f1ef;
+  --background: #15100c;
+  --foreground: #f8f1e6;
 }
 
 body {

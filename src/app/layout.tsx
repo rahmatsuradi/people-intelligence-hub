@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono, Cormorant_Garamond } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono, Lobster } from "next/font/google";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -12,17 +12,18 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
-// Serif untuk wordmark LENCIR dan judul bergaya merk. Kontras tebal-tipisnya
-// mendekati wordmark asli yang bergaya Didone.
-const cormorant = Cormorant_Garamond({
-  variable: "--font-serif",
+// Huruf sambung untuk wordmark "Rica Rico" — paling dekat dengan tulisan di logo.
+// Hanya dipakai untuk merk; teks kerja tetap Plus Jakarta Sans agar mudah dibaca.
+const lobster = Lobster({
+  variable: "--font-script",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
-  title: "LENCIR — People Intelligence",
-  description: "Platform HR terpadu Lencir Indonesia: perencanaan tenaga kerja, rekrutmen, payroll & kepatuhan statutori, performance, dan asesmen.",
+  title: "Rica Rico Bakery — People Intelligence",
+  description: "Platform HR terpadu Rica Rico Bakery: rekrutmen, payroll & kepatuhan statutori, performance, dan asesmen.",
+  icons: { icon: "/brand/rica-rico-logo.jpg", apple: "/brand/rica-rico-logo.jpg" },
 };
 
 export default function RootLayout({
@@ -33,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakarta.variable} ${cormorant.variable} ${jetbrainsMono.variable} h-full antialiased font-sans`}
+      className={`${plusJakarta.variable} ${lobster.variable} ${jetbrainsMono.variable} h-full antialiased font-sans`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 dark:bg-slate-950 font-sans">{children}</body>
     </html>

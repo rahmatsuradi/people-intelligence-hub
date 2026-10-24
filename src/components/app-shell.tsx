@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCandidates, getJobReqs, syncFromSupabase } from "@/lib/store";
 import { getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
-import { LencirWordmark } from "@/components/lencir-logo";
+import { RicaRicoMark, RicaRicoWordmark } from "@/components/rica-rico-logo";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -341,12 +341,16 @@ export function AppShell({
       {/* Sidebar */}
       {sidebarOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
       <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-out dark:border-slate-800 dark:bg-slate-900 lg:static lg:translate-x-0", sidebarOpen ? "translate-x-0" : "-translate-x-full")} aria-label="Main navigation">
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
-          <Link href="/" className="min-w-0 flex-1" aria-label="Beranda">
-            <LencirWordmark className="h-4 w-auto text-slate-900 dark:text-slate-50" />
-            <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-              People Intelligence
-            </p>
+        <div className="h-1 shrink-0 bg-gradient-to-r from-blue-600 via-blue-500 to-amber-400" aria-hidden />
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-4 dark:border-slate-800">
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5" aria-label="Beranda">
+            <RicaRicoMark size={38} />
+            <span className="min-w-0">
+              <RicaRicoWordmark className="block text-[22px]" />
+              <span className="mt-0.5 block truncate text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                People Intelligence
+              </span>
+            </span>
           </Link>
           <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-slate-800" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
             <Icon className="h-5 w-5"><SvgPath name="close" /></Icon>
@@ -381,7 +385,7 @@ export function AppShell({
               <span className="block text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                 Badan Hukum
               </span>
-              <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+              <span className="block whitespace-nowrap text-xs font-semibold text-slate-800 dark:text-slate-200">
                 {activeCompany.name}
               </span>
             </div>
@@ -429,7 +433,7 @@ export function AppShell({
 
           <footer className="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
             <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:text-slate-400">
-              <p>&copy; 2026 People Intelligence &middot; Platform HR Terpadu</p>
+              <p>&copy; 2026 Rica Rico Bakery &middot; Platform HR Terpadu</p>
               <p className="tabular-nums">v0.1.0 &middot; {activeCompany.shortName}</p>
             </div>
           </footer>
