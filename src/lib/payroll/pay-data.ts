@@ -1,4 +1,6 @@
 import type { StatutoryConfig } from "./run-payroll";
+import { supabase } from "../supabase";
+import { getActiveCompanyId } from "./company-profile";
 
 // Bentuk baris DB pi_* (mirror kolom di supabase/pay-module-schema.sql).
 export interface PiEmployeeRow {
@@ -177,6 +179,47 @@ export function aggregateDecemberContext(
 // keadaan kosong yang jujur ketika database belum terisi.
 export function getActiveCompanyEmployees(): PiEmployeeRow[] {
   return [];
+}
+
+/** Karyawan aktif + upah pokok yang berlaku hari ini (null = belum punya data upah). */
+export type ActiveEmployee = PiEmployeeRow & { upah_pokok: number | null };
+
+/** Upah pokok yang BERLAKU pada `today` per karyawan. `pi_compensation` ber-versi per
+ *  effective_date — menjumlahkan semua baris akan menghitung ganda karyawan yang pernah
+ *  naik gaji, jadi diambil satu baris terbaru yang sudah berlaku. */
+export function currentUpahByEmployee(
+  rows: Pick<PiCompensationRow, "employee_id" | "upah_pokok" | "effective_date">[],
+  today: string,
+): Map<string, number> {
+  const latest = new Map<string, { date: string; upah: number }>();
+  for (const r of rows) {
+    if (r.effective_date > today) continue;
+    const prev = latest.get(r.employee_id);
+    if (!prev || r.effective_date > prev.date) latest.set(r.employee_id, { date: r.effective_date, upah: Number(r.upah_pokok) || 0 });
+  }
+  return new Map(Array.from(latest.entries()).map(([id, v]) => [id, v.upah]));
+}
+
+/** Karyawan aktif perusahaan yang sedang dipakai, langsung dari `pi_employees` (+ upah dari
+ *  `pi_compensation`). Halaman yang hanya memanggil getActiveCompanyEmployees() tidak akan
+ *  pernah melihat karyawan asli — fungsi itu sengaja kosong. */
+export async function loadActiveEmployees(): Promise<ActiveEmployee[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("pi_employees").select("*")
+    .eq("status", "active").eq("tenant_id", getActiveCompanyId())
+    .order("full_name");
+  if (error || !data) {
+    if (error) console.warn("[pay-data] gagal memuat karyawan:", error.message);
+    return [];
+  }
+  const employees = data as PiEmployeeRow[];
+  if (employees.length === 0) return [];
+  // Tanpa filter id: daftar ratusan uuid di query string bisa melewati batas panjang URL.
+  // Baris milik karyawan lain tidak ikut terpakai karena dicocokkan per id di bawah.
+  const comp = await supabase.from("pi_compensation").select("employee_id, upah_pokok, effective_date");
+  const upah = currentUpahByEmployee((comp.data ?? []) as PiCompensationRow[], new Date().toISOString().slice(0, 10));
+  return employees.map((e) => ({ ...e, upah_pokok: upah.get(e.id) ?? null }));
 }
 
 const STATUTORY_TOGGLES_KEY = "pi_statutory_toggles_v1";

@@ -10,6 +10,12 @@ import { supabase } from './supabase';
 import { getActiveCompanyId } from './payroll/company-profile';
 import type { CompetencyCluster, AiCompetencyScore, AiRiskFlag, AiInterviewQuestion } from './cv-analyzer-ai';
 
+// Penulisan ke cloud bersifat fire-and-forget, tetapi kegagalannya tidak boleh hilang diam-diam.
+type SyncResult = { error: { message?: string } | null } | null | undefined;
+function logSync(op: string, res: SyncResult): void {
+  if (res?.error) console.warn(`[store] ${op} sync failed:`, res.error.message ?? res.error);
+}
+
 export type PipelineStage = "applied" | "screened" | "work_sample" | "interviewed" | "offered" | "hired" | "rejected";
 export type ReqStatus = "draft" | "active" | "paused" | "closed";
 
@@ -295,12 +301,12 @@ export function saveCandidate(candidate: CandidateRecord): void {
   if (idx >= 0) all[idx] = candidate;
   else all.unshift(candidate);
   writeJson(CANDIDATES_KEY, all);
-  supabase?.from('candidates').upsert(candidateToRow(candidate)).then(() => {});
+  supabase?.from('candidates').upsert(candidateToRow(candidate)).then((r) => logSync('candidate upsert', r));
 }
 
 export function deleteCandidate(id: string): void {
   writeJson(CANDIDATES_KEY, getCandidates().filter((c) => c.id !== id));
-  supabase?.from('candidates').delete().eq('id', id).then(() => {});
+  supabase?.from('candidates').delete().eq('id', id).then((r) => logSync('candidate delete', r));
 }
 
 /* ─── Talent Pool ─── */
@@ -446,7 +452,7 @@ export function importCandidates(rows: ImportRow[]): number {
       target: `${added} candidate${added === 1 ? "" : "s"} via CSV`,
       type: "create",
     });
-    supabase?.from('candidates').upsert(all.slice(0, added).map(candidateToRow)).then(() => {});
+    supabase?.from('candidates').upsert(all.slice(0, added).map(candidateToRow)).then((r) => logSync('candidates import', r));
   }
   return added;
 }
@@ -563,12 +569,12 @@ export function saveJobReq(req: JobRequisition): void {
   if (idx >= 0) all[idx] = req;
   else all.unshift(req);
   writeJson(JOBREQS_KEY, all);
-  supabase?.from('job_reqs').upsert(reqToRow(req)).then(() => {});
+  supabase?.from('job_reqs').upsert(reqToRow(req)).then((r) => logSync('job_req upsert', r));
 }
 
 export function deleteJobReq(id: string): void {
   writeJson(JOBREQS_KEY, getJobReqs().filter((r) => r.id !== id));
-  supabase?.from('job_reqs').delete().eq('id', id).then(() => {});
+  supabase?.from('job_reqs').delete().eq('id', id).then((r) => logSync('job_req delete', r));
 }
 
 export function createJobReq(data: {
@@ -636,7 +642,7 @@ export function addActivity(data: {
   };
   all.unshift(entry);
   writeJson(ACTIVITY_KEY, all.slice(0, 50));
-  supabase?.from('activities').insert(activityToRow(entry)).then(() => {});
+  supabase?.from('activities').insert(activityToRow(entry)).then((r) => logSync('activity insert', r));
 }
 
 /* ─── Dashboard Stats ─── */

@@ -14,6 +14,15 @@ Fitur Hire yang sudah berfungsi & bisa dites tidak boleh rusak:
 - Pengembangan modul baru dikerjakan di branch terpisah; `main` = versi yang sudah teruji jalan. Merge hanya setelah modul baru berfungsi & Hire tetap OK.
 - Penambahan bersifat **aditif**: file/route/tabel baru. Untuk DB, **tidak ada `ALTER`/`DROP`** pada tabel lama milik modul lain.
 
+### 1b. Satu jalur kerja — WAJIB dicek di awal setiap sesi (HP maupun laptop)
+
+Juli–Oktober 2026 kerja dari HP masuk ke `main` sementara kerja dari laptop masuk ke `feat/multi-tenant-hr-platform`; keduanya tidak disatukan selama tiga bulan dan akhirnya saling bertentangan (satu menanam ulang data demo yang satunya hapus) sambil memakai **satu database yang sama**. Disatukan 24 Oktober 2026 (tag cadangan `backup/sebelum-merge-main-2026-10-24` dan `backup/main-sebelum-merge-2026-10-24`). Supaya tidak terulang:
+
+- Sebelum mengerjakan apa pun: `git fetch` lalu `git rev-list --count HEAD..origin/main`. Kalau bukan 0, satukan dulu — jangan menumpuk kerja di atas versi yang tertinggal.
+- Kerja kecil, disatukan dalam hitungan hari. Branch yang hidup berbulan-bulan adalah sumber konflik terbesar di repo ini.
+- Instance ini melayani **satu perusahaan dengan data asli**. Jangan menambahkan data demo, seed contoh, atau "auto-seed agar layar tidak kosong" — termasuk di fitur baru. Layar kosong yang jujur adalah perilaku yang benar.
+- Model data **ruang kerja bersama** (semua akun HR melihat data yang sama). Migrasi per-pengguna (`user_id` + composite key) dari `main` sengaja dibuang: pada satu tim HR, rekan tidak akan saling melihat kandidat. Jangan diperkenalkan ulang.
+
 ## 2. Tentang proyek
 
 Dibangun oleh seorang praktisi HR sebagai alat kerja untuk payroll dan kepatuhan statutori Indonesia, sekaligus portofolio.
@@ -76,7 +85,7 @@ Instance ini melayani perusahaan sungguhan, jadi aturannya lebih ketat daripada 
 - **Pilar 1 — Struktur Upah** (UU Ketenagakerjaan/PP 36/2021): komponen upah, UMK, THR (prorata `masa/12`, Permenaker 6/2016), lembur (1/173 × upah, tabel multiplier PP 35/2021 — menggantikan Kepmenaker 102/2004 yang sudah dicabut).
 - **Pilar 2 — BPJS**: JHT 5,7% (3,7/2) · JP 3% (2/1, plafon upah disesuaikan tiap Maret) · JKK 0,24–1,74% (per kelas risiko) · JKM 0,3% · Kesehatan 5% (4/1, plafon 12jt); interaksi dgn PPh 21.
 - **Pilar 3 — PPh 21 (TER, PP 58/2023)**: PTKP, kategori TER A/B/C, TER bulanan Jan–Nov, rekonsiliasi Des progresif (Pasal 17 UU HPP), biaya jabatan (PMK 250/2008, tidak diubah PP 58/2023).
-- **Pilar 4 — Slip & Pelaporan**: slip gaji (selesai) · ekspor pelaporan BPJS (selesai) · formulir 1721-A1 (belum dibangun — di luar cakupan MVP).
+- **Pilar 4 — Slip & Pelaporan**: slip gaji (selesai) · ekspor pelaporan BPJS (selesai) · formulir 1721-A1 (selesai — `/pay/laporan/1721-a1`, mesin `src/lib/payroll/tax-1721-a1.ts` + 7 unit test; belum diuji dengan data payroll asli setahun penuh).
 
 ## 8. Integrasi UI (aditif)
 
@@ -170,7 +179,10 @@ Aturan di `question-bank.ts` (23 unit test):
 
 ## 10. Yang belum dikerjakan
 
-- Formulir pelaporan pajak tahunan 1721-A1.
+- **Enam fitur HR dari penyatuan `main` hanya menyimpan data di browser (localStorage)**, bukan di cloud: eNPS & umpan balik (`engagement-store`), pelatihan (`training-store`), suksesi & 9-box (`succession-store`), OD & grading (`org-development-store`), hubungan industrial (`ir-store`), matriks kompetensi (`competency-matrix-store`), plus kalender konten & riwayat employer branding. Akibatnya: rekan HR tidak saling melihat, dan data hilang bila cache browser dibuang. Daftar karyawannya sudah dibaca dari `pi_employees` (lewat `loadActiveEmployees()`), tetapi isian HR-nya belum. Pindahkan ke tabel Supabase `pi_*` sebelum dipakai untuk keputusan nyata.
+- **Turnover & beban lembur di dashboard** butuh kolom siklus hidup (`exit_date`, `exit_type`) dan jam lembur yang belum ada di `pi_employees`; kartu-kartunya kini jujur menampilkan "belum tersedia".
+- **Endpoint AI (`/api/analyze-cv`, `/api/hr-consultant`, `/api/employer-branding`, `/api/executive-insight`) belum memeriksa login** — siapa pun yang tahu alamatnya bisa menghabiskan kuota Groq. `/api/send-email` sudah dijaga (wajib token Supabase); pola yang sama perlu diterapkan ke keempatnya.
+- 13 error lint gaya (tipe `any`, tanda kutip di JSX) dan penghitung yang diubah saat render di `talent/od` (`renderedCount`).
 - **Rekrutmen:** metrik kecepatan baru akan berarti setelah cukup kandidat berjalan lewat pipeline dengan riwayat tercatat (kandidat lama tidak ikut terhitung). Belum ada: cost-per-hire, sumber biaya iklan lowongan, dan pelacakan alasan penolakan kandidat.
 - **Isi data karyawan Rica Rico Bakery.** Aplikasi kini kosong secara sengaja. Sebelum payroll bisa dijalankan: konfirmasi identitas badan hukum (§2), kelas risiko JKK ke BPJS Ketenagakerjaan, dan UMK sesuai SK Gubernur **tiap wilayah outlet/dapur produksi** (nilai UMK di seed masih placeholder, dan satu nilai tidak cukup untuk jaringan 5 provinsi). Baru setelah itu karyawan diisi lewat `/pay/employees` atau `/pay/onboarding`.
 - **Kerangka kompetensi belum mencakup bakery & ritel outlet.** `CompetencyCluster` hanya punya `hr | tech | business | finance | broadcast | editorial | security`. Peran khas Rica Rico — baker/produksi, QC & keamanan pangan (halal, BPOM PIRT/MD), kepala outlet, kasir/SPG mal, gudang & distribusi antar-outlet, admin pesanan online (GoFood/GrabFood/ShopeeFood) — belum ada klasternya dan sementara jatuh ke `business`. Bank soal wawancara juga masih bertema penyiaran/pabrik. Ini gap nyata, bukan sekadar penamaan.

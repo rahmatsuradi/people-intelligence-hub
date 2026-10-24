@@ -24,9 +24,16 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2500);
   }, [userName, company, companyEmail]);
 
+  // Hanya membuang salinan di browser ini dari data yang PUNYA cadangan di cloud
+  // (kandidat, lowongan, aktivitas) — dimuat ulang saat halaman dibuka lagi. Kunci
+  // `hi_*` lain (eNPS, pelatihan, suksesi, dst.) hanya hidup di browser; membuangnya
+  // berarti kehilangan data. Sengaja TIDAK ada tombol hapus-semua-di-cloud: database
+  // dipakai bersama satu tim HR, jadi satu klik akan menghapus data semua orang.
   const handleClearAll = useCallback(() => {
-    if (!window.confirm("This will delete ALL candidates, roles, and activity history. Are you sure?")) return;
-    ["hi_candidates", "hi_jobreqs", "hi_activity"].forEach((k) => localStorage.removeItem(k));
+    if (!window.confirm("Bersihkan salinan kandidat, lowongan, dan aktivitas di browser ini? Data di cloud tetap aman dan akan dimuat ulang.")) return;
+    Object.keys(localStorage)
+      .filter((k) => /^hi_(candidates|jobreqs|activity)(_|$)/.test(k))
+      .forEach((k) => localStorage.removeItem(k));
     window.location.href = "/";
   }, []);
 
@@ -88,9 +95,9 @@ export default function SettingsPage() {
 
         <Card>
           <h2 className="text-base font-semibold text-red-700 dark:text-red-400">Danger zone</h2>
-          <p className="mt-1 text-sm text-slate-500">Permanently deletes all data stored locally in this browser.</p>
+          <p className="mt-1 text-sm text-slate-500">Membuang salinan kandidat, lowongan, dan aktivitas di browser ini, lalu memuat ulang dari cloud. Data di cloud tidak ikut terhapus.</p>
           <Button variant="danger" size="md" className="mt-4" onClick={handleClearAll}>
-            Clear all data
+            Bersihkan cache browser
           </Button>
         </Card>
       </div>

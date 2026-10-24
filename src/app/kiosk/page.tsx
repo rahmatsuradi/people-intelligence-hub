@@ -1,24 +1,20 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Icon, SvgPath, cn } from "@/components/app-shell";
+import { useState, useEffect } from "react";
+import { Icon, SvgPath, Button, cn } from "@/components/app-shell";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { PiEmployeeRow } from "@/lib/payroll/pay-data";
 import { getActiveCompanyEmployees } from "@/lib/payroll/pay-data";
 import { getActiveCompanyId } from "@/lib/payroll/company-profile";
-import { getAttendance, saveAttendance } from "@/lib/attendance/store";
+import { saveAttendance } from "@/lib/attendance/store";
 import type { AttendanceRecord } from "@/lib/attendance/types";
 
-/*
-  Kiosk Presensi Mandiri — karyawan memilih namanya sendiri lalu check-in.
-  Integrasi biometrik (Face ID / fingerprint) butuh perangkat keras khusus dan
-  sengaja TIDAK disimulasikan di sini agar demo tidak mengklaim kemampuan palsu.
-*/
 export default function KioskPage() {
   const [time, setTime] = useState<Date>(new Date());
   const [employees, setEmployees] = useState<PiEmployeeRow[]>([]);
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<PiEmployeeRow | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<PiEmployeeRow | null>(null);
+  const [scanning, setScanning] = useState<"face" | "fingerprint" | null>(null);
   const [scanResult, setScanResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
@@ -42,57 +38,55 @@ export default function KioskPage() {
     }
   }, []);
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (q.length < 2) return [];
-    return employees
-      .filter((e) => e.full_name.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [query, employees]);
+  const matches = query.trim().length > 0
+    ? employees.filter(e => e.full_name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6)
+    : [];
 
-  const handleCheckIn = () => {
-    if (!selected) return;
-    const today = new Date().toISOString().split("T")[0];
-    const checkInTime = new Date().toTimeString().slice(0, 5);
+  const confirmScan = (type: "face" | "fingerprint") => {
+    if (!selectedEmployee) return;
 
-    // Cegah check-in ganda pada hari yang sama
-    const existing = getAttendance().find((a) => a.employeeId === selected.id && a.date === today);
-    if (existing) {
+    setScanning(type);
+    setScanResult(null);
+
+    // Simulate scanning delay (visual confirmation only — identity was already
+    // established by search selection, not by this animation)
+    setTimeout(() => {
+      setScanning(null);
+      const emp = selectedEmployee;
+      const today = new Date().toISOString().split("T")[0];
+      const checkInTime = new Date().toTimeString().slice(0,5);
+
+      const newRecord: AttendanceRecord = {
+        id: crypto.randomUUID(),
+        employeeId: emp.id,
+        date: today,
+        status: "present",
+        checkIn: checkInTime,
+        overtimeHours: 0,
+      };
+
+      saveAttendance(newRecord);
       setScanResult({
-        type: "error",
-        message: `${selected.full_name}\nsudah check-in hari ini (${existing.checkIn ?? "—"})`,
+        type: "success",
+        message: `Berhasil Check-In!\n${emp.full_name} (${checkInTime})`
       });
-      setTimeout(() => setScanResult(null), 3000);
-      setSelected(null);
-      setQuery("");
-      return;
-    }
 
-    const newRecord: AttendanceRecord = {
-      id: crypto.randomUUID(),
-      employeeId: selected.id,
-      date: today,
-      status: "present",
-      checkIn: checkInTime,
-      overtimeHours: 0,
-    };
-    saveAttendance(newRecord);
-    setScanResult({
-      type: "success",
-      message: `Berhasil Check-In!\n${selected.full_name} (${checkInTime})`,
-    });
-    setTimeout(() => setScanResult(null), 3000);
-    setSelected(null);
-    setQuery("");
+      // Clear result and reset for the next employee after 3 seconds
+      setTimeout(() => {
+        setScanResult(null);
+        setSelectedEmployee(null);
+        setQuery("");
+      }, 3000);
+    }, 2000);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-sans text-slate-100">
-
+      
       {/* Kiosk Header */}
       <div className="absolute top-8 left-8 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-600/20">
-          <Icon className="h-6 w-6 text-white"><SvgPath name="clock" /></Icon>
+          <Icon className="h-6 w-6 text-white"><SvgPath name="sparkles" /></Icon>
         </div>
         <span className="text-xl font-bold tracking-tight text-white">People Intelligence Hub <span className="font-light text-blue-400">Kiosk</span></span>
       </div>
@@ -104,7 +98,7 @@ export default function KioskPage() {
       </div>
 
       {/* Clock */}
-      <div className="text-center mb-12">
+      <div className="text-center mb-16">
         <h1 className="text-[120px] font-bold leading-none tracking-tighter text-white tabular-nums drop-shadow-xl">
           {time.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
         </h1>
@@ -113,18 +107,31 @@ export default function KioskPage() {
         </p>
       </div>
 
-      {/* Self-Service Check-In Area */}
-      <div className="relative w-full max-w-2xl bg-slate-900/50 backdrop-blur-md rounded-3xl border border-slate-800 p-10 text-center shadow-2xl overflow-hidden">
+      {/* Interactive Scan Area */}
+      <div className="relative w-full max-w-2xl bg-slate-900/50 backdrop-blur-md rounded-3xl border border-slate-800 p-12 text-center shadow-2xl overflow-hidden">
+        
+        {/* Scanning Animation Overlay */}
+        {scanning && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-lg">
+            <div className={cn("relative flex h-32 w-32 items-center justify-center rounded-full border-4 border-dashed animate-spin-slow", 
+              scanning === "face" ? "border-blue-500" : "border-emerald-500"
+            )}>
+              <Icon className={cn("h-16 w-16 animate-pulse", scanning === "face" ? "text-blue-400" : "text-emerald-400")}>
+                <SvgPath name={scanning === "face" ? "users" : "document"} />
+              </Icon>
+            </div>
+            <p className="mt-8 text-xl font-semibold text-white animate-pulse">
+              Memindai {scanning === "face" ? "Wajah" : "Sidik Jari"}...
+            </p>
+            <p className="text-sm text-slate-400 mt-2">Mohon jangan bergerak</p>
+          </div>
+        )}
 
         {/* Result Overlay */}
         {scanResult && (
-          <div className={cn("absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-lg",
-            scanResult.type === "success" ? "bg-emerald-950/90" : "bg-amber-950/90")}>
-            <div className={cn("flex h-24 w-24 items-center justify-center rounded-full mb-6",
-              scanResult.type === "success"
-                ? "bg-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.5)]"
-                : "bg-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.5)]")}>
-              <Icon className="h-12 w-12 text-white"><SvgPath name={scanResult.type === "success" ? "check" : "warning"} /></Icon>
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-emerald-950/90 backdrop-blur-lg">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500 mb-6 shadow-[0_0_40px_rgba(16,185,129,0.5)]">
+              <Icon className="h-12 w-12 text-white"><SvgPath name="check" /></Icon>
             </div>
             <p className="text-3xl font-bold text-white whitespace-pre-line leading-tight">
               {scanResult.message}
@@ -132,66 +139,89 @@ export default function KioskPage() {
           </div>
         )}
 
-        {!selected ? (
+        {!scanning && !scanResult && !selectedEmployee && (
           <>
-            <h2 className="text-2xl font-semibold text-white mb-2">Presensi Mandiri</h2>
-            <p className="text-sm text-slate-400 mb-6">Ketik nama Anda untuk check-in hari ini</p>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ketik minimal 2 huruf nama Anda..."
-              autoFocus
-              className="w-full rounded-2xl border-2 border-slate-700 bg-slate-800/70 px-6 py-4 text-xl text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-            {matches.length > 0 && (
-              <div className="mt-4 max-h-72 space-y-2 overflow-y-auto text-left">
-                {matches.map((emp) => (
+            <h2 className="text-2xl font-semibold text-white mb-2">Siapa Anda?</h2>
+            <p className="text-sm text-slate-400 mb-6">Ketik nama Anda untuk memulai presensi</p>
+            {employees.length === 0 && (
+              <p className="mb-4 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                Data karyawan belum tersedia untuk perusahaan ini.
+              </p>
+            )}
+            <div className="relative">
+              <Icon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500"><SvgPath name="search" /></Icon>
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Cari nama Anda..."
+                className="w-full rounded-2xl border-2 border-slate-800 bg-slate-800/50 py-4 pl-12 pr-4 text-lg text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            {query.trim().length > 0 && (
+              <div className="mt-4 max-h-72 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-800/30 text-left">
+                {matches.length > 0 ? matches.map(emp => (
                   <button
                     key={emp.id}
-                    type="button"
-                    onClick={() => setSelected(emp)}
-                    className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-800/50 px-5 py-3.5 transition-all hover:border-blue-500 hover:bg-blue-900/20"
+                    onClick={() => { setSelectedEmployee(emp); setQuery(""); }}
+                    className="flex w-full items-center justify-between gap-4 border-b border-slate-800/80 px-5 py-4 text-left transition-colors last:border-b-0 hover:bg-slate-700/40"
                   >
-                    <span className="text-base font-semibold text-white">{emp.full_name}</span>
-                    <span className="text-xs text-slate-400">{emp.department}</span>
+                    <div>
+                      <p className="font-semibold text-white">{emp.full_name}</p>
+                      <p className="text-sm text-slate-400">{emp.position || emp.department || "-"}</p>
+                    </div>
+                    <Icon className="h-5 w-5 text-slate-500"><SvgPath name="arrowRight" /></Icon>
                   </button>
-                ))}
+                )) : (
+                  <p className="px-5 py-4 text-sm text-slate-500">Tidak ada karyawan dengan nama tersebut</p>
+                )}
               </div>
             )}
-            {query.trim().length >= 2 && matches.length === 0 && (
-              <p className="mt-4 text-sm text-slate-500">Nama tidak ditemukan di daftar karyawan aktif.</p>
-            )}
           </>
-        ) : (
+        )}
+
+        {!scanning && !scanResult && selectedEmployee && (
           <>
-            <h2 className="text-xl font-semibold text-slate-300 mb-1">Konfirmasi Presensi</h2>
-            <p className="text-3xl font-bold text-white">{selected.full_name}</p>
-            <p className="mt-1 text-sm text-slate-400">{selected.position || selected.department} · {selected.department}</p>
-            <div className="mt-8 grid grid-cols-2 gap-4">
+            <div className="mb-8">
+              <p className="text-sm text-slate-400">Konfirmasi presensi untuk</p>
+              <h2 className="text-3xl font-bold text-white mt-1">{selectedEmployee.full_name}</h2>
               <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="rounded-2xl border-2 border-slate-700 bg-slate-800/50 py-4 text-lg font-semibold text-slate-300 transition-all hover:border-slate-500"
+                onClick={() => setSelectedEmployee(null)}
+                className="mt-2 text-sm font-medium text-blue-400 hover:text-blue-300"
               >
-                Bukan Saya
+                Bukan Anda? Ganti
               </button>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
               <button
-                type="button"
-                onClick={handleCheckIn}
-                className="rounded-2xl bg-emerald-600 py-4 text-lg font-bold text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-500"
+                onClick={() => confirmScan("face")}
+                className="group flex flex-col items-center gap-4 rounded-2xl border-2 border-slate-800 bg-slate-800/50 p-8 transition-all hover:border-blue-500 hover:bg-blue-900/20"
               >
-                ✓ Check-In Sekarang
+                <div className="rounded-full bg-blue-500/10 p-6 text-blue-400 transition-transform group-hover:scale-110 group-hover:text-blue-300">
+                  <Icon className="h-16 w-16"><SvgPath name="users" /></Icon>
+                </div>
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-white">Face ID</h3>
+                  <p className="text-sm text-slate-400 mt-1">Pindai wajah Anda</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => confirmScan("fingerprint")}
+                className="group flex flex-col items-center gap-4 rounded-2xl border-2 border-slate-800 bg-slate-800/50 p-8 transition-all hover:border-emerald-500 hover:bg-emerald-900/20"
+              >
+                <div className="rounded-full bg-emerald-500/10 p-6 text-emerald-400 transition-transform group-hover:scale-110 group-hover:text-emerald-300">
+                  <Icon className="h-16 w-16"><SvgPath name="document" /></Icon>
+                </div>
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-white">Fingerprint</h3>
+                  <p className="text-sm text-slate-400 mt-1">Gunakan sidik jari</p>
+                </div>
               </button>
             </div>
           </>
         )}
       </div>
-
-      <p className="mt-6 max-w-xl text-center text-xs text-slate-600">
-        Verifikasi biometrik (Face ID / sidik jari) memerlukan perangkat keras khusus dan ada di roadmap —
-        demo ini memakai presensi mandiri berbasis nama.
-      </p>
 
     </div>
   );

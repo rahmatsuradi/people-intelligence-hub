@@ -366,7 +366,11 @@ export default function RolesPage() {
   const [selected, setSelected] = useState<JobRequisition | null>(null);
   const [showForm, setShowForm] = useState<"add" | "edit" | null>(null);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<ReqStatus | "">("");
+  const [filterStatus, setFilterStatus] = useState<ReqStatus | "">(() => {
+    if (typeof window === "undefined") return "";
+    const p = new URLSearchParams(window.location.search).get("status");
+    return p === "draft" || p === "active" || p === "paused" || p === "closed" ? p : "";
+  });
 
   const reload = useCallback(() => { setAllReqs(getJobReqs()); }, []);
   useEffect(reload, [reload]);

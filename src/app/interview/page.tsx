@@ -21,7 +21,7 @@ import {
   findCandidateByName, createCandidate, saveInterviewResult, getCandidate,
   type InterviewResultSnapshot,
 } from "@/lib/store";
-import { AppShell, Icon, SvgPath, ICON_PATHS, Card, Button, Label, inputClass, cn } from "@/components/app-shell";
+import { AppShell, Icon, SvgPath, Card, Button, Label, inputClass, cn } from "@/components/app-shell";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -2033,7 +2033,7 @@ export default function InterviewPage() {
   };
 
   return (
-    <AppShell activeNavId="interview-workspace" title="Interview Workspace" subtitle="Kit pertanyaan terstruktur & panduan penilaian">
+    <AppShell activeNavId="interviews" title="Interview Workspace" subtitle="Kit pertanyaan terstruktur & panduan penilaian">
       {assessmentHandoff && (
         <div className="rounded-xl border border-teal-200 bg-teal-50/80 px-5 py-4 dark:border-teal-500/30 dark:bg-teal-500/10">
           <div className="flex flex-wrap items-start justify-between gap-3">

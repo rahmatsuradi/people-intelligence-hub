@@ -97,9 +97,9 @@ export function SvgPath({ name }: { name: keyof typeof ICON_PATHS }) {
 
 const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 1. Dashboard
-  dashboard: "dashboard", analytics: "chart", "report-gen": "document", "hr-consultant": "sparkles",
+  dashboard: "dashboard", analytics: "chart", "hr-consultant": "sparkles",
   // 2. Employer Branding
-  "ai-trends": "sparkles", "editorial-plan": "calendarDays", engagement: "users",
+  "employer-branding": "sparkles", "ai-trends": "sparkles", "editorial-plan": "calendarDays", engagement: "users",
   // 3. Talent Acquisition
   mpp: "chart", roles: "briefcase", "talent-pool": "users", candidates: "users", "cv-analyzer": "scan", interviews: "calendar", assessment: "clipboard", "hiring-report": "report", "hiring-analytics": "chart",
   // 4. Core HR
@@ -109,7 +109,7 @@ const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 6. Learning & Development
   courses: "book", competency: "star",
   // 7. Payroll & Rewards
-  payroll: "report", laporan: "chart",
+  payroll: "report", laporan: "chart", "form-1721-a1": "document",
   // 8. Settings & Integrations
   "job-portal": "plug", "social-media": "plug",
 };
@@ -235,16 +235,17 @@ export function AppShell({
       items: [
         { id: "dashboard", label: "Overview", href: "/" },
         { id: "analytics", label: "HR Analytics", href: "/analytics" },
-        { id: "report-gen", label: "Report Generator", href: "/report" },
+        { id: "hiring-report", label: "Report Generator", href: "/report" },
         { id: "hr-consultant", label: "Konsultan HR (AI)", href: "/hr-consultant" },
       ],
     },
     {
       label: "Employer Branding & Culture",
       items: [
+        { id: "employer-branding", label: "AI Content Generator", href: "/employer-branding" },
         { id: "ai-trends", label: "Trend & Ide Konten", href: "/employer-branding/ai-trends" },
-        { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial", soon: true },
-        { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement", soon: true },
+        { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial" },
+        { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement" },
       ],
     },
     {
@@ -264,7 +265,7 @@ export function AppShell({
       label: "Core HR & IR",
       items: [
         { id: "employees", label: "Employee Directory", href: "/employees" },
-        { id: "ir", label: "Industrial Relations", href: "/core-hr/ir", soon: true },
+        { id: "ir", label: "Industrial Relations", href: "/core-hr/ir" },
         { id: "onboarding", label: "Onboarding & Offboarding", href: "/pay/onboarding" },
         { id: "attendance", label: "Attendance", href: "/attendance" },
       ],
@@ -273,15 +274,15 @@ export function AppShell({
       label: "Performance & Talent",
       items: [
         { id: "performance", label: "Performance (PMS)", href: "/performance" },
-        { id: "succession", label: "Succession Planning", href: "/talent/succession", soon: true },
-        { id: "od", label: "Org. Development", href: "/talent/od", soon: true },
+        { id: "succession", label: "Succession Planning", href: "/talent/succession" },
+        { id: "od", label: "Org. Development", href: "/talent/od" },
       ],
     },
     {
       label: "Learning & Development",
       items: [
-        { id: "courses", label: "Training & Courses", href: "/learning/courses", soon: true },
-        { id: "competency", label: "Competency Matrix", href: "/learning/competency", soon: true },
+        { id: "courses", label: "Training & Courses", href: "/learning/courses" },
+        { id: "competency", label: "Competency Matrix", href: "/learning/competency" },
       ],
     },
     {
@@ -289,6 +290,7 @@ export function AppShell({
       items: [
         { id: "payroll", label: "Payroll Run", href: "/pay/payroll" },
         { id: "laporan", label: "Laporan Pajak & BPJS", href: "/pay/laporan" },
+        { id: "form-1721-a1", label: "Formulir 1721-A1", href: "/pay/laporan/1721-a1" },
       ],
     },
     {
@@ -337,7 +339,7 @@ export function AppShell({
     });
 
   return (
-    <div className={cn("flex min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100", isDark && "dark")} data-theme={theme}>
+    <div className={cn("flex h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100", isDark && "dark")} data-theme={theme}>
       {/* Sidebar */}
       {sidebarOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />}
       <aside className={cn("fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-out dark:border-slate-800 dark:bg-slate-900 lg:static lg:translate-x-0", sidebarOpen ? "translate-x-0" : "-translate-x-full")} aria-label="Main navigation">
