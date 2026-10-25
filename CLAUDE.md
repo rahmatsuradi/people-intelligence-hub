@@ -204,6 +204,19 @@ Skema `supabase/rica-rico-phase1.sql` (sudah diterapkan). Data diimpor dari Goog
 - **Status `perlu_verifikasi`** = ada di Employee Database tapi tidak digaji September (40 orang) — mungkin sudah keluar, mungkin belum; HR yang memutuskan.
 - Halaman: `/karyawan` (NIK & rekening disamarkan sampai diklik "Tampilkan"), `/outlet` (outlet per area, jumlah SPG aktif, outlet lowong). Fungsi murni di `src/lib/rr/master.ts` (7 unit test).
 
+## 9f. Pulse Check & Feedback (25 Oktober 2026)
+
+Skema `supabase/pulse-check-schema.sql` (sudah diterapkan). Halaman `/pulse`, mesin murni `src/lib/rr/pulse.ts` (17 unit test). Data diimpor dari Drive (Monthly Pulse Check Rica Rico: 169 jawaban Feb–Sep 2026 + 60 butir Action List; Feedback SPG: 121 jawaban Maret 2026). Skrip impor di luar repo, sama seperti fase 1.
+
+- **Kerahasiaan per tabel, bukan per kolom** (HR dan owner sama-sama role `authenticated`, jadi policy kolom tidak bisa membedakan). `pi_survey_responses` (nama, email, jawaban tertulis) dan `pi_survey_action_raisers` (siapa yang mengangkat tiap butir) = **HR saja**. `pi_surveys` & `pi_survey_actions` = baca HR/owner. Owner membaca angka lewat RPC `pi_survey_summary()` (security definer): hitungan per pilihan per periode, tanpa nama dan tanpa pertanyaan bertipe `text`. Diverifikasi: owner membaca 0 jawaban & 0 pengangkat, 60 action, dan ringkasan tidak memuat teks/email.
+- **Periode < 3 jawaban disembunyikan rinciannya.** Ambang 3 sengaja ditulis tetap di SQL, bukan parameter — parameter bisa dipanggil owner dengan 0.
+- **Semua angka di layar (HR maupun owner) dihitung dari RPC yang sama**, supaya keduanya tidak pernah melihat angka berbeda. `summarize()` di TS adalah cermin perilaku fungsi SQL-nya (dan spesifikasinya di test); dipakai hanya untuk rincian khusus HR (rata-rata per SPV).
+- **Definisi pertanyaan = DATA** (`pi_surveys.questions`, jsonb: `choice|multi|scale|text`, skor per opsi, `higherIsBetter`). Survei baru = baris baru, bukan kode baru.
+- **`period` = bulan YANG DINILAI**, bukan bulan mengisi: formulir diisi awal bulan untuk menilai bulan sebelumnya (pola dari kolom Month di Clean Data). 23 jawaban Oktober yang belum dirapikan HR ditetapkan ke September dengan pola yang sama, dan sumbernya ditandai.
+- **Tab "Chart 2026" di spreadsheet asli berisi angka yang diketik tangan dan tidak cocok dengan datanya** (mis. rata-rata bahagia Feb tertulis 3,27; dari baris jawabannya 2,83). Angka aplikasi dihitung ulang dari baris jawaban — jangan "disamakan" dengan sheet itu.
+- **Keluhan berulang ditampilkan paling atas**: tema (`theme`, diisi saat impor lewat kata kunci, bisa diubah HR) yang muncul di ≥ 2 periode dan masih punya butir terbuka, plus periode yang sudah punya jawaban tapi belum punya action item (Action List berhenti diperbarui setelah Juni 2026).
+- Pulse Check gabungan **Lencir x Rica Rico Marketing sengaja tidak diimpor** — responden marketing bersama menunggu web Lencir (keputusan 25 Oktober 2026).
+
 ## 10. Yang belum dikerjakan
 
 - Kalender konten & riwayat employer branding, target SLA rekrutmen, dan cache ringkasan eksekutif masih hanya di browser (localStorage). Enam fitur HR inti sudah di cloud — lihat §9d.

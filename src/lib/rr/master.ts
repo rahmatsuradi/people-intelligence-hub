@@ -162,7 +162,7 @@ export function countBy<T>(items: T[], key: (t: T) => string | null | undefined)
 /* ─── Database ─── */
 
 /** PostgREST memotong hasil di 1.000 baris secara diam-diam — ambil per halaman. */
-async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>): Promise<T[]> {
+export async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>): Promise<T[]> {
   const out: T[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await page(from, from + 999);
