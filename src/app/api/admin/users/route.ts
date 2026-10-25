@@ -10,23 +10,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireHr } from "@/lib/require-hr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Role = "hr" | "owner";
 const isRole = (r: unknown): r is Role => r === "hr" || r === "owner";
-
-async function requireHr(request: NextRequest): Promise<{ id: string } | NextResponse> {
-  if (!supabaseAdmin) return NextResponse.json({ error: "Server belum dikonfigurasi (service-role)." }, { status: 503 });
-  const token = request.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
-  if (!token) return NextResponse.json({ error: "Harus login." }, { status: 401 });
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data.user) return NextResponse.json({ error: "Sesi tidak valid." }, { status: 401 });
-  const { data: row } = await supabaseAdmin.from("pi_user_roles").select("role").eq("user_id", data.user.id).maybeSingle();
-  if (row?.role !== "hr") return NextResponse.json({ error: "Hanya tim HR yang boleh mengelola akses." }, { status: 403 });
-  return { id: data.user.id };
-}
 
 export async function GET(request: NextRequest) {
   const me = await requireHr(request);

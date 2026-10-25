@@ -143,3 +143,105 @@ describe("periodLabel", () => {
     expect(periodLabel("2026-09-01")).toBe("September 2026");
   });
 });
+
+/* ─── Tahap 2: KPI, formulir publik, sinyal, apresiasi ─── */
+import { appreciationCounts, isVisible, kpi, kpiBetter, kpiTrend, signals, validateSubmission } from "./pulse";
+
+const happyK: SurveyQuestion = { ...happiness, favorable: ["Bahagia", "Sangat Bahagia"], kpiLabel: "Indeks bahagia", required: true };
+const stressK: SurveyQuestion = {
+  key: "stress", label: "Frekuensi stres", type: "choice", required: true, risk: ["2 - 3x dalam seminggu", "Setiap hari"], kpiLabel: "Stres tinggi",
+  options: [{ value: "Tidak sama sekali" }, { value: "2 - 3x dalam seminggu" }, { value: "Setiap hari" }],
+};
+const comfortK: SurveyQuestion = { ...comfort, favorableMin: 8, kpiLabel: "Nyaman" };
+
+describe("kpi (% favorable / % risiko)", () => {
+  it("favorable menghitung pilihan baik terhadap yang menjawab", () => {
+    expect(kpi(happyK, { answered: 4, counts: { Bahagia: 2, "Sangat Bahagia": 1, "Tidak Bahagia": 1 } })).toEqual({ pct: 75, hits: 3, n: 4, kind: "favorable" });
+  });
+  it("risiko menghitung pilihan berisiko; ambang skala untuk pertanyaan 1–10", () => {
+    expect(kpi(stressK, { answered: 5, counts: { "Setiap hari": 1, "2 - 3x dalam seminggu": 1, "Tidak sama sekali": 3 } })?.pct).toBe(40);
+    expect(kpi(comfortK, { answered: 4, counts: { "7": 1, "8": 2, "10": 1 } })?.pct).toBe(75);
+  });
+  it("tanpa definisi KPI = null; tanpa jawaban = pct null", () => {
+    expect(kpi(happiness, { answered: 1, counts: { Bahagia: 1 } })).toBeNull();
+    expect(kpi(happyK, undefined)).toEqual({ pct: null, hits: 0, n: 0, kind: "favorable" });
+  });
+  it("arah kabar baik: favorable naik baik, risiko naik buruk", () => {
+    expect(kpiBetter(happyK, 5)).toBe(true);
+    expect(kpiBetter(stressK, 5)).toBe(false);
+  });
+  it("tren melewati periode tersembunyi tanpa angka", () => {
+    const t = kpiTrend(happyK, [{ period: "2026-08-01", n: 1, suppressed: true, questions: {} }]);
+    expect(t).toEqual([{ period: "2026-08-01", pct: null, n: 0, suppressed: true }]);
+  });
+});
+
+describe("isVisible & validateSubmission", () => {
+  const reason: SurveyQuestion = { key: "reason", label: "Alasan", type: "text", showIf: { key: "stress", notIn: ["Tidak sama sekali"] } };
+  const activity: SurveyQuestion = { key: "activity", label: "Kegiatan", type: "multi", options: [{ value: "Karaoke" }, { value: "Olahraga" }] };
+  const s = { questions: [happyK, stressK, reason, activity, comfortK] };
+
+  it("syarat tampil: notIn & in", () => {
+    expect(isVisible(reason, { stress: "Tidak sama sekali" })).toBe(false);
+    expect(isVisible(reason, { stress: "Setiap hari" })).toBe(true);
+    expect(isVisible(reason, {})).toBe(false);
+    expect(isVisible({ ...reason, showIf: { key: "stress", in: ["Setiap hari"] } }, { stress: "Setiap hari" })).toBe(true);
+  });
+
+  it("menyimpan yang sah saja: key asing dibuang, multi disaring ke opsi, jawaban tersembunyi dibuang", () => {
+    const r = validateSubmission(s, { happiness: "Bahagia", stress: "Tidak sama sekali", reason: "ikut terkirim", activity: ["Karaoke", "Hack", "Karaoke"], comfort: "9", x: "asing" });
+    expect(r.errors).toEqual([]);
+    expect(r.answers).toEqual({ happiness: "Bahagia", stress: "Tidak sama sekali", activity: ["Karaoke"], comfort: 9 });
+  });
+
+  it("wajib kosong, pilihan tak dikenal, dan skala di luar rentang = galat", () => {
+    const r = validateSubmission(s, { happiness: "Luar biasa", comfort: 11 });
+    expect(r.errors).toEqual(["Rasa bahagia: pilihan tidak dikenal", "Rasa bahagia wajib diisi", "Frekuensi stres wajib diisi", "Kenyamanan: nilai di luar rentang"]);
+  });
+
+  it("teks dipangkas ke batas panjang", () => {
+    const r = validateSubmission({ questions: [{ key: "t", label: "T", type: "text" }] }, { t: "a".repeat(5000) });
+    expect((r.answers.t as string).length).toBe(2000);
+  });
+});
+
+describe("signals", () => {
+  const surv = { questions: [happyK, stressK], headline: ["happiness", "stress"] };
+  const P = (period: string, h: Record<string, number>, st: Record<string, number>): PeriodSummary => ({
+    period, n: 10, suppressed: false,
+    questions: { happiness: { answered: 10, counts: h }, stress: { answered: 10, counts: st } },
+  });
+  const summaries = [P("2026-08-01", { Bahagia: 9, "Tidak Bahagia": 1 }, { "Tidak sama sekali": 9, "Setiap hari": 1 }), P("2026-09-01", { Bahagia: 6, "Tidak Bahagia": 4 }, { "Tidak sama sekali": 9, "Setiap hari": 1 })];
+
+  it("pergeseran KPI ≥ 10 poin ditandai, yang memburuk berprioritas tinggi", () => {
+    const s = signals({ survey: surv, summaries, period: "2026-09-01", actions: [action("1", "2026-09-01", "libur")] });
+    expect(s[0]).toMatchObject({ id: "shift-happiness", severity: "tinggi", title: "Indeks bahagia turun 30 poin" });
+    expect(s.find((x) => x.id === "shift-stress")).toBeUndefined();
+  });
+
+  it("kelompok yang tertinggal ≥ 15 poin dari keseluruhan", () => {
+    const seg = { period: "2026-09-01", hidden: 1, groups: { "> 4 Tahun": { n: 3, questions: { stress: { answered: 3, counts: { "Setiap hari": 2, "Tidak sama sekali": 1 } } } } } };
+    const s = signals({ survey: surv, summaries, period: "2026-09-01", actions: [], segments: seg, segmentLabel: "Lama kerja" });
+    expect(s.find((x) => x.id.startsWith("seg-stress"))?.title).toBe("Lama kerja > 4 Tahun: Stres tinggi 67%");
+  });
+
+  it("partisipasi rendah, periode tanpa tindak lanjut, terlalu banyak butir tanpa fokus, keluhan ≥ 3 bulan", () => {
+    const many = Array.from({ length: 11 }, (_, i) => action(String(i), ["2026-02-01", "2026-03-01", "2026-04-01"][i % 3], "libur"));
+    const ids = signals({ survey: surv, summaries, period: "2026-09-01", actions: many, targetCount: 20 }).map((x) => x.id);
+    expect(ids).toEqual(expect.arrayContaining(["participation", "no-action", "no-focus", "recurring"]));
+  });
+
+  it("ada fokus = tidak ada peringatan 'tanpa fokus'", () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({ ...action(String(i), "2026-09-01", "libur"), is_focus: i === 0 }));
+    expect(signals({ survey: surv, summaries, period: "2026-09-01", actions: many }).map((x) => x.id)).not.toContain("no-focus");
+  });
+});
+
+describe("appreciationCounts", () => {
+  const staff = ["Deni Ramdani", "Ilal Marfudi Agustiawan (Billy)", "Sudarti", "Irfan", "Irfan Hakim"];
+  it("menyamakan ejaan ke master karyawan, satu orang dihitung sekali per jawaban, 'semua' dilewati", () => {
+    expect(appreciationCounts(["Billy setiawan, Deni ramdani", "deni, Deni Ramdani", "Sudarti & semua tim", "irfan"], staff)).toEqual([
+      { name: "Deni Ramdani", count: 2 }, { name: "Ilal Marfudi Agustiawan (Billy)", count: 1 }, { name: "Irfan", count: 1 }, { name: "Sudarti", count: 1 },
+    ]);
+  });
+});

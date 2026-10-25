@@ -141,3 +141,111 @@ $$;
 
 revoke all on function public.pi_survey_summary(uuid) from public, anon;
 grant execute on function public.pi_survey_summary(uuid) to authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Tahap 2 (25 Oktober 2026): link isi sendiri, insight AI, rincian per kelompok,
+--  dan tindak lanjut gaya "fokus + tutup lingkaran". Semua ALTER di bawah hanya
+--  menyentuh tabel milik modul ini.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- Satu link = satu siklus (survei × bulan yang dinilai). Peserta tidak punya akun:
+-- formulir publik /survei/<token> menulis lewat service-role di /api/survei.
+create table if not exists public.pi_survey_campaigns (
+  id           uuid primary key default gen_random_uuid(),
+  tenant_id    uuid not null,
+  survey_id    uuid not null references public.pi_surveys (id) on delete cascade,
+  period       date not null,
+  token        text not null unique,
+  status       text not null default 'open' check (status in ('open', 'closed')),
+  closes_at    timestamptz,                -- lewat tanggal ini formulir menolak jawaban
+  target_count int,                        -- jumlah orang yang diharapkan mengisi (untuk tingkat partisipasi)
+  note         text,
+  created_by   uuid default auth.uid(),
+  created_at   timestamptz not null default now(),
+  unique (survey_id, period)
+);
+
+alter table public.pi_survey_responses add column if not exists campaign_id uuid references public.pi_survey_campaigns (id) on delete set null;
+alter table public.pi_surveys add column if not exists segments text[] not null default '{}';  -- key pengelompok, mis. {tenure} / {spv}
+
+-- Tindak lanjut: maksimal beberapa fokus per siklus, tenggat, dan "sudah disampaikan
+-- balik ke karyawan" — survei yang tidak pernah dijawab balik membuat orang berhenti mengisi.
+alter table public.pi_survey_actions add column if not exists is_focus boolean not null default false;
+alter table public.pi_survey_actions add column if not exists due_date date;
+alter table public.pi_survey_actions add column if not exists told_back text;
+
+-- Insight AI per siklus. Dibuat HR; owner hanya melihat yang sudah dibagikan HR.
+create table if not exists public.pi_survey_insights (
+  id                uuid primary key default gen_random_uuid(),
+  tenant_id         uuid not null,
+  survey_id         uuid not null references public.pi_surveys (id) on delete cascade,
+  period            date not null,
+  content           jsonb not null,
+  model             text,
+  shared_with_owner boolean not null default false,
+  created_by        uuid default auth.uid(),
+  created_at        timestamptz not null default now(),
+  unique (survey_id, period)
+);
+
+do $$
+begin
+  alter table public.pi_survey_campaigns enable row level security;
+  drop policy if exists "pi read pi_survey_campaigns" on public.pi_survey_campaigns;
+  drop policy if exists "pi write pi_survey_campaigns" on public.pi_survey_campaigns;
+  create policy "pi read pi_survey_campaigns" on public.pi_survey_campaigns for select to authenticated using (public.pi_role() in ('hr', 'owner'));
+  create policy "pi write pi_survey_campaigns" on public.pi_survey_campaigns for all to authenticated using (public.pi_role() = 'hr') with check (public.pi_role() = 'hr');
+
+  alter table public.pi_survey_insights enable row level security;
+  drop policy if exists "pi read pi_survey_insights" on public.pi_survey_insights;
+  drop policy if exists "pi write pi_survey_insights" on public.pi_survey_insights;
+  create policy "pi read pi_survey_insights" on public.pi_survey_insights for select to authenticated
+    using (public.pi_role() = 'hr' or (public.pi_role() = 'owner' and shared_with_owner));
+  create policy "pi write pi_survey_insights" on public.pi_survey_insights for all to authenticated using (public.pi_role() = 'hr') with check (public.pi_role() = 'hr');
+end $$;
+
+-- Rincian per kelompok (mis. lama kerja, SPV) untuk pertanyaan utama.
+-- Hasil: [{ period, groups: { nilai_kelompok: { n, questions: { key: { answered, counts } } } }, hidden: jumlah_kelompok_kecil }]
+-- Kelompok < 3 orang tidak dikeluarkan sama sekali (hanya dihitung di "hidden"),
+-- dengan ambang tetap yang sama seperti pi_survey_summary().
+create or replace function public.pi_survey_segments(p_survey_id uuid, p_segment text)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with s as (select headline, segments from pi_surveys where id = p_survey_id and p_segment = any (segments)),
+  r as (
+    select id, period, coalesce(nullif(answers->>p_segment, ''), 'Tidak diisi') as grp, answers
+    from pi_survey_responses where survey_id = p_survey_id and exists (select 1 from s)
+  ),
+  g as (select period, grp, count(*) as n from r group by 1, 2),
+  v as (
+    select r.period, r.grp, h.key, r.id, val
+    from r cross join s cross join lateral unnest(s.headline) as h(key)
+    cross join lateral jsonb_array_elements_text(
+      case
+        when r.answers->h.key is null or jsonb_typeof(r.answers->h.key) = 'null' then '[]'::jsonb
+        when jsonb_typeof(r.answers->h.key) = 'array' then r.answers->h.key
+        else jsonb_build_array(r.answers->h.key)
+      end) as val
+  ),
+  c as (select period, grp, key, val, count(*) as n from v group by 1, 2, 3, 4),
+  a as (select period, grp, key, count(distinct id) as answered from v group by 1, 2, 3),
+  q as (
+    select c.period, c.grp, c.key, jsonb_build_object('answered', a.answered, 'counts', jsonb_object_agg(c.val, c.n)) as obj
+    from c join a using (period, grp, key) group by c.period, c.grp, c.key, a.answered
+  ),
+  gq as (
+    select g.period, g.grp, g.n,
+           coalesce((select jsonb_object_agg(q.key, q.obj) from q where q.period = g.period and q.grp = g.grp), '{}'::jsonb) as questions
+    from g where g.n >= 3
+  ),
+  p as (select period, count(*) filter (where n < 3) as hidden from g group by 1)
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'period', p.period,
+           'hidden', p.hidden,
+           'groups', coalesce((select jsonb_object_agg(gq.grp, jsonb_build_object('n', gq.n, 'questions', gq.questions)) from gq where gq.period = p.period), '{}'::jsonb)
+         ) order by p.period), '[]'::jsonb)
+  from p
+  where public.pi_role() in ('hr', 'owner')
+$$;
+
+revoke all on function public.pi_survey_segments(uuid, text) from public, anon;
+grant execute on function public.pi_survey_segments(uuid, text) to authenticated;
