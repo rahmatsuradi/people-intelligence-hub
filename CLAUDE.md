@@ -41,6 +41,8 @@ Identitas visual (rebrand 24 Oktober 2026): logo asli di `public/brand/rica-rico
 
 Sisa data sintetis yang tidak tercakup skrip: kandidat `C-SIM-4834` & `C-SIM-5244` (dari tombol "simulasi lamaran WhatsApp" di `/candidates`, nama acak, melamar ke lowongan demo yang sudah dihapus) beserta 2 aktivitasnya, dan 2 aktivitas uji e2e asesmen ("Uji Ujung-ke-Ujung (sintetis)").
 
+**Nama di slip gaji yang sebenarnya: "CV Rica Rico Bakery Indonesia"** (rekap gaji di Drive, Oktober 2026), dan BPJS karyawan terbagi di enam badan usaha (CV Rica Rico Bakery Indonesia, UD Rica Rico, CV Chocolava, CV Haven Prima Rasa, CV Kuliner Kreatif, CV Pastrindo) + BPU. Karena itu badan usaha dicatat **per karyawan** (`pi_employee_profiles.legal_entity`), bukan satu nilai perusahaan. Header aplikasi masih "PT Valen Persada Nusantara" — usulan menggantinya ke CV Rica Rico Bakery Indonesia sudah disetujui tapi belum diterapkan.
+
 **PT Valen Persada Nusantara tidak ditemukan di sumber publik mana pun** (pencarian web, Oktober 2026). Yang harus dikonfirmasi dari dokumen internal sebelum slip gaji diterbitkan — ditandai `⚠️ MASIH HARUS DIKONFIRMASI` di `company-profile.ts`: ejaan persis nama PT (cocokkan dengan akta/kontrak kerja/registri AHU), alamat terdaftar PT (kolom `address` sengaja dibiarkan "—", bukan diisi alamat outlet), NPWP, nama/jabatan penanda tangan slip, kelas risiko JKK, dan UMK per wilayah outlet.
 
 ## 3. Status modul Pay
@@ -189,6 +191,19 @@ Enam fitur (eNPS & umpan balik, pelatihan, suksesi & 9-box, OD & grading, hubung
 - Satu tabel jsonb, bukan 14 tabel bertipe, karena bentuk data fitur-fitur ini masih akan berubah. Pecah ke tabel bertipe bila dibutuhkan kueri/laporan lintas koleksi.
 - Batasan yang disadari: dua orang menyunting **catatan yang sama** bersamaan → yang terakhir menang (per catatan, bukan per koleksi).
 
+## 9e. Fase 1 Rica Rico — master karyawan, outlet, peran (25 Oktober 2026)
+
+Skema `supabase/rica-rico-phase1.sql` (sudah diterapkan). Data diimpor dari Google Drive HR (Employee Database, rekap gaji September, tracker omset outlet) — **skrip impornya sengaja tidak ada di repo** karena memuat data pribadi; hasilnya hanya di database.
+
+- **Peran, bukan sekadar login.** `pi_user_roles` (`hr` | `owner`) + fungsi `pi_role()` (security definer). 16 tabel `pi_*` memakai policy `pi read <tabel>` (select: hr/owner) dan `pi write <tabel>` (all: hr). Owner melihat semua termasuk gaji & NIK tapi **ditolak database** saat menulis (42501) — banner "Mode lihat saja" hanya penanda, bukan penjaganya. Akun tanpa peran melihat 0 baris. Peran tidak di-bootstrap di file SQL; HR pertama diberikan manual.
+- **Akun dibuat dari `/pengaturan/akses`** lewat `/api/admin/users` (service-role, wajib token akun HR; HR tidak bisa mengubah perannya sendiri). Pengguna ganti sandi di `/akun`.
+- **`pi_outlets`** (110 outlet; unik per `tenant_id + name`) dan **`pi_employee_profiles`** (1:1 dengan `pi_employees`, `on delete cascade`): kelompok kerja (`spg|spv|office|produksi|santan|sopir|host_live|lainnya`), outlet, SPV, badan usaha BPJS, data pribadi/kontak/darurat/pendidikan, tautan dokumen, dan `data_flags`.
+- **`pi_employees.join_date` kini nullable** — 46 karyawan tidak punya tanggal masuk yang sah di sumber; mengisinya dengan tebakan lebih buruk daripada kosong.
+- **Sentinel `BELUM_DIISI`** di `ptkp_status`, `risk_class`, dan `employment_type` yang tidak tercatat di sumber. Mesin payroll sengaja melempar error untuk PTKP yang tidak dikenal, jadi karyawan ini tidak bisa ikut payroll tanpa sengaja sebelum datanya dilengkapi.
+- **`data_flags` = daftar yang harus dibereskan HR, bukan koreksi otomatis.** Arti tiap tanda: `FLAG_LABEL` di `src/lib/rr/master.ts`. NIK ganda/tidak 16 digit dan nama yang cocok ke lebih dari satu orang **tidak pernah digabung atau ditebak**. Karyawan resign tidak dihitung di ringkasan tanda.
+- **Status `perlu_verifikasi`** = ada di Employee Database tapi tidak digaji September (40 orang) — mungkin sudah keluar, mungkin belum; HR yang memutuskan.
+- Halaman: `/karyawan` (NIK & rekening disamarkan sampai diklik "Tampilkan"), `/outlet` (outlet per area, jumlah SPG aktif, outlet lowong). Fungsi murni di `src/lib/rr/master.ts` (7 unit test).
+
 ## 10. Yang belum dikerjakan
 
 - Kalender konten & riwayat employer branding, target SLA rekrutmen, dan cache ringkasan eksekutif masih hanya di browser (localStorage). Enam fitur HR inti sudah di cloud — lihat §9d.
@@ -196,7 +211,8 @@ Enam fitur (eNPS & umpan balik, pelatihan, suksesi & 9-box, OD & grading, hubung
 - **Endpoint AI (`/api/analyze-cv`, `/api/hr-consultant`, `/api/employer-branding`, `/api/executive-insight`) belum memeriksa login** — siapa pun yang tahu alamatnya bisa menghabiskan kuota Groq. `/api/send-email` sudah dijaga (wajib token Supabase); pola yang sama perlu diterapkan ke keempatnya.
 - 13 error lint gaya (tipe `any`, tanda kutip di JSX) dan penghitung yang diubah saat render di `talent/od` (`renderedCount`).
 - **Rekrutmen:** metrik kecepatan baru akan berarti setelah cukup kandidat berjalan lewat pipeline dengan riwayat tercatat (kandidat lama tidak ikut terhitung). Belum ada: cost-per-hire, sumber biaya iklan lowongan, dan pelacakan alasan penolakan kandidat.
-- **Isi data karyawan Rica Rico Bakery.** Aplikasi kini kosong secara sengaja. Sebelum payroll bisa dijalankan: konfirmasi identitas badan hukum (§2), kelas risiko JKK ke BPJS Ketenagakerjaan, dan UMK sesuai SK Gubernur **tiap wilayah outlet/dapur produksi** (nilai UMK di seed masih placeholder, dan satu nilai tidak cukup untuk jaringan 5 provinsi). Baru setelah itu karyawan diisi lewat `/pay/employees` atau `/pay/onboarding`.
+- **Lengkapi data karyawan Rica Rico Bakery.** 365 karyawan sudah diimpor (§9e), tapi PTKP, kelas risiko JKK, dan sebagian status kerja masih `BELUM_DIISI`, dan daftar `data_flags` belum dibereskan. UMK per wilayah outlet/dapur produksi juga masih placeholder.
+- **Fase berikutnya Rica Rico** (urutan disepakati): rekap gaji praktik per kelompok (catat praktik apa adanya, tanpa perbandingan aturan) → komisi SPG/SPV skema berversi (tiering persentil per Oktober 2026) → host live → rekrutmen/onboarding/kontrak/BPJS/reimburse → cuti → absensi (menggantikan Kantorku perlahan, target sebelum ~September 2027).
 - **Kerangka kompetensi belum mencakup bakery & ritel outlet.** `CompetencyCluster` hanya punya `hr | tech | business | finance | broadcast | editorial | security`. Peran khas Rica Rico — baker/produksi, QC & keamanan pangan (halal, BPOM PIRT/MD), kepala outlet, kasir/SPG mal, gudang & distribusi antar-outlet, admin pesanan online (GoFood/GrabFood/ShopeeFood) — belum ada klasternya dan sementara jatuh ke `business`. Bank soal wawancara juga masih bertema penyiaran/pabrik. Ini gap nyata, bukan sekadar penamaan.
 - Script `scripts/run-seed-payroll.ts` dan `scripts/generate-seed-payslips.ts` dulu bergantung pada 13 karyawan seed yang kini sudah dihapus; keduanya sekarang membaca apa pun yang ada di database.
 - **Assessment** (skema/seed/RLS sudah terpasang & terverifikasi — lihat §9). Yang belum: norma lokal dari data nyata (butuh ≥ 100 peserta; lihat §12), analisis butir untuk item kognitif/SJT, uji reliabilitas & analisis faktor untuk adaptasi IPIP, pengiriman tautan tes lewat email otomatis (saat ini disalin manual — modul email belum ada), dan halaman umpan balik hasil untuk peserta.

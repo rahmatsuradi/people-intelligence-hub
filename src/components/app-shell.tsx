@@ -7,6 +7,7 @@ import { getCandidates, getJobReqs, syncFromSupabase } from "@/lib/store";
 import { getActiveCompanyId, getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
 import { syncHrRecords } from "@/lib/hr-records";
 import { RicaRicoMark, RicaRicoWordmark } from "@/components/rica-rico-logo";
+import { clearRoleCache, useRole } from "@/lib/roles";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -104,7 +105,7 @@ const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 3. Talent Acquisition
   mpp: "chart", roles: "briefcase", "talent-pool": "users", candidates: "users", "cv-analyzer": "scan", interviews: "calendar", assessment: "clipboard", "hiring-report": "report", "hiring-analytics": "chart",
   // 4. Core HR
-  employees: "users", ir: "scale", onboarding: "arrowRight", attendance: "clock",
+  karyawan: "users", outlet: "map", employees: "users", ir: "scale", onboarding: "arrowRight", attendance: "clock",
   // 5. Performance & Talent
   performance: "star", succession: "arrowTrend", od: "map",
   // 6. Learning & Development
@@ -112,7 +113,7 @@ const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 7. Payroll & Rewards
   payroll: "report", laporan: "chart", "form-1721-a1": "document",
   // 8. Settings & Integrations
-  "job-portal": "plug", "social-media": "plug",
+  akses: "cog", akun: "eye", "job-portal": "plug", "social-media": "plug",
 };
 
 /* ─── UI Primitives ─── */
@@ -226,7 +227,10 @@ export function AppShell({
     return () => document.removeEventListener("visibilitychange", refresh);
   }, [authStatus]);
 
+  const { role, loading: roleLoading } = useRole();
+
   const handleSignOut = useCallback(async () => {
+    clearRoleCache();
     await signOut();
     router.replace("/login");
   }, [router]);
@@ -266,6 +270,8 @@ export function AppShell({
     {
       label: "Core HR & IR",
       items: [
+        { id: "karyawan", label: "Master Karyawan", href: "/karyawan" },
+        { id: "outlet", label: "Outlet & Penempatan", href: "/outlet" },
         { id: "employees", label: "Employee Directory", href: "/employees" },
         { id: "ir", label: "Industrial Relations", href: "/core-hr/ir" },
         { id: "onboarding", label: "Onboarding & Offboarding", href: "/pay/onboarding" },
@@ -298,6 +304,8 @@ export function AppShell({
     {
       label: "Settings & Integrations",
       items: [
+        { id: "akses", label: "Pengguna & Akses", href: "/pengaturan/akses" },
+        { id: "akun", label: "Akun Saya", href: "/akun" },
         { id: "job-portal", label: "Job Portal Integrations", href: "/settings/job-portal", soon: true },
         { id: "social-media", label: "Social Media API", href: "/settings/social-media", soon: true },
       ],
@@ -432,6 +440,16 @@ export function AppShell({
               <h1 className="text-xl font-semibold text-slate-900 dark:text-white">{title}</h1>
               {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
             </div>
+            {!roleLoading && role === "owner" && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                <strong>Mode lihat saja.</strong> Akun owner bisa membuka semua data, tetapi perubahan hanya bisa dilakukan oleh tim HR.
+              </div>
+            )}
+            {!roleLoading && role === null && authStatus === "authed" && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                <strong>Akun Anda belum diberi akses.</strong> Data tidak akan tampil sampai tim HR memberi peran di menu Pengguna &amp; Akses.
+              </div>
+            )}
             <ErrorBoundary>{children}</ErrorBoundary>
           </div>
 
