@@ -13,9 +13,10 @@ import { AppShell, Button, Card, Label, inputClass, cn } from "@/components/app-
 import { toast } from "@/components/toast";
 import { useRole } from "@/lib/roles";
 import {
-  ACTION_STATUS_LABEL, deleteAction, loadActions, loadCampaigns, loadInsight, loadRaisers, loadResponses, loadSegments, loadSummary, loadSurveys,
+  ACTION_STATUS_LABEL, deleteAction, loadActions, loadCampaigns, loadConclusions, loadEmployeeNames, loadInsight, loadRaisers, loadResponses, loadSegments,
+  loadSpgCountBySpv, loadSummary, loadSurveys,
   periodLabel, saveAction, signals as buildSignals,
-  type ActionStatus, type Campaign, type PeriodSummary, type SegmentPeriod, type StoredInsight, type Survey, type SurveyAction, type SurveyResponse,
+  type ActionStatus, type Campaign, type Conclusion, type PeriodSummary, type SegmentPeriod, type StoredInsight, type Survey, type SurveyAction, type SurveyResponse,
 } from "@/lib/rr/pulse";
 import type { InsightContent } from "@/lib/rr/pulse-insight";
 import { Overview } from "@/components/pulse/overview";
@@ -23,9 +24,12 @@ import { ActionsBoard } from "@/components/pulse/actions-board";
 import { Comments } from "@/components/pulse/comments";
 import { Details } from "@/components/pulse/details";
 import { Campaigns } from "@/components/pulse/campaigns";
+import { SpvReport } from "@/components/pulse/spv-report";
+import { Report360 } from "@/components/pulse/report-360";
+import { People } from "@/components/pulse/people";
 
-type Tab = "ringkasan" | "tindak" | "komentar" | "detail" | "kirim";
-const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area" };
+type Tab = "ringkasan" | "rapor" | "tindak" | "orang" | "komentar" | "detail" | "kirim";
+const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area", jabatan: "Kelompok jabatan" };
 type Draft = Partial<SurveyAction> & { raised_by?: string };
 const GUIDE_KEY = "pulse-guide-hidden";
 
@@ -46,6 +50,10 @@ export default function PulsePage() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [guideHidden, setGuideHidden] = useState(true);
+  const [segChoice, setSegChoice] = useState("");
+  const [roster, setRoster] = useState<Record<string, number>>({});
+  const [conclusions, setConclusions] = useState<Conclusion[]>([]);
+  const [employeeNames, setEmployeeNames] = useState<string[]>([]);
 
   useEffect(() => {
     try { setGuideHidden(localStorage.getItem(GUIDE_KEY) === "1"); } catch { setGuideHidden(false); }
@@ -56,7 +64,8 @@ export default function PulsePage() {
   }, []);
 
   const survey = surveys.find((s) => s.id === surveyId);
-  const segKey = survey?.segments?.[0] ?? "";
+  const kind = survey?.config?.kind ?? "pulse";
+  const segKey = (segChoice && survey?.segments.includes(segChoice) ? segChoice : survey?.segments?.[0]) ?? "";
 
   const reload = useCallback(() => {
     if (!surveyId || roleLoading) return;
@@ -66,14 +75,17 @@ export default function PulsePage() {
       segKey ? loadSegments(surveyId, segKey) : Promise.resolve([] as SegmentPeriod[]),
       isHr ? loadRaisers() : Promise.resolve(new Map<string, string>()),
       isHr ? loadResponses(surveyId) : Promise.resolve([] as SurveyResponse[]),
+      kind === "spv_report" ? loadSpgCountBySpv() : Promise.resolve({} as Record<string, number>),
+      isHr && kind === "pulse" ? loadConclusions(surveyId) : Promise.resolve([] as Conclusion[]),
+      isHr && kind === "pulse" ? loadEmployeeNames() : Promise.resolve([] as string[]),
     ])
-      .then(([s, a, c, seg, r, rs]) => {
-        setSummary(s); setActions(a); setCampaigns(c); setSegments(seg); setRaisers(r); setResponses(rs);
+      .then(([s, a, c, seg, r, rs, ro, co, en]) => {
+        setSummary(s); setActions(a); setCampaigns(c); setSegments(seg); setRaisers(r); setResponses(rs); setRoster(ro); setConclusions(co); setEmployeeNames(en);
         setPeriod((cur) => (cur && s.some((p) => p.period === cur) ? cur : [...s].reverse().find((p) => !p.suppressed)?.period ?? s.at(-1)?.period ?? ""));
       })
       .catch((e: Error) => toast(`Gagal memuat: ${e.message}`, "error"))
       .finally(() => setLoading(false));
-  }, [surveyId, segKey, isHr, roleLoading]);
+  }, [surveyId, segKey, kind, isHr, roleLoading]);
   useEffect(reload, [reload]);
 
   useEffect(() => {
@@ -92,7 +104,10 @@ export default function PulsePage() {
   const commentCount = responses.filter((r) => r.period === period).length;
 
   const hideGuide = (v: boolean) => { setGuideHidden(v); try { localStorage.setItem(GUIDE_KEY, v ? "1" : "0"); } catch { /* abaikan */ } };
-  const switchSurvey = (id: string) => { setSurveyId(id); setPeriod(""); setTab("ringkasan"); };
+  const switchSurvey = (id: string) => {
+    setSurveyId(id); setPeriod(""); setSegChoice("");
+    setTab(surveys.find((s) => s.id === id)?.config?.kind === "360" ? "rapor" : "ringkasan");
+  };
 
   const submitDraft = async () => {
     if (!draft || !survey) return;
@@ -126,9 +141,13 @@ export default function PulsePage() {
     status: "belum", period, is_focus: r.fokus, raised_by: "",
   });
 
-  const tabs: [Tab, string][] = [
+  const tabs: [Tab, string][] = kind === "360" ? [
+    ["rapor", "Rapor 360"], ["komentar", "Komentar"], ["detail", "Detail pertanyaan"], ["kirim", "Kirim survei"],
+  ] : [
     ["ringkasan", "Ringkasan"],
+    ...(kind === "spv_report" ? [["rapor", "Rapor SPV"] as [Tab, string]] : []),
     ["tindak", `Tindak lanjut (${openCount})`],
+    ...(isHr && kind === "pulse" ? [["orang", "Per orang & apresiasi"] as [Tab, string]] : []),
     ...(isHr ? [["komentar", "Komentar"] as [Tab, string]] : []),
     ["detail", "Detail pertanyaan"],
     ...(isHr ? [["kirim", "Kirim survei"] as [Tab, string]] : []),
@@ -199,6 +218,14 @@ export default function PulsePage() {
 
           {loading && !summary.length ? <Card><p className="text-sm text-slate-500">Memuat…</p></Card> : (
             <>
+              {tab === "ringkasan" && survey.segments.length > 1 && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  Bandingkan per
+                  <select className={cn(inputClass, "w-auto py-1 text-xs")} value={segKey} onChange={(e) => setSegChoice(e.target.value)}>
+                    {survey.segments.map((k) => <option key={k} value={k}>{SEGMENT_LABEL[k] ?? k}</option>)}
+                  </select>
+                </div>
+              )}
               {tab === "ringkasan" && (
                 <Overview survey={survey} summary={summary} period={period} setPeriod={setPeriod} signals={sig}
                   segments={segNow} segmentLabel={SEGMENT_LABEL[segKey] ?? segKey} targetCount={campaign?.target_count ?? null}
@@ -209,7 +236,11 @@ export default function PulsePage() {
                   onAdd={() => setDraft({ status: "belum", period, raised_by: "" })} onEdit={(a) => setDraft({ ...a, raised_by: raisers.get(a.id) ?? "" })}
                   onPatch={patchAction} onDelete={removeAction} />
               )}
-              {tab === "komentar" && isHr && <Comments survey={survey} responses={responses} period={period} />}
+              {tab === "rapor" && kind === "spv_report" && <SpvReport survey={survey} segments={segments} period={period} roster={roster} />}
+              {tab === "rapor" && kind === "360" && isHr && <Report360 survey={survey} responses={responses} canEdit={canEdit} onSaved={() => loadSurveys().then(setSurveys)} />}
+              {tab === "orang" && isHr && <People survey={survey} responses={responses} period={period} employeeNames={employeeNames} />}
+              {tab === "komentar" && isHr && <Comments survey={survey} responses={responses} period={period}
+                conclusions={kind === "pulse" ? conclusions : undefined} onConclusionSaved={() => loadConclusions(survey.id).then(setConclusions)} />}
               {tab === "detail" && <Details survey={survey} current={current} />}
               {tab === "kirim" && isHr && <Campaigns survey={survey} summary={summary} campaigns={campaigns} reload={reload} />}
             </>

@@ -249,3 +249,139 @@ $$;
 
 revoke all on function public.pi_survey_segments(uuid, text) from public, anon;
 grant execute on function public.pi_survey_segments(uuid, text) to authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Tahap 3 (26 Oktober 2026): Feedback SPG Bulanan, Feedback 360 SPV, dan
+--  kelengkapan data Pulse Office (kesimpulan per kategori, jabatan, partisipasi).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- Tanda kualitas data per jawaban. Jawaban ganda (nama sama, bulan sama) TIDAK
+-- dihapus — ditandai dan dikeluarkan dari hitungan (excluded); jawaban terakhir dipakai.
+alter table public.pi_survey_responses add column if not exists flags text[] not null default '{}';
+alter table public.pi_survey_responses add column if not exists excluded boolean not null default false;
+
+-- Pengaturan per survei (data, bukan kode): visibility 'hr' = owner tidak melihat
+-- survei ini sama sekali (mis. 360 antar 7 SPV — terlalu kecil untuk tanpa nama);
+-- targets = siapa yang dinilai di tiap blok formulir 360.
+alter table public.pi_surveys add column if not exists config jsonb not null default '{}';
+
+-- Kesimpulan per kategori per bulan (pengganti sheet "Conclusion" / Dropdown 2026):
+-- Company Benefit, Work Environment, Technical Issue, Personal Issue, atau per divisi.
+-- Isinya sering menyebut nama pengangkat, jadi HANYA HR.
+create table if not exists public.pi_survey_conclusions (
+  id         uuid primary key default gen_random_uuid(),
+  tenant_id  uuid not null,
+  survey_id  uuid not null references public.pi_surveys (id) on delete cascade,
+  period     date not null,
+  category   text not null,
+  body       text not null,
+  source     text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (survey_id, period, category)
+);
+
+do $$
+begin
+  alter table public.pi_survey_conclusions enable row level security;
+  drop policy if exists "pi hr only pi_survey_conclusions" on public.pi_survey_conclusions;
+  create policy "pi hr only pi_survey_conclusions" on public.pi_survey_conclusions for all to authenticated
+    using (public.pi_role() = 'hr') with check (public.pi_role() = 'hr');
+
+  drop policy if exists "pi read pi_surveys" on public.pi_surveys;
+  create policy "pi read pi_surveys" on public.pi_surveys for select to authenticated
+    using (public.pi_role() = 'hr' or (public.pi_role() = 'owner' and coalesce(config->>'visibility', 'all') <> 'hr'));
+
+  drop policy if exists "pi read pi_survey_actions" on public.pi_survey_actions;
+  create policy "pi read pi_survey_actions" on public.pi_survey_actions for select to authenticated
+    using (public.pi_role() = 'hr' or (public.pi_role() = 'owner' and exists (
+      select 1 from public.pi_surveys s where s.id = survey_id and coalesce(s.config->>'visibility', 'all') <> 'hr')));
+end $$;
+
+-- Owner boleh membaca ringkasan hanya untuk survei yang tidak berlabel visibility 'hr'.
+create or replace function public.pi_survey_visible(p_survey_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.pi_role() = 'hr' or (public.pi_role() = 'owner' and exists (
+    select 1 from pi_surveys where id = p_survey_id and coalesce(config->>'visibility', 'all') <> 'hr'))
+$$;
+
+create or replace function public.pi_survey_summary(p_survey_id uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with q as (
+    select x->>'key' as key
+    from pi_surveys s, jsonb_array_elements(s.questions) x
+    where s.id = p_survey_id and coalesce(x->>'type', 'text') <> 'text'
+  ),
+  r as (select id, period, answers from pi_survey_responses where survey_id = p_survey_id and not excluded),
+  v as (
+    select r.id, r.period, q.key, val
+    from r cross join q
+    cross join lateral jsonb_array_elements_text(
+      case
+        when r.answers->q.key is null or jsonb_typeof(r.answers->q.key) = 'null' then '[]'::jsonb
+        when jsonb_typeof(r.answers->q.key) = 'array' then r.answers->q.key
+        else jsonb_build_array(r.answers->q.key)
+      end) as val
+  ),
+  c as (select period, key, val, count(*) as n from v group by 1, 2, 3),
+  a as (select period, key, count(distinct id) as answered from v group by 1, 2),
+  pq as (
+    select c.period, c.key, jsonb_build_object('answered', a.answered, 'counts', jsonb_object_agg(c.val, c.n)) as obj
+    from c join a using (period, key) group by c.period, c.key, a.answered
+  ),
+  pp as (select period, count(*) as n from r group by 1)
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'period', pp.period,
+           'n', pp.n,
+           'suppressed', pp.n < 3,
+           'questions', case when pp.n < 3 then '{}'::jsonb
+                             else coalesce((select jsonb_object_agg(pq.key, pq.obj) from pq where pq.period = pp.period), '{}'::jsonb) end
+         ) order by pp.period), '[]'::jsonb)
+  from pp
+  where public.pi_survey_visible(p_survey_id)
+$$;
+
+-- Rincian per kelompok kini untuk SEMUA pertanyaan non-teks (rapor SPV butuh keenam
+-- skala, bukan hanya angka utama). Kelompok < 3 orang tetap tidak dikeluarkan.
+create or replace function public.pi_survey_segments(p_survey_id uuid, p_segment text)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with s as (select questions from pi_surveys where id = p_survey_id and p_segment = any (segments)),
+  qk as (select x->>'key' as key from s, jsonb_array_elements(s.questions) x where coalesce(x->>'type', 'text') <> 'text'),
+  r as (
+    select id, period, coalesce(nullif(answers->>p_segment, ''), 'Tidak diisi') as grp, answers
+    from pi_survey_responses where survey_id = p_survey_id and not excluded and exists (select 1 from s)
+  ),
+  g as (select period, grp, count(*) as n from r group by 1, 2),
+  v as (
+    select r.period, r.grp, qk.key, r.id, val
+    from r cross join qk
+    cross join lateral jsonb_array_elements_text(
+      case
+        when r.answers->qk.key is null or jsonb_typeof(r.answers->qk.key) = 'null' then '[]'::jsonb
+        when jsonb_typeof(r.answers->qk.key) = 'array' then r.answers->qk.key
+        else jsonb_build_array(r.answers->qk.key)
+      end) as val
+  ),
+  c as (select period, grp, key, val, count(*) as n from v group by 1, 2, 3, 4),
+  a as (select period, grp, key, count(distinct id) as answered from v group by 1, 2, 3),
+  q as (
+    select c.period, c.grp, c.key, jsonb_build_object('answered', a.answered, 'counts', jsonb_object_agg(c.val, c.n)) as obj
+    from c join a using (period, grp, key) group by c.period, c.grp, c.key, a.answered
+  ),
+  gq as (
+    select g.period, g.grp, g.n,
+           coalesce((select jsonb_object_agg(q.key, q.obj) from q where q.period = g.period and q.grp = g.grp), '{}'::jsonb) as questions
+    from g where g.n >= 3
+  ),
+  p as (select period, count(*) filter (where n < 3) as hidden from g group by 1)
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'period', p.period,
+           'hidden', p.hidden,
+           'groups', coalesce((select jsonb_object_agg(gq.grp, jsonb_build_object('n', gq.n, 'questions', gq.questions)) from gq where gq.period = p.period), '{}'::jsonb)
+         ) order by p.period), '[]'::jsonb)
+  from p
+  where public.pi_survey_visible(p_survey_id)
+$$;
+
+revoke all on function public.pi_survey_visible(uuid) from public, anon;
+grant execute on function public.pi_survey_visible(uuid) to authenticated;

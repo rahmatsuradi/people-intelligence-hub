@@ -227,6 +227,24 @@ Skema `supabase/pulse-check-schema.sql` (sudah diterapkan). Halaman `/pulse`, me
 - **Tindak lanjut gaya papan** (Belum jalan / Berjalan / Selesai) dengan `is_focus` (maks `MAX_FOCUS` = 3), `due_date`, dan `told_back` ("yang sudah disampaikan ke karyawan") — survei yang tidak pernah dijawab balik membuat orang berhenti mengisi.
 - Komentar (khusus HR) menyembunyikan nama secara bawaan; dibuka dengan centang.
 
+**Tahap 3 (26 Oktober 2026) — tiga survei Rica Rico lengkap.** Alur kerjanya dijelaskan di rekaman Fathom "4# Handover Didi (Rica Rico)" 23 Sep 2026 (Pulse = "Mandi Pas Cek" di transkrip). Prinsipnya: setiap fitur sheet punya padanan di web, dan tidak ada data yang dibuang.
+
+| Survei (`pi_surveys.key`) | Siapa menilai siapa | Data diimpor | `config.kind` |
+|---|---|---|---|
+| `pulse_bulanan` | ±30 office/SPV/CS/admin/produksi/host live menilai diri (stres, bahagia, apresiasi) | 169 jawaban + 60 action + 21 kesimpulan kategori | `pulse` |
+| `feedback_spg_bulanan` | ±150 SPG menilai SPV area | 721 jawaban Mei–Sep (43 isian ganda ditandai) | `spv_report` |
+| `feedback_360` | SPV menilai Leader SPV + sesama SPV | 11 jawaban, putaran Agu & Okt | `360` (visibility `hr`) |
+| `feedback_spg` | SPG, survei sekali (Maret) | 121 jawaban — arsip pembanding | `pulse` |
+
+- **Isian ganda tidak dihapus**: `pi_survey_responses.flags` + `excluded`. Nama sama + bulan sama → isian terakhir dipakai, sisanya `excluded = true` dan dikeluarkan dari `pi_survey_summary`/`pi_survey_segments`. Satu baris kembar persis (detik & milidetik sama) digeser 1 ms supaya lolos indeks dedupe, lalu ditandai. Simpan timestamp sampai milidetik saat impor berikutnya.
+- **`pi_surveys.config` (data, bukan kode)**: `kind` menentukan tampilan, `order` urutan tab, `visibility: 'hr'` menyembunyikan survei dari owner di policy `pi read pi_surveys` / `pi read pi_survey_actions` dan di fungsi `pi_survey_visible()` yang dipanggil kedua RPC. Diverifikasi: owner tidak melihat 360 lewat tabel, RPC, maupun id langsung.
+- **360: siapa di blok mana tidak tercatat di jawaban formulir** (judul kolom tiap blok identik). Dipastikan dari pola "Kosong" (penilai melewati bloknya sendiri): b1 Doni, b2 Rangga, b3 Teddy, b7 Paulus; Irfan = Leader (mengosongkan bagian Leader). b4 & b6 **belum dipastikan** (kemungkinan Winda/Fikih) dan tetap ditampilkan sebagai "Blok N"; HR mengisinya lewat tombol "Atur nama per blok" (`config.targets`). b5 tidak pernah terisi. Formulir punya 7 blok — `get_values` sampai kolom AZ memotong blok 7; ambil sampai BH.
+- **Penilaian diri 360 dipisah** dari rata-rata rekan (`build360`), kalau ikut dirata-ratakan orang yang menilai dirinya 5 menaikkan skornya sendiri.
+- **Rapor SPV** (`spvScorecard`): skor = rata-rata 6 skala (sama dengan "AVERAGE ALL" sheet), % nilai 4–5 per skala, kendala dituntaskan, kendala belum terjawab, partisipasi terhadap jumlah SPG aktif per `supervisor_name` di master. Partisipasi > 100% (mis. Irfan 57/46) **ditampilkan apa adanya** sebagai tanda data, bukan dipotong. Nilai 5 mendominasi dan 99% menjawab "ya" untuk refresh SOP/coaching — bedakan SPV dari porsi nilai rendah, bukan rata-rata.
+- **`pi_survey_segments` kini menghitung semua pertanyaan non-teks** (bukan hanya angka utama) supaya rapor SPV bisa dibaca owner tanpa membuka jawaban mentah.
+- **Pulse Office**: kelompok jabatan (`answers.jabatan`, pertanyaan `hidden`) dari tab Data Email; jawaban baru dari formulir web diisi otomatis dari `pi_employees.position` lewat `jabatanGroup()`. `pi_survey_conclusions` (HR saja) menyimpan kesimpulan 4 kategori Company Benefit / Work Environment / Technical Issue / Personal Issue per bulan (Feb–Jun dari sheet; bulan berikutnya diisi HR di tab Komentar). Partisipasi Juni (16/21) dicatat sebagai campaign tertutup `target_count = 21`.
+- **Per orang & apresiasi** (khusus HR): `personTrends` menandai orang yang tidak bahagia / stres tinggi ≥ 2 bulan berturut-turut — pengganti pilihan "Employee Name" di dashboard sheet. Peringkat apresiasi per bulan + kandidat Employee of the Month (di Lencir Rp150 ribu + poster; Rica Rico belum memberlakukan).
+
 ## 10. Yang belum dikerjakan
 
 - Kalender konten & riwayat employer branding, target SLA rekrutmen, dan cache ringkasan eksekutif masih hanya di browser (localStorage). Enam fitur HR inti sudah di cloud — lihat §9d.

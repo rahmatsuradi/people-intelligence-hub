@@ -245,3 +245,103 @@ describe("appreciationCounts", () => {
     ]);
   });
 });
+
+/* ─── Tahap 3: jabatan, rapor SPV, 360, tren per orang ─── */
+import { build360, jabatanGroup, personTrends, spvScorecard, type SegmentPeriod, type SurveyResponse } from "./pulse";
+
+describe("jabatanGroup", () => {
+  it("memetakan jabatan bebas ke kelompok yang bisa dibandingkan", () => {
+    expect(jabatanGroup("Store Supervisor")).toBe("Supervisor");
+    expect(jabatanGroup("Customer Service")).toBe("Admin & CS");
+    expect(jabatanGroup("Maintenance & MEP Technician")).toBe("Produksi & teknik");
+    expect(jabatanGroup("Host Live Streaming")).toBe("Host live");
+    expect(jabatanGroup("Visual Merchandiser")).toBe("Marketing, VM & HR");
+    expect(jabatanGroup("")).toBe("Tidak tercatat");
+    expect(jabatanGroup("Sopir")).toBe("Tidak tercatat");
+  });
+});
+
+describe("spvScorecard", () => {
+  const scale = (key: string): SurveyQuestion => ({ key, label: key, type: "scale", min: 1, max: 5, favorableMin: 4 });
+  const s = { questions: [scale("reach"), scale("helps"), { key: "followed", label: "f", type: "choice" as const, favorable: ["Ya, diselesaikan"] }] };
+  const seg = (groups: SegmentPeriod["groups"], period = "2026-09-01"): SegmentPeriod => ({ period, hidden: 0, groups });
+  const cur = seg({
+    Winda: { n: 4, questions: { reach: { answered: 4, counts: { "5": 2, "2": 2 } }, helps: { answered: 4, counts: { "4": 4 } }, followed: { answered: 2, counts: { "Ya, diselesaikan": 1, "Belum ada tindak lanjut": 1 } } } },
+    Rangga: { n: 3, questions: { reach: { answered: 3, counts: { "5": 3 } }, helps: { answered: 3, counts: { "5": 3 } } } },
+  });
+  const prev = seg({ Winda: { n: 3, questions: { reach: { answered: 3, counts: { "5": 3 } }, helps: { answered: 3, counts: { "5": 3 } } } } }, "2026-08-01");
+  const out = spvScorecard(s, cur, prev, { Winda: 2, Rangga: 3 }, ["reach", "helps"]);
+
+  it("skor terendah di atas; skor = rata-rata skala", () => {
+    expect(out.map((r) => r.spv)).toEqual(["Winda", "Rangga"]);
+    expect(out[0].score).toBe(3.75); // reach 3.5, helps 4
+    expect(out[0].scorePrev).toBe(5);
+  });
+
+  it("partisipasi > 100% ditampilkan apa adanya; skala terlemah & tindak lanjut", () => {
+    expect(out[0].participation).toBe(200);
+    expect(out[0].weakest).toEqual({ key: "reach", pct: 50 });
+    expect(out[0].followed).toBe(50);
+    expect(out[1].followed).toBeNull();
+  });
+
+  it("tanpa data periode = kosong", () => {
+    expect(spvScorecard(s, null, null, {}, ["reach"])).toEqual([]);
+  });
+});
+
+describe("build360", () => {
+  const cfg = { leader: "Irfan", targets: { b1: "Doni", b2: null } };
+  const rs: { period: string; respondent_name: string; answers: Record<string, string | number> }[] = [
+    { period: "2026-08-01", respondent_name: "Rangga", answers: { rater: "Rangga", leader_a: 4, leader_b: 2, leader_strength: "Membantu", p1_x: 4, p1_y: 2, p1_improve: "Lebih teliti", p2_x: 5, p2_y: 5 } },
+    { period: "2026-08-01", respondent_name: "Doni", answers: { rater: "Doni", leader_a: 2, leader_b: 2, leader_improve: "-", p1_x: 5, p1_y: 5, p2_x: 3, p2_y: 3 } },
+  ];
+  const out = build360(cfg, rs, ["x", "y"], ["leader_a", "leader_b"]);
+
+  it("leader: rata-rata per penilai lalu antar-penilai; teks '-' dibuang", () => {
+    const p = out.leader.periods["2026-08-01"];
+    expect(p.byRater).toEqual([{ rater: "Rangga", avg: 3 }, { rater: "Doni", avg: 2 }]);
+    expect(p.avg).toBe(2.5);
+    expect(p.strengths).toEqual([{ rater: "Rangga", text: "Membantu" }]);
+    expect(p.improvements).toEqual([]);
+  });
+
+  it("penilaian diri dipisah dari rata-rata rekan", () => {
+    const doni = out.targets.find((t) => t.block === "b1")!.periods["2026-08-01"];
+    expect(doni.self).toBe(5);
+    expect(doni.raters).toBe(1);
+    expect(doni.avg).toBe(3);
+    expect(doni.items).toEqual({ x: 4, y: 2 });
+  });
+
+  it("blok tanpa nama tetap muncul dan semua penilai dihitung", () => {
+    const b2 = out.targets.find((t) => t.block === "b2")!;
+    expect(b2.name).toBeNull();
+    expect(b2.periods["2026-08-01"].raters).toBe(2);
+    expect(b2.periods["2026-08-01"].avg).toBe(4);
+  });
+});
+
+describe("personTrends", () => {
+  const sv = { questions: [happyK, stressK], headline: ["happiness", "stress"] };
+  const r = (id: string, period: string, h: string, st: string, extra: Partial<SurveyResponse> = {}): SurveyResponse =>
+    ({ id, survey_id: "s", period, submitted_at: null, respondent_name: "Ani", respondent_email: "ani@x", employee_id: null, answers: { happiness: h, stress: st, jabatan: "Admin & CS" }, ...extra });
+  const out = personTrends(sv, [
+    r("1", "2026-07-01", "Bahagia", "Setiap hari"),
+    r("2", "2026-08-01", "Tidak Bahagia", "Setiap hari"),
+    r("3", "2026-09-01", "Tidak Bahagia", "Tidak sama sekali"),
+    r("4", "2026-09-01", "Bahagia", "Setiap hari", { excluded: true }),
+    r("5", "2026-09-01", "Bahagia", "Tidak sama sekali", { respondent_email: "budi@x", respondent_name: "Budi" }),
+  ]);
+
+  it("mengelompokkan per orang, urut bulan, dan melewati isian yang dikeluarkan", () => {
+    expect(out.map((p) => p.name)).toEqual(["Ani", "Budi"]);
+    expect(out[0].points.map((p) => p.period)).toEqual(["2026-07-01", "2026-08-01", "2026-09-01"]);
+    expect(out[0].jabatan).toBe("Admin & CS");
+  });
+
+  it("menandai risiko ≥ 2 bulan berturut-turut", () => {
+    expect(out[0].alerts).toEqual(["Tidak indeks bahagia 2 bulan berturut-turut", "Stres tinggi 2 bulan berturut-turut"]);
+    expect(out[1].alerts).toEqual([]);
+  });
+});

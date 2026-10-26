@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { periodLabel, validateSubmission, type SurveyQuestion } from "@/lib/rr/pulse";
+import { jabatanGroup, periodLabel, validateSubmission, type SurveyQuestion } from "@/lib/rr/pulse";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,8 +84,12 @@ export async function POST(request: NextRequest) {
   if (errors.length) return NextResponse.json({ error: errors[0], errors }, { status: 400 });
 
   // Tautkan ke master karyawan hanya bila namanya cocok tepat ke SATU orang.
-  const { data: emps } = await supabaseAdmin!.from("pi_employees").select("id, full_name").eq("tenant_id", row!.tenant_id);
+  const { data: emps } = await supabaseAdmin!.from("pi_employees").select("id, full_name, position").eq("tenant_id", row!.tenant_id);
   const hitsByName = (emps ?? []).filter((e) => norm(e.full_name as string) === norm(name));
+  // Kelompok jabatan (pertanyaan tersembunyi) diisi dari master karyawan, bukan ditanyakan.
+  if (row!.pi_surveys!.questions.some((q) => q.key === "jabatan" && q.hidden)) {
+    answers.jabatan = jabatanGroup(hitsByName.length === 1 ? (hitsByName[0].position as string | null) : null);
+  }
 
   const { error: insErr } = await supabaseAdmin!.from("pi_survey_responses").insert({
     tenant_id: row!.tenant_id, survey_id: row!.survey_id, campaign_id: row!.id, period: row!.period,
