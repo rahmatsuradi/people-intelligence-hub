@@ -88,9 +88,9 @@ export function SpvReport({ survey, segments, period, roster, summary }: { surve
   );
 }
 
-const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x)}%`);
+export const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x)}%`);
 /** Warna sel peta panas: 4 tingkat; arah risiko dibalik. Teks tetap token ink agar terbaca di kedua mode. */
-function cell(v: number | null, risk: boolean): React.CSSProperties {
+export function cell(v: number | null, risk: boolean): React.CSSProperties {
   if (v === null) return { background: "var(--v-track)", color: "var(--v-muted)" };
   const good = risk ? 100 - v : v;
   if (good >= 90) return { background: "var(--v-pos2)", color: "#fff" };

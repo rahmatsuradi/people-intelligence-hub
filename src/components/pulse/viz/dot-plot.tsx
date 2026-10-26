@@ -11,8 +11,8 @@ export interface DotRow { key: string; label: string; sub?: string; current: num
  * nol menyesatkan, sedangkan dot plot sah memakai sumbu yang tidak dimulai dari nol. Nilai terbaru ada
  * di kolom kanan (kolom angka, bukan label per titik).
  */
-export function DotPlot({ rows, domain, ticks, currentLabel, previousLabel, highlight }: {
-  rows: DotRow[]; domain: [number, number]; ticks: number[]; currentLabel: string; previousLabel: string; highlight?: string;
+export function DotPlot({ rows, domain, ticks, currentLabel, previousLabel, highlight, unit = "SPG", labelWidth = 110 }: {
+  rows: DotRow[]; domain: [number, number]; ticks: number[]; currentLabel: string; previousLabel: string; highlight?: string; unit?: string; labelWidth?: number;
 }) {
   const { ref, at, atEl, hide, node } = useTip();
   const [lo, hi] = domain;
@@ -21,7 +21,7 @@ export function DotPlot({ rows, domain, ticks, currentLabel, previousLabel, high
 
   return (
     <div ref={ref} className="relative">
-      <div className="grid grid-cols-[110px_1fr_92px] items-end gap-2 pb-1 text-[10px] text-slate-400">
+      <div className="grid items-end gap-2 pb-1 text-[10px] text-slate-400" style={{ gridTemplateColumns: `${labelWidth}px 1fr 92px` }}>
         <span />
         <div className="relative h-4">{ticks.map((t) => <span key={t} className="absolute -translate-x-1/2" style={{ left: `${x(t)}%` }}>{fmtNum(t, 1)}</span>)}</div>
         <span className="text-right">{currentLabel} · Δ</span>
@@ -29,14 +29,14 @@ export function DotPlot({ rows, domain, ticks, currentLabel, previousLabel, high
       <div>
         {rows.map((r) => {
           const d = r.current !== null && r.previous !== null ? r.current - r.previous : null;
-          const tip = { title: r.label, sub: `${r.n} SPG menjawab`, rows: [
+          const tip = { title: r.label, sub: `${r.n} ${unit} menjawab`, rows: [
             { color: "var(--v-s1)", label: currentLabel, value: fmtNum(r.current) },
             ...(r.previous !== null ? [{ color: "var(--v-muted)", label: previousLabel, value: fmtNum(r.previous), ring: true }] : []),
             ...(d !== null ? [{ label: "Selisih", value: `${d > 0 ? "+" : ""}${fmtNum(d)}` }] : []),
             ...(r.note ? [{ label: r.note, value: "" }] : []),
           ] };
           return (
-            <div key={r.key} className="grid grid-cols-[110px_1fr_92px] items-center gap-2" style={{ height: rowH }}>
+            <div key={r.key} className="grid items-center gap-2" style={{ height: rowH, gridTemplateColumns: `${labelWidth}px 1fr 92px` }}>
               <div className="min-w-0 truncate text-xs text-slate-700 dark:text-slate-200">{r.label}{r.sub && <span className="ml-1 text-[10px] text-slate-400">{r.sub}</span>}</div>
               <div className="relative h-full" tabIndex={0} role="img" aria-label={`${r.label}: ${fmtNum(r.current)}, bulan lalu ${fmtNum(r.previous)}`}
                 onPointerMove={(e) => at(e, tip)} onPointerLeave={hide} onFocus={(e) => atEl(e.currentTarget, tip)} onBlur={hide}>

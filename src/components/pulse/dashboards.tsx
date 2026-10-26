@@ -53,7 +53,7 @@ function likertTable(rows: ShareRow[], levels: LikertLevel[]): TableView {
   };
 }
 
-function LikertCard({ question, levels, mode, summary, period, setPeriod, title, subtitle, legendLabels }: {
+export function LikertCard({ question, levels, mode, summary, period, setPeriod, title, subtitle, legendLabels }: {
   question: SurveyQuestion; levels: LikertLevel[]; mode: "diverging" | "share"; summary: PeriodSummary[]; period: string; setPeriod: (p: string) => void;
   title: string; subtitle: string; legendLabels?: Record<string, string>;
 }) {
@@ -68,7 +68,7 @@ function LikertCard({ question, levels, mode, summary, period, setPeriod, title,
   );
 }
 
-function TrendCard({ survey, summary, period, setPeriod, title, subtitle }: { survey: Survey; summary: PeriodSummary[]; period: string; setPeriod: (p: string) => void; title: string; subtitle: string }) {
+export function TrendCard({ survey, summary, period, setPeriod, title, subtitle }: { survey: Survey; summary: PeriodSummary[]; period: string; setPeriod: (p: string) => void; title: string; subtitle: string }) {
   const idx = summary.findIndex((p) => p.period === period);
   const window = summary.slice(0, idx + 1).slice(-WINDOW);
   const series: TrendSeries[] = survey.headline.map((k, i) => ({ key: k, q: q(survey, k) })).filter((x): x is { key: string; q: SurveyQuestion } => !!x.q && !!(x.q.favorable?.length || x.q.risk?.length || x.q.favorableMin !== undefined))
@@ -83,7 +83,7 @@ function TrendCard({ survey, summary, period, setPeriod, title, subtitle }: { su
   );
 }
 
-function ThemeCard({ survey, themes, period, setPeriod, title, subtitle, unit }: { survey: Survey; themes: ThemePeriod[]; period: string; setPeriod: (p: string) => void; title: string; subtitle: string; unit: string }) {
+export function ThemeCard({ survey, themes, period, setPeriod, title, subtitle, unit }: { survey: Survey; themes: ThemePeriod[]; period: string; setPeriod: (p: string) => void; title: string; subtitle: string; unit: string }) {
   const defs = survey.config.themes ?? [];
   const idx = themes.findIndex((t) => t.period === period);
   const window = themes.slice(0, idx + 1).slice(-WINDOW);

@@ -13,6 +13,7 @@
    Logika hitung ada di src/lib/rr/pulse*.ts (diuji); grafik di src/components/pulse/viz; halaman ini hanya merangkai.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell, Button, Card, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
@@ -215,6 +216,7 @@ export default function PulsePage() {
                   </select>
                 </>
               )}
+              <Link href="/pulse/presentasi" className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Mode presentasi</Link>
               {guideHidden && view === HOME && <Button size="sm" variant="ghost" onClick={() => hideGuide(false)}>Cara pakai</Button>}
             </div>
           </div>
