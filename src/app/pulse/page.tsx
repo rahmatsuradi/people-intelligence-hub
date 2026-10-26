@@ -76,7 +76,7 @@ export default function PulsePage() {
       isHr ? loadRaisers() : Promise.resolve(new Map<string, string>()),
       isHr ? loadResponses(surveyId) : Promise.resolve([] as SurveyResponse[]),
       kind === "spv_report" ? loadSpgCountBySpv() : Promise.resolve({} as Record<string, number>),
-      isHr && kind === "pulse" ? loadConclusions(surveyId) : Promise.resolve([] as Conclusion[]),
+      isHr && kind !== "360" ? loadConclusions(surveyId) : Promise.resolve([] as Conclusion[]),
       isHr && kind === "pulse" ? loadEmployeeNames() : Promise.resolve([] as string[]),
     ])
       .then(([s, a, c, seg, r, rs, ro, co, en]) => {
@@ -99,7 +99,9 @@ export default function PulsePage() {
   const sig = useMemo(() => survey && period ? buildSignals({
     survey, summaries: summary, period, actions, segments: segNow, segmentLabel: SEGMENT_LABEL[segKey] ?? segKey, targetCount: campaign?.target_count,
   }) : [], [survey, summary, period, actions, segNow, segKey, campaign]);
-  const periods = [...new Set([...summary.map((p) => p.period), ...campaigns.map((c) => c.period)])].sort().reverse();
+  // Siklus = bulan yang SUDAH punya jawaban. Link untuk bulan berikutnya (belum ada jawaban)
+  // hanya tampil di tab Kirim survei — kalau ikut di sini, terlihat seolah datanya sudah ada.
+  const periods = [...new Set(summary.map((p) => p.period))].sort().reverse();
   const openCount = actions.filter((a) => a.status === "belum" || a.status === "berjalan").length;
   const commentCount = responses.filter((r) => r.period === period).length;
 
@@ -240,7 +242,7 @@ export default function PulsePage() {
               {tab === "rapor" && kind === "360" && isHr && <Report360 survey={survey} responses={responses} canEdit={canEdit} onSaved={() => loadSurveys().then(setSurveys)} />}
               {tab === "orang" && isHr && <People survey={survey} responses={responses} period={period} employeeNames={employeeNames} />}
               {tab === "komentar" && isHr && <Comments survey={survey} responses={responses} period={period}
-                conclusions={kind === "pulse" ? conclusions : undefined} onConclusionSaved={() => loadConclusions(survey.id).then(setConclusions)} />}
+                conclusions={kind !== "360" ? conclusions : undefined} onConclusionSaved={() => loadConclusions(survey.id).then(setConclusions)} />}
               {tab === "detail" && <Details survey={survey} current={current} />}
               {tab === "kirim" && isHr && <Campaigns survey={survey} summary={summary} campaigns={campaigns} reload={reload} />}
             </>

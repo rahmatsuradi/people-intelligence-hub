@@ -122,6 +122,7 @@ export const RESPONSE_FLAG_LABEL: Record<string, string> = {
   isian_ganda_bulan_sama: "Isian ganda di bulan yang sama — tidak dihitung, isian terakhir yang dipakai",
   punya_isian_ganda: "Orang ini mengisi lebih dari sekali bulan ini — isian ini yang dihitung",
   baris_kembar_persis: "Baris kembar persis dari Google Form — tidak dihitung",
+  bulan_belum_dilabel_hr: "Belum diberi bulan oleh HR di sheet (diisi setelah siklus ditutup) — tidak dihitung ke bulan mana pun",
 };
 
 export type ActionStatus = "belum" | "berjalan" | "selesai" | "dibatalkan";
