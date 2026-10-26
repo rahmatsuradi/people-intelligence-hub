@@ -1,56 +1,63 @@
 "use client";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Pulse Check & Feedback — dirancang mengikuti pola HRIS survei karyawan
-   (Culture Amp, Peakon/Workday, Lattice): satu siklus per bulan → link isi →
-   skor "% favorable" & tren → rincian per kelompok → komentar bertema →
-   maksimal 3 fokus → tindak lanjut → kabari balik karyawan.
-   Logika hitung ada di src/lib/rr/pulse.ts (diuji); halaman ini hanya merangkai.
+   Pulse Check & Feedback — "Suara Karyawan" Rica Rico.
+
+   Struktur (sama di setiap survei, supaya tidak perlu belajar ulang):
+     Ikhtisar  → tiga survei dalam satu layar untuk bulan terbaru
+     Survei    → Pulse Office · SPG → SPV · 360 SPV   (Arsip: survei lama/sekali)
+     Tab       → Dashboard · [Rapor] · Tindak lanjut · [Per orang] · Komentar · Pertanyaan · Kirim
+
+   Pola HRIS survei (Culture Amp, Peakon, Lattice): satu siklus per bulan → link isi → angka utama & tren →
+   rincian per kelompok → komentar bertema → maksimal 3 fokus → tindak lanjut → kabari balik.
+   Logika hitung ada di src/lib/rr/pulse*.ts (diuji); grafik di src/components/pulse/viz; halaman ini hanya merangkai.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AppShell, Button, Card, Label, inputClass, cn } from "@/components/app-shell";
+import { AppShell, Button, Card, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { useRole } from "@/lib/roles";
 import {
-  ACTION_STATUS_LABEL, deleteAction, loadActions, loadCampaigns, loadConclusions, loadEmployeeNames, loadInsight, loadRaisers, loadResponses, loadSegments,
-  loadSpgCountBySpv, loadSummary, loadSurveys,
-  periodLabel, saveAction, signals as buildSignals,
-  type ActionStatus, type Campaign, type Conclusion, type PeriodSummary, type SegmentPeriod, type StoredInsight, type Survey, type SurveyAction, type SurveyResponse,
+  deleteAction, loadActions, loadCampaigns, loadConclusions, loadEmployeeNames, loadInsight, loadRaisers, loadResponses, loadSegments,
+  loadSpgCountBySpv, loadSummary, loadSurveys, loadThemes, periodLabel, saveAction, signals as buildSignals,
+  type Campaign, type Conclusion, type PeriodSummary, type SegmentPeriod, type StoredInsight, type Survey, type SurveyAction, type SurveyResponse, type ThemePeriod,
 } from "@/lib/rr/pulse";
 import type { InsightContent } from "@/lib/rr/pulse-insight";
-import { Overview } from "@/components/pulse/overview";
 import { ActionsBoard } from "@/components/pulse/actions-board";
-import { Comments } from "@/components/pulse/comments";
-import { Details } from "@/components/pulse/details";
+import { ActionModal, type ActionDraft } from "@/components/pulse/action-modal";
 import { Campaigns } from "@/components/pulse/campaigns";
-import { SpvReport } from "@/components/pulse/spv-report";
-import { Report360 } from "@/components/pulse/report-360";
+import { Comments } from "@/components/pulse/comments";
+import { PulseDashboard, SpgDashboard } from "@/components/pulse/dashboards";
+import { Details } from "@/components/pulse/details";
+import { Ikhtisar } from "@/components/pulse/ikhtisar";
 import { People } from "@/components/pulse/people";
+import { Report360 } from "@/components/pulse/report-360";
+import { SpvReport } from "@/components/pulse/spv-report";
 
-type Tab = "ringkasan" | "rapor" | "tindak" | "orang" | "komentar" | "detail" | "kirim";
+type Tab = "dash" | "rapor" | "tindak" | "orang" | "komentar" | "detail" | "kirim";
 const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area", jabatan: "Kelompok jabatan" };
-type Draft = Partial<SurveyAction> & { raised_by?: string };
 const GUIDE_KEY = "pulse-guide-hidden";
+const HOME = "ikhtisar";
 
 export default function PulsePage() {
   const { role, loading: roleLoading, canEdit } = useRole();
   const isHr = role === "hr";
   const [surveys, setSurveys] = useState<Survey[]>([]);
-  const [surveyId, setSurveyId] = useState("");
+  const [view, setView] = useState<string>(HOME);
   const [summary, setSummary] = useState<PeriodSummary[]>([]);
-  const [segments, setSegments] = useState<SegmentPeriod[]>([]);
+  const [segmentsBy, setSegmentsBy] = useState<Record<string, SegmentPeriod[]>>({});
+  const [themes, setThemes] = useState<ThemePeriod[]>([]);
   const [actions, setActions] = useState<SurveyAction[]>([]);
   const [raisers, setRaisers] = useState<Map<string, string>>(new Map());
   const [responses, setResponses] = useState<SurveyResponse[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [insight, setInsight] = useState<StoredInsight | null>(null);
   const [period, setPeriod] = useState("");
-  const [tab, setTab] = useState<Tab>("ringkasan");
+  const [tab, setTab] = useState<Tab>("dash");
   const [loading, setLoading] = useState(true);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<ActionDraft | null>(null);
   const [guideHidden, setGuideHidden] = useState(true);
-  const [segChoice, setSegChoice] = useState("");
+  const [showArchive, setShowArchive] = useState(false);
   const [roster, setRoster] = useState<Record<string, number>>({});
   const [conclusions, setConclusions] = useState<Conclusion[]>([]);
   const [employeeNames, setEmployeeNames] = useState<string[]>([]);
@@ -58,57 +65,63 @@ export default function PulsePage() {
   useEffect(() => {
     try { setGuideHidden(localStorage.getItem(GUIDE_KEY) === "1"); } catch { setGuideHidden(false); }
     loadSurveys()
-      .then((s) => { setSurveys(s); setSurveyId((cur) => cur || s.find((x) => x.key === "pulse_bulanan")?.id || s[0]?.id || ""); })
+      .then(setSurveys)
       .catch((e: Error) => toast(`Gagal memuat survei: ${e.message}`, "error"))
       .finally(() => setLoading(false));
   }, []);
 
-  const survey = surveys.find((s) => s.id === surveyId);
+  const main = surveys.filter((s) => !s.config.archived);
+  const archived = surveys.filter((s) => s.config.archived);
+  const survey = view === HOME ? undefined : surveys.find((s) => s.id === view);
   const kind = survey?.config?.kind ?? "pulse";
-  const segKey = (segChoice && survey?.segments.includes(segChoice) ? segChoice : survey?.segments?.[0]) ?? "";
+  const segKeys = (survey?.segments ?? []).join(",");
 
   const reload = useCallback(() => {
-    if (!surveyId || roleLoading) return;
+    if (!survey || roleLoading) return;
     setLoading(true);
+    const keys = survey.segments;
     Promise.all([
-      loadSummary(surveyId), loadActions(surveyId), loadCampaigns(surveyId),
-      segKey ? loadSegments(surveyId, segKey) : Promise.resolve([] as SegmentPeriod[]),
+      loadSummary(survey.id), loadActions(survey.id), loadCampaigns(survey.id),
+      Promise.all(keys.map((k) => loadSegments(survey.id, k))),
+      survey.config.themes?.length ? loadThemes(survey.id) : Promise.resolve([] as ThemePeriod[]),
       isHr ? loadRaisers() : Promise.resolve(new Map<string, string>()),
-      isHr ? loadResponses(surveyId) : Promise.resolve([] as SurveyResponse[]),
+      isHr ? loadResponses(survey.id) : Promise.resolve([] as SurveyResponse[]),
       kind === "spv_report" ? loadSpgCountBySpv() : Promise.resolve({} as Record<string, number>),
-      isHr && kind !== "360" ? loadConclusions(surveyId) : Promise.resolve([] as Conclusion[]),
+      isHr && kind !== "360" ? loadConclusions(survey.id) : Promise.resolve([] as Conclusion[]),
       isHr && kind === "pulse" ? loadEmployeeNames() : Promise.resolve([] as string[]),
     ])
-      .then(([s, a, c, seg, r, rs, ro, co, en]) => {
-        setSummary(s); setActions(a); setCampaigns(c); setSegments(seg); setRaisers(r); setResponses(rs); setRoster(ro); setConclusions(co); setEmployeeNames(en);
+      .then(([s, a, c, segs, th, r, rs, ro, co, en]) => {
+        setSummary(s); setActions(a); setCampaigns(c); setThemes(th); setRaisers(r); setResponses(rs); setRoster(ro); setConclusions(co); setEmployeeNames(en);
+        setSegmentsBy(Object.fromEntries(keys.map((k, i) => [k, segs[i]])));
         setPeriod((cur) => (cur && s.some((p) => p.period === cur) ? cur : [...s].reverse().find((p) => !p.suppressed)?.period ?? s.at(-1)?.period ?? ""));
       })
       .catch((e: Error) => toast(`Gagal memuat: ${e.message}`, "error"))
       .finally(() => setLoading(false));
-  }, [surveyId, segKey, kind, isHr, roleLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [survey?.id, segKeys, kind, isHr, roleLoading]);
   useEffect(reload, [reload]);
 
   useEffect(() => {
-    if (!surveyId || !period) { setInsight(null); return; }
-    loadInsight(surveyId, period).then(setInsight).catch(() => setInsight(null));
-  }, [surveyId, period]);
+    if (!survey || !period) { setInsight(null); return; }
+    loadInsight(survey.id, period).then(setInsight).catch(() => setInsight(null));
+  }, [survey, period]);
 
-  const current = summary.find((p) => p.period === period);
   const campaign = campaigns.find((c) => c.period === period) ?? null;
-  const segNow = segments.find((s) => s.period === period) ?? null;
+  const segKey = survey?.segments?.[0] ?? "";
   const sig = useMemo(() => survey && period ? buildSignals({
-    survey, summaries: summary, period, actions, segments: segNow, segmentLabel: SEGMENT_LABEL[segKey] ?? segKey, targetCount: campaign?.target_count,
-  }) : [], [survey, summary, period, actions, segNow, segKey, campaign]);
-  // Siklus = bulan yang SUDAH punya jawaban. Link untuk bulan berikutnya (belum ada jawaban)
-  // hanya tampil di tab Kirim survei — kalau ikut di sini, terlihat seolah datanya sudah ada.
+    survey, summaries: summary, period, actions, segments: segmentsBy[segKey]?.find((s) => s.period === period) ?? null,
+    segmentLabel: SEGMENT_LABEL[segKey] ?? segKey, targetCount: campaign?.target_count,
+  }) : [], [survey, summary, period, actions, segmentsBy, segKey, campaign]);
+  // Siklus = bulan yang SUDAH punya jawaban. Link bulan berikutnya hanya tampil di tab Kirim survei.
   const periods = [...new Set(summary.map((p) => p.period))].sort().reverse();
   const openCount = actions.filter((a) => a.status === "belum" || a.status === "berjalan").length;
-  const commentCount = responses.filter((r) => r.period === period).length;
+  const commentCount = responses.filter((r) => r.period === period && !r.excluded).length;
 
   const hideGuide = (v: boolean) => { setGuideHidden(v); try { localStorage.setItem(GUIDE_KEY, v ? "1" : "0"); } catch { /* abaikan */ } };
-  const switchSurvey = (id: string) => {
-    setSurveyId(id); setPeriod(""); setSegChoice("");
-    setTab(surveys.find((s) => s.id === id)?.config?.kind === "360" ? "rapor" : "ringkasan");
+  const open = (id: string) => {
+    const s = surveys.find((x) => x.id === id);
+    setView(id); setPeriod(""); setShowArchive(false);
+    setTab(s?.config.kind === "360" ? "rapor" : s?.config.kind === "archive" ? "detail" : "dash");
   };
 
   const submitDraft = async () => {
@@ -144,43 +157,69 @@ export default function PulsePage() {
   });
 
   const tabs: [Tab, string][] = kind === "360" ? [
-    ["rapor", "Rapor 360"], ["komentar", "Komentar"], ["detail", "Detail pertanyaan"], ["kirim", "Kirim survei"],
+    ["rapor", "Rapor 360"], ["komentar", "Komentar"], ["detail", "Pertanyaan"], ["kirim", "Kirim survei"],
+  ] : kind === "archive" ? [
+    ["detail", "Hasil survei"], ["komentar", "Komentar"],
   ] : [
-    ["ringkasan", "Ringkasan"],
+    ["dash", "Dashboard"],
     ...(kind === "spv_report" ? [["rapor", "Rapor SPV"] as [Tab, string]] : []),
     ["tindak", `Tindak lanjut (${openCount})`],
     ...(isHr && kind === "pulse" ? [["orang", "Per orang & apresiasi"] as [Tab, string]] : []),
     ...(isHr ? [["komentar", "Komentar"] as [Tab, string]] : []),
-    ["detail", "Detail pertanyaan"],
+    ["detail", "Pertanyaan"],
     ...(isHr ? [["kirim", "Kirim survei"] as [Tab, string]] : []),
   ];
+  const visibleTabs = tabs.filter(([k]) => k !== "komentar" || isHr);
+  const current = summary.find((p) => p.period === period);
+  const dashProps = survey ? {
+    survey, summary, period, setPeriod, themes, segmentsBy, targetCount: campaign?.target_count ?? null, signals: sig,
+    insight, setInsight, isHr, onAddAction: fromInsight,
+  } : null;
 
   return (
     <AppShell activeNavId="pulse" title="Pulse Check & Feedback" subtitle="Dengar karyawan tiap bulan, putuskan fokus, dan kabari balik">
       {!loading && surveys.length === 0 && <Card><p className="text-sm text-slate-600 dark:text-slate-300">Belum ada survei tersimpan.</p></Card>}
 
-      {survey && (
+      {surveys.length > 0 && (
         <>
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
-              {surveys.map((s) => (
-                <button key={s.id} type="button" onClick={() => switchSurvey(s.id)}
-                  className={cn("rounded-md px-3 py-1.5 text-sm", s.id === surveyId ? "bg-blue-600 font-medium text-white" : "text-slate-600 dark:text-slate-300")}>{s.title}</button>
+            <nav aria-label="Survei" className="inline-flex flex-wrap rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+              <button type="button" onClick={() => { setView(HOME); setShowArchive(false); }}
+                className={cn("rounded-md px-3 py-1.5 text-sm", view === HOME ? "bg-blue-600 font-medium text-white" : "text-slate-600 dark:text-slate-300")}>Ikhtisar</button>
+              {main.map((s) => (
+                <button key={s.id} type="button" onClick={() => open(s.id)}
+                  className={cn("rounded-md px-3 py-1.5 text-sm", view === s.id ? "bg-blue-600 font-medium text-white" : "text-slate-600 dark:text-slate-300")}>{s.config.navLabel ?? s.title}</button>
               ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Siklus</span>
-              <select className={cn(inputClass, "w-auto")} value={period} onChange={(e) => setPeriod(e.target.value)}>
-                {periods.map((p) => {
-                  const s = summary.find((x) => x.period === p);
-                  return <option key={p} value={p}>{periodLabel(p)} — {s ? `${s.n} jawaban` : "belum ada jawaban"}</option>;
-                })}
-              </select>
-              {guideHidden && <Button size="sm" variant="ghost" onClick={() => hideGuide(false)}>Cara pakai</Button>}
+            </nav>
+            <div className="flex flex-wrap items-center gap-2">
+              {archived.length > 0 && (
+                <div className="relative">
+                  <Button size="sm" variant="ghost" onClick={() => setShowArchive((v) => !v)} aria-expanded={showArchive}>Arsip ▾</Button>
+                  {showArchive && (
+                    <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                      {archived.map((s) => (
+                        <button key={s.id} type="button" onClick={() => open(s.id)} className="block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <span className="font-medium text-slate-800 dark:text-slate-100">{s.config.navLabel ?? s.title}</span>
+                          <span className="block text-slate-500">{s.config.who}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {survey && kind !== "archive" && (
+                <>
+                  <span className="text-xs text-slate-500">Bulan yang dinilai</span>
+                  <select className={inputClass} style={{ width: "auto" }} value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Bulan yang dinilai">
+                    {periods.map((p) => <option key={p} value={p}>{periodLabel(p)} — {summary.find((x) => x.period === p)?.n ?? 0} jawaban</option>)}
+                  </select>
+                </>
+              )}
+              {guideHidden && view === HOME && <Button size="sm" variant="ghost" onClick={() => hideGuide(false)}>Cara pakai</Button>}
             </div>
           </div>
 
-          {!guideHidden && (
+          {view === HOME && !guideHidden && (
             <Card className="bg-gradient-to-r from-blue-50 to-amber-50 dark:from-blue-950/30 dark:to-amber-950/20">
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Cara pakai — 4 langkah tiap bulan</h2>
@@ -188,15 +227,14 @@ export default function PulsePage() {
               </div>
               <ol className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  ["1. Kirim link", "Awal bulan, buat link untuk bulan lalu lalu tempel pesannya ke grup WA.", isHr ? "kirim" : null],
-                  ["2. Baca hasil", "Lihat angka utama, tren, dan bagian \"Perlu diperhatikan\". Buat insight AI.", "ringkasan"],
-                  ["3. Pilih fokus", "Dari usulan AI dan komentar, pilih paling banyak 3 hal untuk dikerjakan.", "tindak"],
-                  ["4. Kabari balik", "Saat selesai, catat apa yang disampaikan ke karyawan — supaya mereka mau mengisi lagi.", "tindak"],
-                ].map(([t, d, go]) => (
+                  ["1. Kirim link", "Awal bulan (SPG: tanggal 22–23), buat link lalu tempel pesannya ke grup WA. Buka survei → tab Kirim survei."],
+                  ["2. Baca hasil", "Mulai dari Ikhtisar, lalu buka dashboard survei yang angkanya bergeser. Buat insight AI bila perlu."],
+                  ["3. Pilih fokus", "Dari usulan dan komentar, pilih paling banyak 3 hal untuk dikerjakan (tab Tindak lanjut)."],
+                  ["4. Kabari balik", "Saat selesai, catat apa yang disampaikan ke karyawan — supaya mereka mau mengisi lagi."],
+                ].map(([t, d]) => (
                   <li key={t} className="rounded-lg bg-white/80 p-3 dark:bg-slate-900/70">
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">{t}</p>
                     <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{d}</p>
-                    {go && <button type="button" className="mt-1.5 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300" onClick={() => setTab(go as Tab)}>Buka →</button>}
                   </li>
                 ))}
               </ol>
@@ -209,87 +247,47 @@ export default function PulsePage() {
             </p>
           )}
 
-          <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
-            {tabs.map(([k, label]) => (
-              <button key={k} type="button" onClick={() => setTab(k)}
-                className={cn("-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm", tab === k ? "border-blue-600 font-medium text-blue-700 dark:text-blue-300" : "border-transparent text-slate-500")}>
-                {label}{k === "komentar" && commentCount ? ` (${commentCount})` : ""}
-              </button>
-            ))}
-          </div>
-
-          {loading && !summary.length ? <Card><p className="text-sm text-slate-500">Memuat…</p></Card> : (
+          {view === HOME ? <Ikhtisar surveys={surveys} isHr={isHr} onOpen={open} /> : survey && dashProps && (
             <>
-              {tab === "ringkasan" && survey.segments.length > 1 && (
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  Bandingkan per
-                  <select className={cn(inputClass, "w-auto py-1 text-xs")} value={segKey} onChange={(e) => setSegChoice(e.target.value)}>
-                    {survey.segments.map((k) => <option key={k} value={k}>{SEGMENT_LABEL[k] ?? k}</option>)}
-                  </select>
+              {kind === "archive" && <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">Arsip pembanding: {survey.config.who}. Pertanyaannya berbeda dari Feedback SPG Bulanan, jadi angkanya tidak digabung.</p>}
+              <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
+                {visibleTabs.map(([k, label]) => (
+                  <button key={k} type="button" onClick={() => setTab(k)}
+                    className={cn("-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm", tab === k ? "border-blue-600 font-medium text-blue-700 dark:text-blue-300" : "border-transparent text-slate-500")}>
+                    {label}{k === "komentar" && commentCount ? ` (${commentCount})` : ""}
+                  </button>
+                ))}
+              </div>
+
+              {loading && !summary.length ? <Card><p className="text-sm text-slate-500">Memuat…</p></Card> : (
+                <div className={cn(loading && "opacity-60 transition-opacity")}>
+                  {tab === "dash" && kind === "pulse" && <PulseDashboard {...dashProps} />}
+                  {tab === "dash" && kind === "spv_report" && <SpgDashboard {...dashProps} />}
+                  {tab === "rapor" && kind === "spv_report" && <SpvReport survey={survey} segments={segmentsBy.spv ?? []} period={period} roster={roster} summary={summary} />}
+                  {tab === "rapor" && kind === "360" && isHr && <Report360 survey={survey} responses={responses} canEdit={canEdit} onSaved={() => loadSurveys().then(setSurveys)} />}
+                  {tab === "tindak" && (
+                    <ActionsBoard actions={actions} raisers={raisers} isHr={isHr} canEdit={canEdit} period={period}
+                      onAdd={() => setDraft({ status: "belum", period, raised_by: "" })} onEdit={(a) => setDraft({ ...a, raised_by: raisers.get(a.id) ?? "" })}
+                      onPatch={patchAction} onDelete={removeAction} />
+                  )}
+                  {tab === "orang" && isHr && <People survey={survey} responses={responses} period={period} employeeNames={employeeNames} />}
+                  {tab === "komentar" && isHr && <Comments survey={survey} responses={responses} period={period || periodOf(responses)}
+                    conclusions={kind === "360" || kind === "archive" ? undefined : conclusions} onConclusionSaved={() => loadConclusions(survey.id).then(setConclusions)} />}
+                  {tab === "detail" && <Details survey={survey} current={kind === "archive" ? summary.at(-1) : current} />}
+                  {tab === "kirim" && isHr && <Campaigns survey={survey} summary={summary} campaigns={campaigns} reload={reload} />}
                 </div>
               )}
-              {tab === "ringkasan" && (
-                <Overview survey={survey} summary={summary} period={period} setPeriod={setPeriod} signals={sig}
-                  segments={segNow} segmentLabel={SEGMENT_LABEL[segKey] ?? segKey} targetCount={campaign?.target_count ?? null}
-                  insight={insight} setInsight={setInsight} isHr={isHr} onAddAction={fromInsight} />
-              )}
-              {tab === "tindak" && (
-                <ActionsBoard actions={actions} raisers={raisers} isHr={isHr} canEdit={canEdit} period={period}
-                  onAdd={() => setDraft({ status: "belum", period, raised_by: "" })} onEdit={(a) => setDraft({ ...a, raised_by: raisers.get(a.id) ?? "" })}
-                  onPatch={patchAction} onDelete={removeAction} />
-              )}
-              {tab === "rapor" && kind === "spv_report" && <SpvReport survey={survey} segments={segments} period={period} roster={roster} />}
-              {tab === "rapor" && kind === "360" && isHr && <Report360 survey={survey} responses={responses} canEdit={canEdit} onSaved={() => loadSurveys().then(setSurveys)} />}
-              {tab === "orang" && isHr && <People survey={survey} responses={responses} period={period} employeeNames={employeeNames} />}
-              {tab === "komentar" && isHr && <Comments survey={survey} responses={responses} period={period}
-                conclusions={kind !== "360" ? conclusions : undefined} onConclusionSaved={() => loadConclusions(survey.id).then(setConclusions)} />}
-              {tab === "detail" && <Details survey={survey} current={current} />}
-              {tab === "kirim" && isHr && <Campaigns survey={survey} summary={summary} campaigns={campaigns} reload={reload} />}
             </>
           )}
         </>
       )}
 
-      {draft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onClick={() => setDraft(null)}>
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">{draft.id ? "Ubah tindak lanjut" : "Tindak lanjut baru"}</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2"><Label>Apa yang akan dilakukan</Label>
-                <textarea className={inputClass} rows={2} value={draft.title ?? ""} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></div>
-              <div><Label>Dari pulse check bulan</Label>
-                <input type="month" className={inputClass} value={(draft.period ?? "").slice(0, 7)} onChange={(e) => setDraft({ ...draft, period: e.target.value ? `${e.target.value}-01` : "" })} /></div>
-              <div><Label>Status</Label>
-                <select className={inputClass} value={draft.status ?? "belum"} onChange={(e) => setDraft({ ...draft, status: e.target.value as ActionStatus })}>
-                  {(Object.keys(ACTION_STATUS_LABEL) as ActionStatus[]).map((s) => <option key={s} value={s}>{ACTION_STATUS_LABEL[s]}</option>)}
-                </select></div>
-              <div><Label>Tema</Label>
-                <input className={inputClass} list="pulse-themes" value={draft.theme ?? ""} onChange={(e) => setDraft({ ...draft, theme: e.target.value || null })} />
-                <datalist id="pulse-themes">{[...new Set(actions.map((a) => a.theme).filter(Boolean))].map((t) => <option key={t} value={t as string} />)}</datalist></div>
-              <div><Label>PIC</Label>
-                <input className={inputClass} placeholder="mis. Owner, HR" value={draft.pic ?? ""} onChange={(e) => setDraft({ ...draft, pic: e.target.value || null })} /></div>
-              <div><Label>Tenggat</Label>
-                <input type="date" className={inputClass} value={draft.due_date ?? ""} onChange={(e) => setDraft({ ...draft, due_date: e.target.value || null })} /></div>
-              <div className="flex items-end"><label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                <input type="checkbox" checked={!!draft.is_focus} onChange={(e) => setDraft({ ...draft, is_focus: e.target.checked })} /> ★ Jadikan fokus</label></div>
-              <div className="sm:col-span-2"><Label>Langkah</Label>
-                <textarea className={inputClass} rows={3} value={draft.plan ?? ""} onChange={(e) => setDraft({ ...draft, plan: e.target.value || null })} /></div>
-              <div className="sm:col-span-2"><Label>Hasil nyata</Label>
-                <textarea className={inputClass} rows={2} value={draft.result ?? ""} onChange={(e) => setDraft({ ...draft, result: e.target.value || null })} /></div>
-              <div className="sm:col-span-2"><Label>Yang sudah disampaikan ke karyawan</Label>
-                <textarea className={inputClass} rows={2} placeholder="mis. Diumumkan di grup 3 Nov: mulai Desember libur jadi 3x sebulan untuk tim produksi" value={draft.told_back ?? ""} onChange={(e) => setDraft({ ...draft, told_back: e.target.value || null })} /></div>
-              {isHr && (
-                <div className="sm:col-span-2"><Label>Diangkat oleh (hanya terlihat oleh HR)</Label>
-                  <input className={inputClass} value={draft.raised_by ?? ""} onChange={(e) => setDraft({ ...draft, raised_by: e.target.value })} /></div>
-              )}
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setDraft(null)}>Batal</Button>
-              <Button variant="primary" onClick={submitDraft}>Simpan</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {draft && <ActionModal draft={draft} setDraft={setDraft} themes={[...new Set(actions.map((a) => a.theme).filter((t): t is string => !!t))]} isHr={isHr} onSave={submitDraft} />}
     </AppShell>
   );
+}
+
+/** Arsip tidak punya "siklus": pakai bulan terakhir yang punya jawaban. */
+function periodOf(responses: SurveyResponse[]): string {
+  return responses.map((r) => r.period).sort().at(-1) ?? "";
 }

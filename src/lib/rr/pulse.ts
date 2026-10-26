@@ -50,14 +50,34 @@ export interface SurveyConfig {
   /** 'hr' = owner tidak melihat survei ini sama sekali (dijaga RLS). */
   visibility?: "hr" | "all";
   /** Menentukan tampilan ringkasan: pulse (umum), spv_report (rapor SPV), 360 (rapor 360). */
-  kind?: "pulse" | "spv_report" | "360";
+  kind?: "pulse" | "spv_report" | "360" | "archive";
   order?: number;
   /** 360: Leader SPV yang dinilai di bagian "Penilaian ke Leader". */
   leader?: string;
   /** 360: siapa yang dinilai di tiap blok formulir (b1…b7). null = belum dipastikan. */
   targets?: Record<string, string | null>;
   targetNote?: string;
+  /** Label pendek di menu, mis. "SPG → SPV". */
+  navLabel?: string;
+  /** Satu kalimat: siapa menilai siapa. */
+  who?: string;
+  /** true = survei lama/sekali yang disimpan sebagai arsip pembanding, tidak di menu utama. */
+  archived?: boolean;
+  /** Definisi tema keluhan (dihitung database oleh pi_survey_themes). */
+  themes?: ThemeDef[];
 }
+
+export interface ThemeDef {
+  key: string;
+  label: string;
+  /** Regex sintaks PostgreSQL (batas kata = \y). */
+  pattern: string;
+  fields: string[];
+  group?: string;
+}
+
+/** Hasil pi_survey_themes(): jumlah ORANG yang menyebut tiap tema per periode. */
+export interface ThemePeriod { period: string; n: number; themes: Record<string, number> }
 
 export interface Survey {
   id: string;
@@ -97,6 +117,10 @@ export interface QuestionSummary { answered: number; counts: Record<string, numb
 export interface PeriodSummary {
   period: string; // YYYY-MM-01, bulan yang DINILAI
   n: number;
+  /** Baris masuk (termasuk yang tidak dihitung), baris dikeluarkan, dan orang unik. */
+  n_total?: number;
+  n_excluded?: number;
+  n_people?: number;
   suppressed: boolean;
   questions: Record<string, QuestionSummary>;
 }
@@ -119,10 +143,10 @@ export interface SurveyResponse {
 }
 
 export const RESPONSE_FLAG_LABEL: Record<string, string> = {
-  isian_ganda_bulan_sama: "Isian ganda di bulan yang sama — tidak dihitung, isian terakhir yang dipakai",
-  punya_isian_ganda: "Orang ini mengisi lebih dari sekali bulan ini — isian ini yang dihitung",
+  isian_ganda_outlet_sama: "Isian ganda — orang dan outlet yang sama di bulan yang sama; tidak dihitung, isian terakhir yang dipakai",
+  punya_isian_ganda_outlet_sama: "Orang ini mengisi lebih dari sekali untuk outlet ini bulan ini — isian ini yang dihitung",
   baris_kembar_persis: "Baris kembar persis dari Google Form — tidak dihitung",
-  bulan_belum_dilabel_hr: "Belum diberi bulan oleh HR di sheet (diisi setelah siklus ditutup) — tidak dihitung ke bulan mana pun",
+  bulan_dari_tanggal_isi: "Kolom bulan di sheet kosong — bulan ditentukan dari tanggal isi formulir",
 };
 
 export type ActionStatus = "belum" | "berjalan" | "selesai" | "dibatalkan";
@@ -837,6 +861,13 @@ export async function loadSegments(surveyId: string, segment: string): Promise<S
   const { data, error } = await supabase.rpc("pi_survey_segments", { p_survey_id: surveyId, p_segment: segment });
   if (error) throw new Error(error.message);
   return (data ?? []) as SegmentPeriod[];
+}
+
+export async function loadThemes(surveyId: string): Promise<ThemePeriod[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("pi_survey_themes", { p_survey_id: surveyId });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ThemePeriod[];
 }
 
 export async function loadCampaigns(surveyId: string): Promise<Campaign[]> {

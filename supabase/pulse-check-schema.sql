@@ -385,3 +385,88 @@ $$;
 
 revoke all on function public.pi_survey_visible(uuid) from public, anon;
 grant execute on function public.pi_survey_visible(uuid) to authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  Tahap 4 (26 Oktober 2026): dashboard visual.
+--   • pi_survey_summary kini melaporkan juga baris masuk, dikecualikan, dan orang unik per periode —
+--     supaya "berapa sebenarnya jawabannya" tidak perlu ditebak dari angka yang dihitung.
+--   • pi_survey_themes: jumlah ORANG yang menyebut tiap tema keluhan per bulan. Definisi tema = DATA
+--     (pi_surveys.config.themes: key, label, pattern regex PostgreSQL, fields). Owner hanya menerima hitungan.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create or replace function public.pi_survey_summary(p_survey_id uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with q as (
+    select x->>'key' as key
+    from pi_surveys s, jsonb_array_elements(s.questions) x
+    where s.id = p_survey_id and coalesce(x->>'type', 'text') <> 'text'
+  ),
+  allr as (
+    select id, period, excluded, lower(regexp_replace(coalesce(respondent_name, id::text), '[^a-zA-Z]', '', 'g')) as who
+    from pi_survey_responses where survey_id = p_survey_id
+  ),
+  r as (select id, period, answers from pi_survey_responses where survey_id = p_survey_id and not excluded),
+  v as (
+    select r.id, r.period, q.key, val
+    from r cross join q
+    cross join lateral jsonb_array_elements_text(
+      case
+        when r.answers->q.key is null or jsonb_typeof(r.answers->q.key) = 'null' then '[]'::jsonb
+        when jsonb_typeof(r.answers->q.key) = 'array' then r.answers->q.key
+        else jsonb_build_array(r.answers->q.key)
+      end) as val
+  ),
+  c as (select period, key, val, count(*) as n from v group by 1, 2, 3),
+  a as (select period, key, count(distinct id) as answered from v group by 1, 2),
+  pq as (
+    select c.period, c.key, jsonb_build_object('answered', a.answered, 'counts', jsonb_object_agg(c.val, c.n)) as obj
+    from c join a using (period, key) group by c.period, c.key, a.answered
+  ),
+  pp as (
+    select period, count(*) filter (where not excluded) as n, count(*) as n_total,
+           count(*) filter (where excluded) as n_excluded, count(distinct who) as n_people
+    from allr group by 1
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'period', pp.period,
+           'n', pp.n,
+           'n_total', pp.n_total,
+           'n_excluded', pp.n_excluded,
+           'n_people', pp.n_people,
+           'suppressed', pp.n < 3,
+           'questions', case when pp.n < 3 then '{}'::jsonb
+                             else coalesce((select jsonb_object_agg(pq.key, pq.obj) from pq where pq.period = pp.period), '{}'::jsonb) end
+         ) order by pp.period), '[]'::jsonb)
+  from pp
+  where pp.n > 0 and public.pi_survey_visible(p_survey_id)
+$$;
+
+create or replace function public.pi_survey_themes(p_survey_id uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with t as (
+    select x->>'key' as key, x->>'pattern' as pattern,
+           array(select jsonb_array_elements_text(x->'fields')) as fields
+    from pi_surveys s, jsonb_array_elements(coalesce(s.config->'themes', '[]'::jsonb)) x
+    where s.id = p_survey_id
+  ),
+  r as (select id, period, answers from pi_survey_responses where survey_id = p_survey_id and not excluded),
+  hit as (
+    select r.period, t.key, count(distinct r.id) as n
+    from r join t on exists (
+      select 1 from unnest(t.fields) f where coalesce(r.answers->>f, '') ~* t.pattern
+    )
+    group by 1, 2
+  ),
+  pp as (select period, count(*) as n from r group by 1)
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'period', pp.period,
+           'n', pp.n,
+           'themes', case when pp.n < 3 then '{}'::jsonb
+                          else coalesce((select jsonb_object_agg(h.key, h.n) from hit h where h.period = pp.period), '{}'::jsonb) end
+         ) order by pp.period), '[]'::jsonb)
+  from pp
+  where public.pi_survey_visible(p_survey_id)
+$$;
+
+revoke all on function public.pi_survey_themes(uuid) from public, anon;
+grant execute on function public.pi_survey_themes(uuid) to authenticated;
