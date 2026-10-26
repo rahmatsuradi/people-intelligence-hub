@@ -150,6 +150,13 @@ Pelajaran yang sudah dibayar saat membangunnya, jangan diulang:
 - `callGroq()` terkunci mode JSON; percakapan bebas memakai `callGroqChat()`.
 - Pesan ber-role `system` dari klien **dibuang** di route, supaya persona dan batasannya tidak bisa ditimpa dari browser.
 
+**CV Analyzer — kerangka Ritel & Outlet (26 Oktober 2026).** Keluhan "tidak bisa dipakai" ternyata bukan API (kunci Groq valid, model `qwen/qwen3.8-27b` ada, analisis jalan di lokal & produksi 4–7 detik) melainkan **hasil yang salah untuk SPG**: posisi tanpa kata kunci jatuh ke kerangka Lominger (kepemimpinan eksekutif, patokan 80+) dan model menandai "tenure singkat" serta "lulusan SMA" sebagai risiko. Perbaikan, semuanya aditif:
+- Klaster baru `retail` (`RETAIL_COMPETENCIES`, 7 kompetensi, patokan pemula 60–68) + `detectCluster` mengenali SPG/kasir/baker/staf outlet/produksi (dicek paling awal supaya "penjaga toko" tidak jadi satpam) dan departemen "Retail & Outlet". Kerangka ini **disusun internal dan belum divalidasi lokal** — jangan dilabeli standar nasional.
+- `RETAIL_SCREENING_RULES` ikut ke prompt hanya untuk klaster ini: pengalaman 1–2 bulan sudah memenuhi syarat; pendidikan/usia/status pernikahan/agama/penampilan tidak boleh menurunkan skor; risiko hanya bila ada bukti di CV.
+- `verifyEvidenceQuotes()` (dipakai `/api/analyze-cv` dan `/api/apply`): kutipan bukti yang tidak ada di teks CV (model menyalin kalimat rubrik) dikosongkan menjadi "Tidak ditemukan bukti eksplisit" dan dicatat di `processingNote`; skor tidak diubah otomatis.
+- Halaman menampilkan pesan yang bisa dipahami untuk batas Groq (429, paket gratis ±12 ribu token/menit — jangan analisis beruntun) dan respons non-JSON saat waktu habis.
+- **Peringatan uji:** analisis lewat halaman menyimpan kandidat + aktivitas ke database nyata. Uji dengan API (`curl`) atau hapus baris ujinya sesudahnya.
+
 ## 9c. Wawancara terstruktur — panel, kompetensi wajib, cakupan
 
 Mesin murni di `src/lib/recruiting/interview-scoring.ts` (26 unit test). Layar skoring, layar hasil, dan debrief semuanya menghitung lewat mesin ini — tidak ada lagi ambang yang ditulis ulang di komponen.

@@ -10,6 +10,7 @@ import {
   buildAnalysisPrompt,
   buildFallbackResult,
   parseAnalysisResponse,
+  verifyEvidenceQuotes,
 } from "@/lib/cv-analyzer-ai";
 import { GROQ_MODEL, extractPdfText, callGroq } from "@/lib/cv-groq";
 
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     const prompt = buildAnalysisPrompt(cvText, candidateName, targetPosition, department);
     const groq = await callGroq(prompt, noRetry ? 1 : 3);
-    const result = parseAnalysisResponse(groq.content);
+    const result = verifyEvidenceQuotes(parseAnalysisResponse(groq.content), cvText).result;
 
     return NextResponse.json({
       success: true,

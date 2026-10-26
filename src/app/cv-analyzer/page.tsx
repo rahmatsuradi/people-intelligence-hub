@@ -61,7 +61,7 @@ interface HistoryItem {
 }
 
 const DEPARTMENTS = [
-  "Penyiaran", "Redaksi", "Engineering", "Product", "Data", "Design", "Sales",
+  "Retail & Outlet", "Penyiaran", "Redaksi", "Engineering", "Product", "Data", "Design", "Sales",
   "Finance", "Security", "Operations", "HR", "Legal",
 ];
 
@@ -74,6 +74,7 @@ const CLUSTER_BADGE: Record<CompetencyCluster, { label: string; className: strin
   broadcast: { label: "SKKNI Penyiaran", className: "bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300" },
   editorial: { label: "SKKNI Redaksi", className: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300" },
   security: { label: "SKKNI Satpam", className: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300" },
+  retail: { label: "Ritel & Outlet", className: "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300" },
 };
 
 function buildReportFromAi(ai: AiAnalysisResult, startMs: number): Omit<AnalysisReport, "reportId" | "generatedAt"> {
@@ -601,12 +602,16 @@ export default function CvAnalyzerPage() {
       formData.append("department", department);
 
       const res = await fetch("/api/analyze-cv", { method: "POST", body: formData });
-      const json = await res.json() as {
+      // Server yang kehabisan waktu / error di tingkat platform membalas HTML, bukan JSON — tampilkan pesan yang bisa dipahami.
+      const json = await res.json().catch(() => null) as {
         success?: boolean;
         result?: AiAnalysisResult;
         error?: string;
-      };
+        retryAfter?: number;
+      } | null;
 
+      if (!json) throw new Error(`Server tidak memberi jawaban yang bisa dibaca (kode ${res.status}). Biasanya karena waktu habis — coba lagi sebentar lagi.`);
+      if (res.status === 429) throw new Error(`Batas penggunaan AI per menit sedang penuh. Tunggu ${json.retryAfter ? Math.ceil(json.retryAfter) : 30} detik lalu klik Analisis lagi.`);
       if (!res.ok || json.error) throw new Error(json.error ?? `Server error ${res.status}`);
       if (!json.result) throw new Error("Respons tidak valid dari server");
 
@@ -699,11 +704,11 @@ export default function CvAnalyzerPage() {
             <div className="mt-4 space-y-4">
               <div>
                 <Label htmlFor="candidate-name">Candidate name</Label>
-                <input id="candidate-name" type="text" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} placeholder="e.g. Lionel Messi" className={inputClass} />
+                <input id="candidate-name" type="text" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} placeholder="mis. Sari Wulandari" className={inputClass} />
               </div>
               <div>
                 <Label htmlFor="target-position">Target position</Label>
-                <input id="target-position" type="text" value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} placeholder="e.g. Video Editor / Reporter / MCR Operator / Satpam" className={inputClass} />
+                <input id="target-position" type="text" value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} placeholder="mis. SPG Outlet / Kasir / Baker / Staf Produksi" className={inputClass} />
               </div>
               <div>
                 <Label htmlFor="department">Department</Label>

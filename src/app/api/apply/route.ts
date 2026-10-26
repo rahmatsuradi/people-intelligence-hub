@@ -11,7 +11,7 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import { NextRequest, NextResponse } from "next/server";
-import { buildAnalysisPrompt, parseAnalysisResponse } from "@/lib/cv-analyzer-ai";
+import { buildAnalysisPrompt, parseAnalysisResponse, verifyEvidenceQuotes } from "@/lib/cv-analyzer-ai";
 import { extractPdfText, callGroq } from "@/lib/cv-groq";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { CvAnalysisSnapshot } from "@/lib/store";
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
     /* ─── Analyze with Groq (same pipeline as the dashboard) ─── */
     const prompt = buildAnalysisPrompt(cvText, name, role.title, role.department);
     const groq = await callGroq(prompt, 2);
-    const result = parseAnalysisResponse(groq.content);
+    const result = verifyEvidenceQuotes(parseAnalysisResponse(groq.content), cvText).result;
 
     /* ─── Persist candidate + activity via service-role client ─── */
     const now = new Date().toISOString();

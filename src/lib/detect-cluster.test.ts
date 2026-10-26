@@ -54,3 +54,25 @@ describe("detectCluster — 'security' disambiguation", () => {
     expect(detectCluster("Infosec Engineer", "Security")).toBe("tech");
   });
 });
+
+describe("detectCluster — ritel & outlet (SPG, kasir, produksi)", () => {
+  it.each([
+    ["SPG", "Retail & Outlet", "retail"],
+    ["SPG Outlet Mal", "Sales", "retail"],
+    ["Sales Promotion Girl", "Sales", "retail"],
+    ["Kasir", "Operations", "retail"],
+    ["Penjaga Toko", "Security", "retail"], // BUKAN satpam
+    ["Staf Outlet", "Operations", "retail"],
+    ["Baker", "Produksi", "retail"],
+    ["Operator Produksi", "Operations", "retail"],
+    ["Staff", "Retail & Outlet", "retail"], // lewat departemen saja
+  ] as const)("routes '%s' (%s) → %s", (pos, dept, expected) => {
+    expect(detectCluster(pos, dept)).toBe(expected);
+  });
+
+  it("tidak salah menangkap kata yang hanya mengandung 'spg'/'baker' di dalam kata lain", () => {
+    expect(detectCluster("Bakery Manager Trainee", "Operations")).toBe("business");
+    expect(detectCluster("Software Engineer", "Engineering")).toBe("tech");
+    expect(detectCluster("Satpam", "Security")).toBe("security");
+  });
+});

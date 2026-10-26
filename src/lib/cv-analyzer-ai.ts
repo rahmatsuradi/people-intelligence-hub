@@ -85,6 +85,11 @@ export function detectCluster(position: string, department: string): CompetencyC
     "design": "business",
     "sales": "business",
     "operations": "business",
+    // Ritel & outlet (SPG, kasir, staf outlet, produksi bakery)
+    "retail": "retail",
+    "retail & outlet": "retail",
+    "outlet": "retail",
+    "produksi": "retail",
     // Operational — Broadcast & Multimedia
     "penyiaran": "broadcast",
     "broadcast": "broadcast",
@@ -107,6 +112,13 @@ export function detectCluster(position: string, department: string): CompetencyC
 
   // 2. Position keyword matching — spesifik, tidak overlap
   // Operational position keywords — checked BEFORE white-collar keywords
+  // Posisi garis depan ritel/outlet — dicek lebih dulu supaya "penjaga toko" tidak terbaca satpam
+  // dan "sales promotion" tidak masuk jalur kepemimpinan.
+  const RETAIL_POS = ["spg", "spb", "sales promotion", "promotor", "kasir", "cashier",
+    "pramuniaga", "pramusaji", "penjaga toko", "penjaga outlet", "staf outlet", "staff outlet",
+    "crew outlet", "store crew", "store staff", "kepala outlet", "store leader", "baker", "pastry",
+    "operator produksi", "staf produksi", "staff produksi", "helper produksi", "packing"];
+
   const BROADCAST_POS = ["cameraman", "kamera", "video editor", "editor video",
     "floor director", "studio technician", "teknisi studio", "audio engineer",
     "lighting", "mcr", "broadcast", "penyiaran"];
@@ -132,6 +144,8 @@ export function detectCluster(position: string, department: string): CompetencyC
     "data engineer", "ml engineer", "ai engineer", "devops", "cloud",
     "cybersecurity", "infosec", "solution architect", "tech lead",
     "programmer", "qa engineer", "sre", "platform engineer"];
+
+  if (RETAIL_POS.some(k => new RegExp(`(^|[^a-z])${k}([^a-z]|$)`).test(pos))) return "retail";
 
   // Cek operational dulu (paling spesifik untuk konteks media/penyiaran)
   if (BROADCAST_POS.some(k => pos.includes(k))) return "broadcast";
@@ -182,6 +196,21 @@ const FRAMEWORK_META: Record<CompetencyCluster, FrameworkMeta> = Object.fromEntr
   ]),
 ) as Record<CompetencyCluster, FrameworkMeta>;
 
+/** Aturan khusus seleksi garis depan. Ditulis eksplisit karena tanpa ini model memakai logika posisi manajerial:
+ *  menandai "tenure singkat" dan "lulusan SMA" sebagai risiko — kebalikan dari kebutuhan rekrutmen SPG/outlet. */
+export const RETAIL_SCREENING_RULES = `═══ ATURAN SELEKSI GARIS DEPAN (WAJIB, menimpa aturan umum bila bertentangan) ═══
+- Ini seleksi posisi pemula/garis depan (SPG, kasir, staf outlet, produksi). Patokan skor adalah patokan PEMULA, bukan manajer.
+- Pengalaman kerja minimal 1–2 bulan di ritel, F&B, atau layanan pelanggan SUDAH MEMENUHI syarat pengalaman: beri level 3 pada kompetensi yang terbukti. Jangan menandai durasi pengalaman singkat sebagai risiko.
+- Jangan menjadikan pendidikan (SMA/SMK/tanpa gelar), usia, status pernikahan, agama, atau penampilan fisik sebagai alasan menurunkan skor atau sebagai risiko.
+- Tidak ada bukti pengalaman layanan sama sekali: beri level 2 (bukan 1), kecuali ada tanda negatif nyata (sikap kasar, selisih kas, sering mangkir).
+- Risiko HANYA ditandai bila ada bukti di CV: tidak bersedia shift/penempatan, celah kerja panjang tanpa penjelasan, riwayat selisih kas/kecurangan, atau data CV tidak lengkap sehingga tidak bisa dinilai.
+- Rekomendasi: "Hire" bila ada bukti pengalaman layanan ≥ 1 bulan dan overallScore ≥ 60; "Strong Hire" bila ≥ 80; "Review" bila bukti pengalaman belum jelas; "Reject" hanya bila ada tanda negatif nyata.
+- evidenceQuote WAJIB kutipan persis dari TEKS CV. Dilarang menyalin atau memparafrasekan teks level/rubrik. Bila CV tidak memuat buktinya, tulis "Tidak ditemukan bukti eksplisit" dan beri level 2.
+- Pertanyaan wawancara: praktis dan situasional (melayani pelanggan ramai, selisih kas, rekan tidak masuk/backup, produk rusak, shift panjang).
+═══════════════════════════════════════════════════════════════════
+
+`;
+
 export function buildAnalysisPrompt(
   cvText: string,
   candidateName: string,
@@ -211,7 +240,7 @@ ${trimmedCv}
 
 ${meta.definition}
 
-INSTRUKSI:
+${cluster === "retail" ? RETAIL_SCREENING_RULES : ""}INSTRUKSI:
 - Evaluasi setiap kompetensi dari evidence nyata di CV
 - Jika tidak ada bukti, beri rawLevel 1-2
 - evidenceQuote: kutipan langsung dari CV max 15 kata, atau "Tidak ditemukan bukti eksplisit"
@@ -273,6 +302,37 @@ export function parseAnalysisResponse(rawResponse: string): AiAnalysisResult {
   if (parsed.candidateName) parsed.candidateName = String(parsed.candidateName).trim().slice(0, 80);
 
   return parsed;
+}
+
+export const NO_EVIDENCE = "Tidak ditemukan bukti eksplisit";
+
+const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * Memeriksa bahwa tiap evidenceQuote benar-benar ada di teks CV. Model kadang menyalin kalimat dari rubrik
+ * (yang ia terima di prompt) dan menyajikannya sebagai "bukti" — itu terlihat meyakinkan tetapi palsu.
+ * Kutipan yang tidak ditemukan DIKOSONGKAN dan jumlahnya dicatat di processingNote; skor TIDAK diubah otomatis
+ * (pola yang sama dengan indeks kualitas asesmen: memberi tanda, bukan mengoreksi diam-diam).
+ * Dianggap ditemukan bila ada urutan 3 kata berurutan dari kutipan yang muncul di CV (toleran terhadap salah ketik kecil
+ * dan pemotongan kutipan); kutipan < 3 kata harus muncul utuh.
+ */
+export function verifyEvidenceQuotes(result: AiAnalysisResult, cvText: string): { result: AiAnalysisResult; removed: number } {
+  const cv = ` ${norm(cvText)} `;
+  let removed = 0;
+  const competencies = result.competencies.map((c) => {
+    const q = (c.evidenceQuote ?? "").trim();
+    if (!q || norm(q) === norm(NO_EVIDENCE) || norm(q) === "error") return c;
+    const words = norm(q).split(" ").filter(Boolean);
+    const found = words.length < 3
+      ? cv.includes(` ${words.join(" ")} `)
+      : words.some((_, i) => i + 3 <= words.length && cv.includes(` ${words.slice(i, i + 3).join(" ")} `));
+    if (found) return c;
+    removed++;
+    return { ...c, evidenceQuote: NO_EVIDENCE };
+  });
+  if (!removed) return { result, removed };
+  const note = `${removed} kutipan bukti tidak ditemukan di teks CV dan dikosongkan; skor kompetensi terkait perlu diverifikasi saat wawancara.`;
+  return { result: { ...result, competencies, processingNote: result.processingNote ? `${result.processingNote} ${note}` : note }, removed };
 }
 
 export function buildFallbackResult(errorMessage: string): AiAnalysisResult {

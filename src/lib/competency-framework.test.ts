@@ -20,10 +20,10 @@ import {
 const CLUSTERS = Object.keys(CLUSTER_FRAMEWORKS) as CompetencyCluster[];
 
 describe("competency definitions", () => {
-  it("covers all four clusters with no competency left undefined", () => {
+  it("covers every cluster with no competency left undefined", () => {
     const fromClusters = CLUSTERS.flatMap((c) => CLUSTER_FRAMEWORKS[c].competencies);
     expect(fromClusters).toHaveLength(ALL_COMPETENCY_DEFINITIONS.length);
-    expect(ALL_COMPETENCY_DEFINITIONS.length).toBe(54);
+    expect(ALL_COMPETENCY_DEFINITIONS.length).toBe(61);
   });
 
   it("has unique ids", () => {
@@ -51,6 +51,7 @@ describe("competency definitions", () => {
       broadcast: ["skkni-broadcast"],
       editorial: ["skkni-editorial"],
       security: ["skkni-security"],
+      retail: ["retail-frontline"],
     };
     for (const cluster of CLUSTERS) {
       for (const c of CLUSTER_FRAMEWORKS[cluster].competencies) {

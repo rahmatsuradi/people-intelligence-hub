@@ -17,7 +17,7 @@ import {
 import type { AiAnalysisResult } from "@/lib/cv-analyzer-ai";
 
 const DEPARTMENTS = [
-  "Engineering", "Product", "Data", "Design", "Sales",
+  "Retail & Outlet", "Engineering", "Product", "Data", "Design", "Sales",
   "Finance", "Security", "Operations", "HR", "Legal",
 ];
 

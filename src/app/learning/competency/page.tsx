@@ -29,6 +29,7 @@ const CLUSTER_OPTIONS: { value: CompetencyCluster; label: string }[] = [
   { value: "broadcast", label: "Penyiaran (SKKNI Broadcast)" },
   { value: "editorial", label: "Jurnalistik & Redaksi (SKKNI Editorial)" },
   { value: "security", label: "Satuan Pengamanan (SKKNI Security)" },
+  { value: "retail", label: "Ritel & Outlet (SPG, kasir, produksi)" },
 ];
 
 const SCORE_COLOR: Record<number, string> = {

@@ -1174,6 +1174,141 @@ export const SECURITY_COMPETENCIES: CompetencyDefinition[] = [
   },
 ];
 
+/* ─── Ritel & Outlet — garis depan (SPG, kasir, staf outlet, produksi bakery) (7) ───
+   Disusun internal untuk seleksi garis depan Rica Rico; BUKAN adopsi butir-demi-butir standar nasional
+   dan belum divalidasi pada data lokal. Patokan (benchmark) sengaja realistis untuk level pemula:
+   pengalaman 1–2 bulan di ritel/F&B/layanan sudah memenuhi level 3, dan pendidikan SMA/SMK tidak
+   dijadikan syarat. Yang diukur adalah bukti perilaku kerja, bukan gelar atau lama bekerja. */
+
+export const RETAIL_COMPETENCIES: CompetencyDefinition[] = [
+  {
+    id: "ret-customer-service",
+    pillar: "retail-frontline",
+    name: "Customer Service & Friendliness",
+    nameId: "Layanan Pelanggan & Keramahan",
+    description:
+      "Menyapa, melayani, dan menawarkan produk kepada pelanggan dengan sopan; menangani keluhan sederhana dengan tenang; menjaga sikap tetap ramah di jam ramai.",
+    evidenceMethod: "Situational Judgment Test + role-play layanan",
+    validityCoeff: 0.42,
+    benchmark: 65,
+    rubric: operationalRubric([
+      "Tidak ada bukti pengalaman melayani orang; atau ada catatan sikap kasar terhadap pelanggan.",
+      "Belum pernah bekerja melayani tetapi ada bukti serupa (organisasi, panitia, jaga warung keluarga, usaha online).",
+      "Pernah melayani pelanggan langsung minimal 1–2 bulan (ritel, F&B, kasir, SPG); menyebut kegiatan nyata melayani dan menawarkan.",
+      "Pengalaman layanan jelas dengan hasil (jumlah pelanggan, pujian, penanganan keluhan); sikap konsisten di jam ramai.",
+      "Menjadi rujukan layanan di tim; melatih rekan baru; ada bukti penghargaan atau ulasan pelanggan.",
+    ]),
+  },
+  {
+    id: "ret-sales",
+    pillar: "retail-frontline",
+    name: "Selling & Target Achievement",
+    nameId: "Penjualan & Pencapaian Target",
+    description:
+      "Menawarkan produk (bolu, brownies, bika ambon, dan sejenisnya), menjelaskan keunggulan produk, dan berusaha mencapai target harian outlet.",
+    evidenceMethod: "Work sample — simulasi penawaran produk",
+    validityCoeff: 0.42,
+    benchmark: 62,
+    rubric: operationalRubric([
+      "Tidak ada bukti pernah menjual; menolak target.",
+      "Belum ada pengalaman menjual tetapi menyatakan ingin belajar dan ada contoh membujuk/menawarkan dalam kegiatan lain.",
+      "Pernah menawarkan atau menjual produk minimal 1–2 bulan; tahu cara menjelaskan produk; mengenal konsep target harian.",
+      "Menyebut angka atau hasil nyata (target tercapai, penjualan naik); memakai teknik tawar tambahan (upsell/cross-sell).",
+      "Konsisten melampaui target; berbagi teknik dengan rekan; paham momen ramai/promo.",
+    ]),
+  },
+  {
+    id: "ret-cash-stock",
+    pillar: "retail-frontline",
+    name: "Cash & Stock Accuracy",
+    nameId: "Ketelitian Kas & Stok",
+    description:
+      "Menerima pembayaran, memberi kembalian, mencatat stok masuk/keluar, dan merekap kas akhir shift tanpa selisih.",
+    evidenceMethod: "Work sample — hitung kas dan rekap stok",
+    validityCoeff: 0.54,
+    benchmark: 65,
+    rubric: operationalRubric([
+      "Ada indikasi selisih kas atau kecurangan; atau menolak tanggung jawab uang.",
+      "Belum pernah memegang kas/stok tetapi menunjukkan ketelitian di tugas lain.",
+      "Pernah menangani kas dan/atau mencatat stok minimal 1–2 bulan; paham rekap akhir shift.",
+      "Mencatat rapi, jarang selisih, dan melapor cepat bila ada selisih; terbiasa memakai mesin kasir/aplikasi.",
+      "Dipercaya memegang kas dan stok outlet; menemukan sumber selisih; melatih rekan.",
+    ]),
+  },
+  {
+    id: "ret-hygiene-display",
+    pillar: "retail-frontline",
+    name: "Hygiene, Display & Food Safety",
+    nameId: "Kebersihan, Display & Keamanan Pangan",
+    description:
+      "Menjaga kebersihan outlet dan diri, menata display produk menarik dan rapi, menerapkan prinsip keamanan pangan (kemasan, tanggal, kontaminasi) dan menjaga kehalalan produk.",
+    evidenceMethod: "Observasi kerja + pertanyaan SOP",
+    validityCoeff: 0.42,
+    benchmark: 65,
+    rubric: operationalRubric([
+      "Mengabaikan kebersihan atau keamanan pangan; tidak memahami pentingnya.",
+      "Menyadari pentingnya kebersihan tetapi belum pernah menerapkan di tempat kerja.",
+      "Menata display dan menjaga kebersihan outlet minimal 1–2 bulan; paham dasar kemasan dan tanggal produk.",
+      "Rutin memeriksa kondisi produk, melaporkan produk rusak/kotor, dan menjaga display tetap rapi di jam ramai.",
+      "Menjadi teladan standar outlet; mengajarkan SOP kebersihan; ada bukti lolos audit/inspeksi.",
+    ]),
+  },
+  {
+    id: "ret-reliability",
+    pillar: "retail-frontline",
+    name: "Reliability & Shift Readiness",
+    nameId: "Kedisiplinan & Kesiapan Kerja Shift",
+    description:
+      "Hadir tepat waktu, siap bekerja sesuai jadwal shift (termasuk akhir pekan dan jam kerja panjang), bersedia ditempatkan di outlet yang ditentukan, dan bertanggung jawab atas tugas.",
+    evidenceMethod: "Reference check + konfirmasi kesediaan",
+    validityCoeff: 0.42,
+    benchmark: 68,
+    rubric: operationalRubric([
+      "Menyatakan tidak bersedia shift/penempatan, atau ada catatan sering tidak hadir tanpa kabar.",
+      "Bersedia bekerja tetapi dengan banyak batasan (waktu, lokasi); belum ada bukti kehadiran.",
+      "Menyatakan bersedia shift dan ditempatkan di outlet mana pun; ada riwayat bekerja sesuai jadwal.",
+      "Bukti kehadiran baik dan siap menggantikan shift; pernah bekerja dengan jadwal padat.",
+      "Sangat andal; dipercaya membuka/menutup outlet; contoh bekerja melebihi harapan tanpa mengeluh.",
+    ]),
+  },
+  {
+    id: "ret-teamwork",
+    pillar: "retail-frontline",
+    name: "Teamwork & Communication",
+    nameId: "Kerja Sama & Komunikasi",
+    description:
+      "Berkoordinasi dengan rekan shift, SPV, dan SPG backup; melapor kendala dengan jelas dan tepat waktu; menerima arahan dan teguran dengan baik.",
+    evidenceMethod: "Structured behavioural interview",
+    validityCoeff: 0.42,
+    benchmark: 62,
+    rubric: operationalRubric([
+      "Sulit bekerja sama atau sering berkonflik; tidak mau menerima arahan.",
+      "Dapat bekerja dalam tim kecil tetapi belum pernah melapor atau berkoordinasi secara formal.",
+      "Bekerja dalam tim minimal 1–2 bulan; melapor ke atasan bila ada kendala; menerima arahan.",
+      "Aktif membantu rekan, mengisi shift, dan menyampaikan masalah dengan solusi.",
+      "Menjadi perekat tim; membantu rekan baru; mampu meredakan konflik kecil.",
+    ]),
+  },
+  {
+    id: "ret-learning",
+    pillar: "retail-frontline",
+    name: "Learning Attitude & SOP Compliance",
+    nameId: "Kemauan Belajar & Kepatuhan SOP",
+    description:
+      "Mau belajar produk dan prosedur baru, mengikuti SOP outlet, dan memperbaiki diri setelah diberi masukan.",
+    evidenceMethod: "Structured interview + masa percobaan",
+    validityCoeff: 0.42,
+    benchmark: 60,
+    rubric: operationalRubric([
+      "Menolak belajar atau mengikuti prosedur; tidak mau menerima masukan.",
+      "Terbuka belajar tetapi belum ada contoh nyata.",
+      "Menyatakan siap mengikuti pelatihan produk dan SOP; ada contoh belajar hal baru di pekerjaan sebelumnya.",
+      "Cepat menguasai produk/SOP baru dan menerapkannya; ada contoh perbaikan setelah masukan.",
+      "Mengusulkan perbaikan SOP; melatih rekan; belajar mandiri dengan hasil nyata.",
+    ]),
+  },
+];
+
 export const ALL_COMPETENCY_DEFINITIONS: CompetencyDefinition[] = [
   ...ULRICH_COMPETENCIES,
   ...SKKNI_COMPETENCIES,
@@ -1183,6 +1318,7 @@ export const ALL_COMPETENCY_DEFINITIONS: CompetencyDefinition[] = [
   ...BROADCAST_COMPETENCIES,
   ...EDITORIAL_COMPETENCIES,
   ...SECURITY_COMPETENCIES,
+  ...RETAIL_COMPETENCIES,
 ];
 
 export const COMPETENCY_BY_ID = Object.fromEntries(
@@ -1196,7 +1332,7 @@ export const COMPETENCY_BY_ID = Object.fromEntries(
    apart the way they did when each file kept its own copy.
 ═══════════════════════════════════════════════════════════════════════════ */
 
-export type CompetencyCluster = "hr" | "tech" | "business" | "finance" | "broadcast" | "editorial" | "security";
+export type CompetencyCluster = "hr" | "tech" | "business" | "finance" | "broadcast" | "editorial" | "security" | "retail";
 
 export interface ClusterFramework {
   label: string;
@@ -1239,6 +1375,11 @@ export const CLUSTER_FRAMEWORKS: Record<CompetencyCluster, ClusterFramework> = {
     label: "SKKNI Satuan Pengamanan — Kepmenaker No. 259/2018",
     reference: "Kemnaker RI (2018); Perpol No. 4/2020; BNSP/LSP Polri; Gada Pratama/Madya",
     competencies: SECURITY_COMPETENCIES,
+  },
+  retail: {
+    label: "Ritel & Outlet — kerangka garis depan Rica Rico (SPG, kasir, staf outlet, produksi)",
+    reference: "Disusun internal HR (Okt 2026), belum divalidasi lokal; rujukan praktik seleksi garis depan dan Sackett dkk. (2022) untuk bobot wawancara terstruktur",
+    competencies: RETAIL_COMPETENCIES,
   },
 };
 
