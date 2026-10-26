@@ -45,6 +45,19 @@ Sisa data sintetis yang tidak tercakup skrip: kandidat `C-SIM-4834` & `C-SIM-524
 
 **PT Valen Persada Nusantara tidak ditemukan di sumber publik mana pun** (pencarian web, Oktober 2026). Yang harus dikonfirmasi dari dokumen internal sebelum slip gaji diterbitkan — ditandai `⚠️ MASIH HARUS DIKONFIRMASI` di `company-profile.ts`: ejaan persis nama PT (cocokkan dengan akta/kontrak kerja/registri AHU), alamat terdaftar PT (kolom `address` sengaja dibiarkan "—", bukan diisi alamat outlet), NPWP, nama/jabatan penanda tangan slip, kelas risiko JKK, dan UMK per wilayah outlet.
 
+## 2b. Satu kode, dua pemasangan — Rica Rico & Lencir (27 Oktober 2026)
+
+Kode ini dipasang dua kali: **Rica Rico** (bawaan) dan **Lencir Indonesia** (PT Loe Cantik Kita Cuan). Tiap pemasangan punya database Supabase, proyek Vercel, dan akun sendiri — data karyawan tidak pernah bercampur. Yang membedakan hanya `NEXT_PUBLIC_INSTANCE` (`rica-rico` | `lencir`, kosong = `rica-rico`). Sengaja **bukan** salinan repo: dua salinan pasti saling menjauh (pelajaran §1b), sedangkan fitur baru — mis. alur rekrutmen otomatis — cukup dibangun sekali.
+
+- **`src/lib/instance.ts`** = semua teks/pilihan per merek: nama, judul tab, ikon, menu yang disembunyikan (`hiddenNav`), subjudul halaman, konteks perusahaan untuk prompt AI, `source` survei web. Nilai env yang salah ketik **menghentikan build** (disengaja, supaya Lencir tidak diam-diam tampil sebagai Rica Rico).
+- **Jangan menulis nama merek langsung di komponen atau prompt.** Pakai `INSTANCE.brandName` / `shortName` / field baru di `InstanceConfig`. `instance.test.ts` menjaga konfigurasi Lencir bebas teks "Rica Rico" dan konteks AI Lencir bebas angka karangan.
+- **Badan hukum** per instance di `company-profile.ts` (`COMPANY_RICA_RICO`, `COMPANY_LENCIR`; `ACTIVE_COMPANY` dipilih lewat instance). ID tenant Lencir **baru** (`5555…`), bukan `3333…` milik era Lencir sebelumnya.
+- **Logo** lewat `src/components/brand-logo.tsx` (sidebar, login, survei publik). Lencir hanya punya wordmark serif (Cormorant Garamond); ikon tab Lencir masih favicon bawaan sampai ada berkas resminya.
+- **Palet**: `layout.tsx` menulis `data-instance` di `<html>`; blok `html[data-instance="lencir"]` di bawah `globals.css` menimpa skala warna yang sama dengan palet Rica Rico (diuji: tidak ada separuh-tema).
+- Fitur khusus satu perusahaan → sembunyikan menunya di instance lain lewat `hiddenNav` (Lencir: `outlet`), jangan dihapus dari kode.
+- **Database instance baru**: `supabase/lencir-bootstrap.sql` (struktur utuh hasil potret database Rica Rico + tarif + norma/profil bawaan; di-generate `scripts/bundle-lencir-sql.ts`), lalu `supabase/lencir-first-hr.sql` untuk akun HR pertama. Sudah diterapkan ke proyek Supabase Lencir (27 Okt 2026, 25 tabel / 46 policy). Bila struktur Rica Rico berubah, perbarui `lencir-structure.sql` dari katalog database dan terapkan perubahannya ke **kedua** database.
+- Menjalankan keduanya berdampingan di laptop: konfigurasi `lencir-dev` di `.claude/launch.json` (port 3101, `NEXT_DIST_DIR=.next-lencir`, Supabase sengaja diarahkan ke alamat mati supaya tidak membaca data Rica Rico). ⚠️ `next dev`/`next build` dengan `NEXT_DIST_DIR` menambahkan path ke `tsconfig.json` — kembalikan sebelum commit.
+
 ## 3. Status modul Pay
 
 Selesai dan terverifikasi end-to-end (bukan sekadar kode yang "terlihat jalan"):

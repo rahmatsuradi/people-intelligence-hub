@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { getCandidates, getJobReqs, syncFromSupabase } from "@/lib/store";
 import { getActiveCompanyId, getActiveCompanyProfile, type CompanyProfile } from "@/lib/payroll/company-profile";
 import { syncHrRecords } from "@/lib/hr-records";
-import { RicaRicoMark, RicaRicoWordmark } from "@/components/rica-rico-logo";
+import { BrandSidebarLogo } from "@/components/brand-logo";
+import { INSTANCE } from "@/lib/instance";
 import { clearRoleCache, useRole } from "@/lib/roles";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
@@ -311,7 +312,11 @@ export function AppShell({
         { id: "social-media", label: "Social Media API", href: "/settings/social-media", soon: true },
       ],
     },
-  ], [badges]);
+  ]
+    // Menu yang tidak berlaku untuk instance ini disembunyikan (halamannya tetap ada);
+    // grup yang jadi kosong ikut hilang supaya tidak tersisa judul tanpa isi.
+    .map((g) => ({ label: g.label, items: (g.items as NavItem[]).filter((i) => !INSTANCE.hiddenNav.includes(i.id)) }))
+    .filter((g) => g.items.length > 0), [badges]);
 
   // Auth gate: show a loader while checking, render nothing while redirecting.
   if (authStatus === "loading") {
@@ -357,13 +362,7 @@ export function AppShell({
         <div className="h-1 shrink-0 bg-gradient-to-r from-blue-600 via-blue-500 to-amber-400" aria-hidden />
         <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-4 dark:border-slate-800">
           <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5" aria-label="Beranda">
-            <RicaRicoMark size={38} />
-            <span className="min-w-0">
-              <RicaRicoWordmark className="block text-[22px]" />
-              <span className="mt-0.5 block truncate text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                People Intelligence
-              </span>
-            </span>
+            <BrandSidebarLogo />
           </Link>
           <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-slate-800" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
             <Icon className="h-5 w-5"><SvgPath name="close" /></Icon>
@@ -456,7 +455,7 @@ export function AppShell({
 
           <footer className="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
             <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between dark:text-slate-400">
-              <p>&copy; 2026 Rica Rico Bakery &middot; Platform HR Terpadu</p>
+              <p>&copy; 2026 {INSTANCE.brandName} &middot; Platform HR Terpadu</p>
               <p className="tabular-nums">v0.1.0 &middot; {activeCompany.shortName}</p>
             </div>
           </footer>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell, Button, Card, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { useRole } from "@/lib/roles";
+import { INSTANCE } from "@/lib/instance";
 import { activeSpgByOutlet, loadMaster, saveOutlet, vacantOutlets, type MasterEmployee, type Outlet } from "@/lib/rr/master";
 
 const TYPE_LABEL: Record<NonNullable<Outlet["location_type"]>, string> = {
@@ -61,7 +62,7 @@ export default function OutletPage() {
   };
 
   return (
-    <AppShell activeNavId="outlet" title="Outlet & Penempatan" subtitle="Outlet Rica Rico per area dan SPV, dengan jumlah SPG aktif"
+    <AppShell activeNavId="outlet" title="Outlet & Penempatan" subtitle={INSTANCE.outletsSubtitle}
       headerActions={canEdit ? <Button variant="primary" size="sm" onClick={() => setDraft({ name: "", status: "active" })}>+ Outlet</Button> : undefined}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card><p className="text-xs text-slate-500">Outlet aktif</p><p className="mt-1 text-2xl font-semibold tabular-nums">{loading ? "…" : outlets.filter((o) => o.status === "active").length}</p></Card>

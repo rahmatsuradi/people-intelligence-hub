@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell, Button, Card, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { useRole } from "@/lib/roles";
+import { INSTANCE } from "@/lib/instance";
 import { maskBankAccount, maskNik } from "@/lib/payroll/payslip-masking";
 import {
   FLAG_LABEL, STATUS_LABEL, WORK_GROUP_LABEL, filterEmployees, loadMaster, saveEmployee, summarizeFlags,
@@ -62,7 +63,7 @@ export default function MasterKaryawanPage() {
   const set = (patch: MasterFilter) => { setFilter((f) => ({ ...f, ...patch })); setShown(PAGE); };
 
   return (
-    <AppShell activeNavId="karyawan" title="Master Karyawan" subtitle="Seluruh karyawan Rica Rico — sumber: rekap gaji September 2026 + Employee Database">
+    <AppShell activeNavId="karyawan" title="Master Karyawan" subtitle={INSTANCE.employeesSubtitle}>
       {error && <Card><p className="text-sm text-red-600">Gagal memuat data: {error}</p></Card>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

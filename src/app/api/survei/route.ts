@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { INSTANCE } from "@/lib/instance";
 import { jabatanGroup, periodLabel, validateSubmission, type SurveyQuestion } from "@/lib/rr/pulse";
 
 export const runtime = "nodejs";
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
   const { error: insErr } = await supabaseAdmin!.from("pi_survey_responses").insert({
     tenant_id: row!.tenant_id, survey_id: row!.survey_id, campaign_id: row!.id, period: row!.period,
     submitted_at: new Date().toISOString(), respondent_name: name, respondent_email: contact,
-    employee_id: hitsByName.length === 1 ? hitsByName[0].id : null, answers, source: "Formulir web Rica Rico",
+    employee_id: hitsByName.length === 1 ? hitsByName[0].id : null, answers, source: INSTANCE.surveySource,
   });
   if (insErr) return NextResponse.json({ error: "Jawaban gagal disimpan. Coba kirim ulang." }, { status: 500 });
   return NextResponse.json({ ok: true });

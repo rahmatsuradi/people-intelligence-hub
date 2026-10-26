@@ -13,6 +13,7 @@
    jawaban tidak diberikan (model menyalinnya mentah).
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { INSTANCE } from "../instance";
 import { MAX_FOCUS, distribution, hasKpi, isVisible, kpi, periodLabel, type PeriodSummary, type SegmentPeriod, type Survey, type SurveyAction } from "./pulse";
 
 export interface InsightContent {
@@ -70,7 +71,7 @@ export function buildInsightPrompt(i: InsightInput): string {
   const lines: string[] = [];
 
   lines.push(`KONTEKS PERUSAHAAN
-Rica Rico Bakery: produsen bika ambon & kue, jaringan ±110 outlet kecil di stasiun KRL, mal, dan supermarket Jabodetabek, satu dapur produksi, dan kantor pusat (admin operasional, customer service, purchasing, host live streaming). SPG menjaga outlet dengan shift panjang (sering 12 jam), diawasi SPV area yang memegang belasan outlet. Usaha keluarga, bukan korporasi: anggaran terbatas, keputusan ada di owner, HR hanya 1–2 orang. Libur karyawan operasional selama ini 2x per bulan.`);
+${INSTANCE.aiBusinessContext}`);
 
   lines.push(`\nSURVEI: ${i.survey.title} — bulan yang dinilai ${periodLabel(i.period)}. Pengisi: ${i.survey.audience ?? "-"}. Responden: ${cur?.n ?? 0}${i.targetCount ? ` dari target ${i.targetCount}` : ""}.`);
 
@@ -118,7 +119,7 @@ Rica Rico Bakery: produsen bika ambon & kue, jaringan ±110 outlet kecil di stas
 
   lines.push(`
 TUGAS
-Kamu analis people analytics senior yang membaca hasil pulse check ini untuk HR dan owner Rica Rico. Tulis dalam Bahasa Indonesia yang lugas, untuk orang non-teknis.
+Kamu analis people analytics senior yang membaca hasil pulse check ini untuk HR dan owner ${INSTANCE.shortName}. Tulis dalam Bahasa Indonesia yang lugas, untuk orang non-teknis.
 Aturan:
 1. Setiap temuan WAJIB menyebut angka dari data di atas (persen, jumlah orang, atau jumlah komentar). Tanpa angka = jangan ditulis.
 2. Kelompokkan komentar menjadi tema; hitung berapa komentar per tema. Tulis intinya dengan parafrase — jangan mengutip kalimat asli lebih dari 6 kata, dan jangan menyebut nama atau petunjuk yang bisa mengungkap siapa penulisnya (outlet tertentu, jabatan tunggal).

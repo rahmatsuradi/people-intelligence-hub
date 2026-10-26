@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, cn, inputClass } from "@/components/app-shell";
 import { appreciationCounts, periodLabel, personTrends, type Survey, type SurveyResponse } from "@/lib/rr/pulse";
+import { INSTANCE } from "@/lib/instance";
 import { shortMonth } from "./charts";
 
 /**
@@ -33,7 +34,7 @@ export function People({ survey, responses, period, employeeNames }: { survey: S
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Paling banyak diapresiasi — {periodLabel(period)}</h2>
             {month.length === 0 ? <p className="mt-2 text-sm text-slate-500">Belum ada.</p> : (
               <>
-                <p className="mt-1 text-xs text-slate-500">Kandidat Employee of the Month: <span className="font-semibold text-emerald-700 dark:text-emerald-400">{month[0].name}</span> ({month[0].count}× disebut rekan). Di Lencir diberi Rp150.000 + poster; di Rica Rico belum diberlakukan.</p>
+                <p className="mt-1 text-xs text-slate-500">Kandidat Employee of the Month: <span className="font-semibold text-emerald-700 dark:text-emerald-400">{month[0].name}</span> ({month[0].count}× disebut rekan). {INSTANCE.employeeOfMonthNote}</p>
                 <ol className="mt-2 space-y-1 text-sm">{month.map((a, i) => <li key={a.name} className="flex justify-between"><span>{i + 1}. {a.name}</span><span className="tabular-nums text-slate-500">{a.count}×</span></li>)}</ol>
               </>
             )}

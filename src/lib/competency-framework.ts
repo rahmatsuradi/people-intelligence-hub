@@ -1377,7 +1377,7 @@ export const CLUSTER_FRAMEWORKS: Record<CompetencyCluster, ClusterFramework> = {
     competencies: SECURITY_COMPETENCIES,
   },
   retail: {
-    label: "Ritel & Outlet — kerangka garis depan Rica Rico (SPG, kasir, staf outlet, produksi)",
+    label: "Ritel & Outlet — kerangka garis depan (SPG, kasir, staf outlet, produksi)",
     reference: "Disusun internal HR (Okt 2026), belum divalidasi lokal; rujukan praktik seleksi garis depan dan Sackett dkk. (2022) untuk bobot wawancara terstruktur",
     competencies: RETAIL_COMPETENCIES,
   },

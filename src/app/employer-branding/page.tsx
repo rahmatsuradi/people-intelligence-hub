@@ -43,6 +43,7 @@ import { useCallback, useState, type ChangeEvent } from "react";
 // research on a company other than the active tenant.
 const TENANT_INDUSTRY_LABEL: Record<string, string> = {
   bakery: "Makanan & Minuman / Bakery",
+  wellness: "Kecantikan & Wellness",
 };
 
 /* ─── Platform badge colors ─── */

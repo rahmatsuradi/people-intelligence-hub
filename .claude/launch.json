@@ -4,8 +4,23 @@
     {
       "name": "nextdev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev", "--port", "3000"],
+      "runtimeArgs": [
+        "next",
+        "dev",
+        "--port",
+        "3000"
+      ],
       "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "lencir-dev",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set NEXT_PUBLIC_INSTANCE=lencir&& set NEXT_DIST_DIR=.next-lencir&& set NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:9&& set NEXT_PUBLIC_SUPABASE_ANON_KEY=tidak-terhubung&& npx next dev --port 3101"
+      ],
+      "port": 3101,
       "autoPort": false
     }
   ]

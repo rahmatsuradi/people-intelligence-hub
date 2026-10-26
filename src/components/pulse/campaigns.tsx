@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, Card, Label, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { createCampaign, periodLabel, updateCampaign, type Campaign, type PeriodSummary, type Survey } from "@/lib/rr/pulse";
+import { INSTANCE } from "@/lib/instance";
 
 const addMonths = (period: string, n: number) => {
   const [y, m] = period.split("-").map(Number);
@@ -32,7 +33,7 @@ export function Campaigns({ survey, summary, campaigns, reload }: { survey: Surv
   const count = (p: string) => summary.find((s) => s.period === p)?.n ?? 0;
 
   const waText = (c: Campaign) =>
-    `Halo rekan-rekan Rica Rico 👋\n\nYuk isi *${survey.title} ${periodLabel(c.period)}* (±3 menit) lewat link ini:\n${link(c)}\n\n` +
+    `Halo rekan-rekan ${INSTANCE.shortName} 👋\n\nYuk isi *${survey.title} ${periodLabel(c.period)}* (±3 menit) lewat link ini:\n${link(c)}\n\n` +
     `Jawabanmu hanya dibaca tim HR dan dipakai untuk memperbaiki tempat kerja kita. Owner hanya melihat ringkasan angka tanpa nama.` +
     (c.closes_at ? `\n\nBatas pengisian: ${new Date(c.closes_at).toLocaleDateString("id-ID", { day: "numeric", month: "long" })}.` : "") + `\n\nTerima kasih 🙏`;
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono, Lobster } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono, Lobster, Cormorant_Garamond } from "next/font/google";
+import { INSTANCE } from "@/lib/instance";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -20,11 +21,24 @@ const lobster = Lobster({
   weight: "400",
 });
 
+// Serif untuk wordmark LENCIR. Kontras tebal-tipisnya mendekati wordmark asli yang
+// bergaya Didone. Next membutuhkan pemanggilan font di tingkat modul, jadi kedua font
+// merek dideklarasikan; hanya yang milik instance aktif yang dipasang di <html> di bawah.
+const cormorant = Cormorant_Garamond({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+// Judul, deskripsi, dan ikon tab mengikuti instance (src/lib/instance.ts).
+// Tanpa iconPath, ikon bawaan aplikasi (src/app/favicon.ico) yang dipakai.
 export const metadata: Metadata = {
-  title: "Rica Rico Bakery — People Intelligence",
-  description: "Platform HR terpadu Rica Rico Bakery: rekrutmen, payroll & kepatuhan statutori, performance, dan asesmen.",
-  icons: { icon: "/brand/rica-rico-logo.jpg", apple: "/brand/rica-rico-logo.jpg" },
+  title: INSTANCE.appTitle,
+  description: INSTANCE.description,
+  ...(INSTANCE.iconPath ? { icons: { icon: INSTANCE.iconPath, apple: INSTANCE.iconPath } } : {}),
 };
+
+const brandFontVariable = INSTANCE.key === "lencir" ? cormorant.variable : lobster.variable;
 
 export default function RootLayout({
   children,
@@ -34,7 +48,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakarta.variable} ${lobster.variable} ${jetbrainsMono.variable} h-full antialiased font-sans`}
+      data-instance={INSTANCE.key}
+      className={`${plusJakarta.variable} ${brandFontVariable} ${jetbrainsMono.variable} h-full antialiased font-sans`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 dark:bg-slate-950 font-sans">{children}</body>
     </html>
