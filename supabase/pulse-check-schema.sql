@@ -470,3 +470,39 @@ $$;
 
 revoke all on function public.pi_survey_themes(uuid) from public, anon;
 grant execute on function public.pi_survey_themes(uuid) to authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Tahap 5 (26 Okt 2026): analisis akar masalah per survei × bulan — DATA, bukan kode.
+--   Satu baris = satu masalah: siapa pemiliknya, angka bukti, penyebab, solusi (+PIC), kutipan (tanpa nama).
+--   Disusun HR dari angka + seluruh komentar (lihat CLAUDE.md §9f). Khusus HR: kutipan bisa dikenali gaya bahasanya.
+--   `spv` = nama SPV bila masalahnya khusus satu area; judul/label memakai penanda {spv} agar bisa disamarkan di layar.
+-- ═══════════════════════════════════════════════════════════════════════════
+create table if not exists public.pi_survey_diagnoses (
+  id           uuid primary key default gen_random_uuid(),
+  tenant_id    uuid not null,
+  survey_id    uuid not null references public.pi_surveys (id) on delete cascade,
+  period       date not null,
+  ord          int  not null default 0,
+  title        text not null,
+  owner        text not null,
+  spv          text,
+  metric       text,
+  metric_label text,
+  evidence     text[] not null default '{}',
+  causes       text[] not null default '{}',
+  solutions    jsonb  not null default '[]'::jsonb,
+  quotes       text[] not null default '{}',
+  notes        text[] not null default '{}',
+  source       text,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (survey_id, period, ord)
+);
+
+do $$
+begin
+  alter table public.pi_survey_diagnoses enable row level security;
+  drop policy if exists "pi hr only pi_survey_diagnoses" on public.pi_survey_diagnoses;
+  create policy "pi hr only pi_survey_diagnoses" on public.pi_survey_diagnoses for all to authenticated
+    using (public.pi_role() = 'hr') with check (public.pi_role() = 'hr');
+end $$;

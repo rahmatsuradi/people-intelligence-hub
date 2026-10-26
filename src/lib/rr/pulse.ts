@@ -758,6 +758,22 @@ export interface Conclusion { id: string; survey_id: string; period: string; cat
 export const CONCLUSION_CATEGORIES = ["Company Benefit", "Work Environment", "Technical Issue", "Personal Issue"] as const;
 
 /** Khusus HR (isinya sering menyebut nama pengangkat). */
+/** Analisis akar masalah per survei × bulan (pi_survey_diagnoses, khusus HR). `{spv}` di judul/label diganti nama SPV atau samarannya. */
+export interface Diagnosis {
+  id: string; survey_id: string; period: string; ord: number;
+  title: string; owner: string; spv: string | null; metric: string | null; metric_label: string | null;
+  evidence: string[]; causes: string[]; solutions: { text: string; pic?: string; due?: string }[]; quotes: string[]; notes: string[]; source: string | null;
+}
+
+export async function loadDiagnoses(surveyId: string): Promise<Diagnosis[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from("pi_survey_diagnoses")
+    .select("id, survey_id, period, ord, title, owner, spv, metric, metric_label, evidence, causes, solutions, quotes, notes, source")
+    .eq("survey_id", surveyId).order("period").order("ord");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Diagnosis[];
+}
+
 export async function loadConclusions(surveyId: string): Promise<Conclusion[]> {
   if (!supabase) return [];
   const { data, error } = await supabase.from("pi_survey_conclusions").select("id, survey_id, period, category, body, source")

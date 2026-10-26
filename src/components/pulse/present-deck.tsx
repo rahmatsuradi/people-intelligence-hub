@@ -1,52 +1,57 @@
 "use client";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Mode Presentasi Pulse Check — satu langkah per layar, dari lapangan ke atas:
-     Pembuka → SPG menilai SPV → SPV menilai Koordinator SPV → Keputusan.
-   Semua angka dan grafik memakai fungsi & komponen yang sama dengan dashboard, jadi tidak mungkin
-   berbeda. Judul tiap layar = kesimpulan yang dihitung dari data (pulse-present.ts), bukan tulisan tetap.
+   Mode Presentasi Pulse Check — satu layar = satu pesan, dari lapangan ke atas:
+     Pembuka (peta masalah) → SPG menilai SPV (bukti) → SPV menilai Koordinator → Akar masalah → Keputusan.
+
+   Aturan tata letak: judul ≤ ±10 kata, satu visual, paling banyak 3 poin pendek. Penjelasan panjang
+   masuk ke catatan pembicara (tersembunyi secara bawaan, tombol N). Angka & grafik memakai fungsi dan
+   komponen yang sama dengan dashboard; judul yang memuat angka dihitung dari data, bukan tulisan tetap.
+   Akar masalah (penyebab, solusi, kutipan) adalah DATA di pi_survey_diagnoses yang disusun HR.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, cn, inputClass } from "@/components/app-shell";
 import {
-  ACTION_STATUS_LABEL, periodLabel, spvScorecard, build360,
-  type Campaign, type PeriodSummary, type SegmentPeriod, type Survey, type SurveyAction, type SurveyResponse, type ThemePeriod,
+  periodLabel, spvScorecard, build360,
+  type Campaign, type Diagnosis, type PeriodSummary, type SegmentPeriod, type Survey, type SurveyAction, type SurveyResponse, type ThemePeriod,
 } from "@/lib/rr/pulse";
-import { leaderView, maskNames, spvHighlights, MOVE_EPS } from "@/lib/rr/pulse-present";
+import { leaderView, maskNames, spvHighlights } from "@/lib/rr/pulse-present";
 import { ceilingItems, compileThemes, crossTab, favorableOf, gap, issueFunnel, spanOfControl, themeBySegment, themeGroups, type CrossRow } from "@/lib/rr/pulse-bi";
-import { headlineKpis, themeMatrix, topThemes } from "@/lib/rr/pulse-viz";
+import { headlineKpis } from "@/lib/rr/pulse-viz";
 import { KpiRow } from "./dash-common";
-import { CoverageCard, FOLLOWED_LEVELS, LikertCard, PRIOR_LEVELS, ThemeCard, TrendCard } from "./dashboards";
+import { TrendCard } from "./dashboards";
 import { SPV_SCALES, cell, pct } from "./spv-report";
 import { ChartCard, Legend, VizStyle, fmtNum } from "./viz/base";
 import { DotPlot, type DotRow } from "./viz/dot-plot";
-import { FindingCard, Funnel, PctBars, SeqHeat, StackRows } from "./viz/present-viz";
+import { Funnel, PctBars, SeqHeat, StackRows } from "./viz/present-viz";
 
 const LEADER_KEYS = ["leader_direction", "leader_problem", "leader_mentoring", "leader_openness", "leader_fairness"];
+const VISIT = ["Tidak Pernah", "1 kali", "2 kali", "3 kali", "Lebih dari 3 kali"];
+const LOW_VISIT = ["Tidak Pernah", "1 kali", "2 kali"];
+/** Kelompok terkecil yang boleh menentukan peringkat pengungkit. */
+const MIN_RANK_N = 10;
+const r0 = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x)}%`);
 
 export interface DeckData {
-  spg: { survey: Survey; summary: PeriodSummary[]; segments: SegmentPeriod[]; themes: ThemePeriod[]; actions: SurveyAction[]; roster: Record<string, number>; campaigns: Campaign[];
-    /** Jawaban mentah — kosong untuk owner; slide analisis kaitan hanya muncul bila terisi. */
-    responses: SurveyResponse[] } | null;
+  spg: {
+    survey: Survey; summary: PeriodSummary[]; segments: SegmentPeriod[]; themes: ThemePeriod[]; actions: SurveyAction[]; roster: Record<string, number>; campaigns: Campaign[];
+    /** Jawaban mentah — kosong untuk owner; layar analisis kaitan hanya muncul bila terisi. */
+    responses: SurveyResponse[];
+    /** Analisis akar masalah (khusus HR). */
+    diagnoses: Diagnosis[];
+  } | null;
   koor: { survey: Survey; responses: SurveyResponse[] } | null;
   isHr: boolean;
 }
 
-type Group = "buka" | "spg" | "koor" | "putus";
+type Group = "buka" | "spg" | "koor" | "akar" | "putus";
 const GROUPS: { id: Group; label: string }[] = [
-  { id: "buka", label: "Pembuka" }, { id: "spg", label: "SPG → SPV" }, { id: "koor", label: "SPV → Koordinator" }, { id: "putus", label: "Keputusan" },
+  { id: "buka", label: "Pembuka" }, { id: "spg", label: "SPG → SPV" }, { id: "koor", label: "SPV → Koordinator" }, { id: "akar", label: "Akar masalah" }, { id: "putus", label: "Keputusan" },
 ];
-const KICKER: Record<Group, string> = { buka: "Pembuka", spg: "Bagian 1 · SPG menilai SPV", koor: "Bagian 2 · SPV menilai Koordinator SPV", putus: "Penutup" };
+const KICKER: Record<Group, string> = { buka: "Pembuka", spg: "Bagian 1 · SPG menilai SPV", koor: "Bagian 2 · SPV menilai Koordinator", akar: "Bagian 3 · Akar masalah", putus: "Penutup" };
 
-interface Slide { id: string; group: Group; title: string; sub?: string; body: React.ReactNode; notes: string[] }
-
-const signed = (d: number) => `${d > 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d))}`;
-const VISIT = ["Tidak Pernah", "1 kali", "2 kali", "3 kali", "Lebih dari 3 kali"];
-const LOW_VISIT = ["Tidak Pernah", "1 kali", "2 kali"];
-const r0 = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x)}%`);
-/** Kelompok terkecil yang boleh menentukan peringkat pengungkit. */
-const MIN_RANK_N = 10;
+interface Slide { id: string; group: Group; kicker?: string; title: string; sub?: string; body: React.ReactNode; notes: string[] }
 
 export function PresentDeck({ data }: { data: DeckData }) {
   const { spg, koor, isHr } = data;
@@ -57,7 +62,7 @@ export function PresentDeck({ data }: { data: DeckData }) {
   }, [spg, koor]);
   const [period, setPeriod] = useState(() => (spg ? [...spg.summary].reverse().find((p) => !p.suppressed)?.period : undefined) ?? periods[0] ?? "");
   const [idx, setIdx] = useState(0);
-  const [notes, setNotes] = useState(true);
+  const [notes, setNotes] = useState(false);
   const [hideNames, setHideNames] = useState(false);
   const [quotes, setQuotes] = useState(false);
   const [full, setFull] = useState(false);
@@ -78,10 +83,14 @@ export function PresentDeck({ data }: { data: DeckData }) {
     const segPrev = spg && segIdx > 0 ? spg.segments[segIdx - 1] : null;
     const rows = spg && survey ? spvScorecard(survey, segCur, segPrev, spg.roster, SPV_SCALES) : [];
     const hi = spvHighlights(rows, SPV_SCALES, label);
-    const mask = hideNames ? maskNames([...rows.map((r) => r.spv), ...Object.keys(spg?.roster ?? {})]) : {};
+    const diags = (spg?.diagnoses ?? []).filter((d) => d.period === period).sort((a, b) => a.ord - b.ord);
+    const spvOptions = survey?.questions.find((q) => q.key === "spv")?.options?.map((o) => o.value) ?? [];
+    const mask = hideNames ? maskNames([...rows.map((r) => r.spv), ...Object.keys(spg?.roster ?? {}), ...spvOptions, ...diags.map((d) => d.spv).filter((x): x is string => !!x)]) : {};
     const nm = (s: string) => mask[s] ?? s;
+    // Teks analisis bisa menyebut SPV lain (mis. di catatan); saat disamarkan, semua nama yang dikenal ikut diganti.
+    const maskAll = (t: string) => Object.entries(mask).reduce((acc, [k, v]) => acc.replace(new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"), v), t);
+    const fill = (text: string | null, d: Diagnosis) => maskAll((text ?? "").replace(/\{spv\}/g, d.spv ? nm(d.spv) : "SPV"));
     const kpis = spg && survey ? headlineKpis(survey, spg.summary, period) : [];
-    const prevSummary = spg && cur ? spg.summary.slice(0, spg.summary.indexOf(cur)).reverse().find((p) => !p.suppressed) : undefined;
     const spgOk = !!(spg && survey && cur && !cur.suppressed);
 
     /* ─── Data bagian 2 ─── */
@@ -92,22 +101,19 @@ export function PresentDeck({ data }: { data: DeckData }) {
       return leaderView(leader, period, LEADER_KEYS, l);
     })();
     const leaderName = hideNames ? "Koordinator SPV" : `Koordinator SPV${koor?.survey.config.leader ? ` (${koor.survey.config.leader})` : ""}`;
-    const raters360 = lv?.raters ?? 0;
 
     /* ─── Analisis tingkat responden (khusus HR; owner tidak menerima jawaban mentah) ─── */
     const raw = (spg?.responses ?? []).filter((r) => r.period === period && !r.excluded);
     const bi = raw.length >= 10 && survey ? (() => {
       const fav = (r: Pick<SurveyResponse, "answers">) => favorableOf(r, "comfort");
       const drivers: { key: string; title: string; rows: CrossRow[] }[] = [
-        { key: "visit", title: "Seberapa sering SPV berkunjung", rows: crossTab(raw, "visit_freq", fav, { buckets: { "Lebih dari 3 kali": ["Lebih dari 3 kali"], "3 kali": ["3 kali"], "2 kali atau kurang": LOW_VISIT } }) },
-        { key: "problem", title: "Cara SPV menangani masalah di store", rows: crossTab(raw, "problem_behavior", fav, { buckets: { "Sangat membantu": ["Sangat membantu"], "Cukup membantu": ["Cukup membantu"], "Kurang / tidak membantu": ["Kurang membantu", "Tidak membantu"] } }) },
-        { key: "unresolved", title: "Masih ada kendala yang belum terjawab?", rows: crossTab(raw, "unresolved", fav, { buckets: { Tidak: ["Tidak"], Ya: ["Ya"] } }) },
+        { key: "visit", title: "Frekuensi kunjungan SPV", rows: crossTab(raw, "visit_freq", fav, { buckets: { "> 3 kali": ["Lebih dari 3 kali"], "3 kali": ["3 kali"], "≤ 2 kali": LOW_VISIT } }) },
+        { key: "problem", title: "Cara SPV menangani masalah", rows: crossTab(raw, "problem_behavior", fav, { buckets: { "Sangat membantu": ["Sangat membantu"], "Cukup membantu": ["Cukup membantu"], "Kurang / tidak": ["Kurang membantu", "Tidak membantu"] } }) },
+        { key: "unresolved", title: "Ada kendala belum terjawab", rows: crossTab(raw, "unresolved", fav, { buckets: { Tidak: ["Tidak"], Ya: ["Ya"] } }) },
       ].filter((d) => d.rows.length >= 2);
       const themes = compileThemes(survey.config.themes ?? []);
       const tg = themes.length ? themeGroups(raw, themes) : null;
-      const topThemeKeys = tg ? tg.groups.flatMap((g) => g.themes).sort((a, b) => b.n - a.n).slice(0, 6) : [];
-      const visitAll = crossTab(raw, "visit_freq", () => true, { order: VISIT });
-      const visitN = visitAll.reduce((a, b) => a + b.n, 0);
+      const topThemeKeys = tg ? tg.groups.flatMap((g) => g.themes).sort((a, b) => b.n - a.n).slice(0, 5) : [];
       return {
         // Peringkat pengungkit hanya dari kelompok ≥ MIN_RANK_N orang, supaya kelompok 4 orang tidak menjadi "temuan utama".
         drivers: drivers.map((d) => ({ ...d, gap: gap(d.rows.filter((r) => r.n >= MIN_RANK_N)) })).sort((a, b) => (b.gap ?? -1) - (a.gap ?? -1)),
@@ -116,130 +122,85 @@ export function PresentDeck({ data }: { data: DeckData }) {
         tg, topThemeKeys,
         bySpv: themes.length ? themeBySegment(raw, themes, "spv", topThemeKeys.map((t) => t.key)) : [],
         ceiling: ceilingItems(survey, raw),
-        visitTopPct: visitN ? ((visitAll.find((v) => v.value === "Lebih dari 3 kali")?.n ?? 0) / visitN) * 100 : null,
-        visitLow: visitAll.filter((v) => LOW_VISIT.includes(v.value)).reduce((a, b) => a + b.n, 0),
-        visitN,
       };
     })() : null;
 
     /* ═══ Pembuka ═══ */
     out.push({
-      id: "buka", group: "buka", title: "Suara dari lapangan, naik satu tingkat demi satu tingkat",
-      sub: `Pulse Check & Feedback · ${mon}`,
+      id: "buka", group: "buka", title: `Suara SPG & SPV — ${mon}`, sub: "Dari lapangan ke atas, lalu kita putuskan bersama.",
       body: (
-        <div className="space-y-6">
-          <div className="grid items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
-            <FlowBox who="SPG" does="menilai SPV-nya" value={spgOk ? `${cur!.n} jawaban` : "belum ada data"} />
-            <Arrow />
-            <FlowBox who="SPV" does="menilai Koordinator SPV" value={lv ? `${raters360} penilai` : isHr ? "belum ada data" : "khusus HR"} />
-            <Arrow />
-            <FlowBox who="Koordinator SPV" does="membina para SPV" value={lv?.avg != null ? `skor ${fmtNum(lv.avg)}` : "—"} />
-          </div>
-          <ol className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 sm:grid-cols-2">
-            {["Cara data dikumpulkan dan dibaca", "Bagian 1 — SPG menilai SPV: gambaran, peringkat, titik lemah, isu lama, suara SPG", "Bagian 2 — SPV menilai Koordinator SPV", "Keputusan dan tindak lanjut"].map((t, i) => (
-              <li key={t} className="flex gap-3 rounded-lg bg-white p-3 shadow-sm dark:bg-slate-900"><span className="font-semibold text-blue-600">{i + 1}</span><span>{t}</span></li>
-            ))}
-          </ol>
+        <div className="grid items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
+          <FlowBox who="SPG" does="menilai SPV" value={spgOk ? `${cur!.n} jawaban` : "—"} />
+          <Arrow />
+          <FlowBox who="SPV" does="menilai Koordinator" value={lv ? `${lv.raters} penilai` : isHr ? "—" : "khusus HR"} />
+          <Arrow />
+          <FlowBox who="Koordinator SPV" does="membina para SPV" value={lv?.avg != null ? `skor ${fmtNum(lv.avg, 1)} / 5` : "—"} />
         </div>
       ),
       notes: [
-        "Tujuan sesi: memastikan masalah di lapangan sampai ke atasan lewat data, bukan lewat gosip — lalu ada yang memutuskan dan ada yang dikabari balik.",
-        "Rantainya tiga tingkat. SPG menilai SPV; SPV menilai Koordinator SPV. Kita baca dari bawah ke atas.",
-        "Sebut dulu bahwa semua yang tampil adalah angka dan ringkasan, bukan siapa menjawab apa.",
+        "Tujuan: masalah di lapangan sampai ke atasan lewat data, ada yang memutuskan, dan SPG dikabari balik.",
+        "Urutan: peta masalah → bukti dari SPG → penilaian Koordinator → akar masalah → keputusan.",
+        "Yang tampil hanya angka per kelompok; nama SPG tidak pernah muncul.",
       ],
     });
 
-    /* ═══ Ringkasan eksekutif — jawaban dulu, rincian kemudian ═══ */
-    if (bi && spgOk) {
-      const vd = bi.drivers.find((d) => d.key === "visit");
-      const vHi = vd?.rows.find((r) => r.value === "Lebih dari 3 kali");
-      const vLo = vd?.rows.find((r) => r.value === "2 kali atau kurang");
-      const top = bi.span[0];
-      const isLeader = !!(top && koor?.survey.config.leader && top.spv === koor.survey.config.leader);
-      const g0 = bi.tg?.groups[0];
-      const f = bi.funnel;
-      const policy = g0?.group === "Hak & kesejahteraan";
-      const cards = [
-        g0 && g0.n > 0 ? {
-          value: r0(g0.pct), title: `SPG menyebut ${g0.group.toLowerCase()} (${g0.themes.slice(0, 3).map((t) => t.label.toLowerCase()).join(", ")})`,
-          meaning: policy ? "Keluhan terbesar adalah kebijakan perusahaan — SPV tidak bisa menyelesaikannya sendiri." : "Kelompok keluhan yang paling banyak disebut bulan ini.",
-          action: policy ? "Bawa ke manajemen sebagai keputusan kebijakan dan beri jawaban resmi ke SPG, walau jawabannya 'belum bisa'." : "Tunjuk penanggung jawab per tema dan kabari SPG hasilnya.",
-        } : null,
-        vHi?.pct != null && vLo?.pct != null ? {
-          value: `${vHi.pct - vLo.pct >= 0 ? "+" : ""}${Math.round(vHi.pct - vLo.pct)} poin`,
-          title: `Dikunjungi > 3x sebulan: ${r0(vHi.pct)} nyaman dengan SPV; 2x atau kurang: ${r0(vLo.pct)}`,
-          meaning: `Frekuensi kunjungan berkaitan dengan rasa nyaman. ${bi.visitLow} SPG (${r0(bi.visitN ? (bi.visitLow / bi.visitN) * 100 : null)}) dikunjungi 2x atau kurang.`,
-          action: "Tetapkan minimal kunjungan per outlet per bulan, lalu pantau di rapor SPV bulan depan.",
-        } : null,
-        top ? {
-          value: r0(top.share), title: `${nm(top.spv)} membina ${top.n} dari ${bi.span.reduce((a, b) => a + b.n, 0)} SPG yang menjawab${isLeader && !hideNames ? " — sekaligus Koordinator SPV" : ""}`,
-          meaning: `${r0(top.top)} SPG-nya dikunjungi lebih dari 3x sebulan; rata-rata semua SPV ${r0(bi.visitTopPct)}. Rentang kendali yang terlalu lebar menipiskan pendampingan.`,
-          action: "Tinjau pembagian outlet per SPV, atau beri pendamping di area dengan SPG terbanyak.",
-        } : null,
-        {
-          value: String(f.unresolved), title: "SPG masih punya kendala yang belum mendapat solusi",
-          meaning: `${f.reported} dari ${f.total} SPG melapor kendala ke SPV; ${f.solved} diselesaikan, ${f.inProgress} sedang diproses, ${f.notFollowed} belum ditindaklanjuti.`,
-          action: "Buka daftarnya di tab Jawaban lengkap; SPV menutup satu per satu dalam 2 minggu dan HR memeriksa.",
-        },
-      ].filter((x): x is NonNullable<typeof x> => !!x);
+    if (diags.length) {
       out.push({
-        id: "ringkasan", group: "buka", title: `${cards.length} hal yang perlu diketahui dari ${mon}`,
-        sub: "Ringkasan dulu, rinciannya di layar-layar berikut. Setiap angka bisa ditelusuri ke grafiknya.",
-        body: <div className="grid gap-3 md:grid-cols-2">{cards.map((c, i) => <FindingCard key={i} n={i + 1} {...c} />)}</div>,
+        id: "peta", group: "buka", title: `${diags.length} masalah utama ${mon}`, sub: "Dikelompokkan menurut siapa yang bisa menyelesaikannya.",
+        body: (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {diags.map((d) => (
+              <div key={d.id} className="flex flex-col rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <OwnerBadge owner={d.owner} />
+                <p className="mt-2 text-3xl font-semibold leading-none text-slate-900 dark:text-white">{d.metric}</p>
+                <p className="mt-1 text-xs text-slate-500">{fill(d.metric_label, d)}</p>
+                <p className="mt-auto pt-3 text-sm font-medium leading-snug text-slate-900 dark:text-white">{fill(d.title, d)}</p>
+              </div>
+            ))}
+          </div>
+        ),
         notes: [
-          "Sampaikan jawabannya lebih dulu (prinsip piramida): keempat temuan ini adalah alasan pertemuan hari ini.",
-          "Kaitan bukan sebab-akibat. Contoh: SPG yang sering dikunjungi lebih nyaman — bisa karena kunjungan, bisa juga karena outletnya mudah dijangkau. Tetap layak dijadikan target karena murah dan bisa diukur.",
-          "Usulan di tiap kartu adalah titik awal diskusi, bukan keputusan.",
+          "Ini jawabannya lebih dulu. Layar berikutnya adalah buktinya, lalu tiap masalah dibedah satu per satu di bagian Akar masalah.",
+          "Perhatikan pemiliknya: dua masalah terbesar ada di level manajemen dan HR, bukan di SPV.",
         ],
       });
     }
 
-    /* ═══ Bagian 1 ═══ */
+    /* ═══ Bagian 1 — bukti dari SPG ═══ */
     if (!spgOk) {
-      out.push({
-        id: "spg-kosong", group: "spg", title: `Belum ada data SPG → SPV untuk ${mon}`, sub: "Pilih bulan lain di bagian atas.",
-        body: <p className="text-sm text-slate-500">Bulan ini belum punya jawaban yang cukup (minimal 3) untuk ditampilkan.</p>, notes: [],
-      });
+      out.push({ id: "spg-kosong", group: "spg", title: `Belum ada data SPG → SPV untuk ${mon}`, sub: "Pilih bulan lain di bagian atas.", body: <span />, notes: [] });
     } else {
       const c = cur!;
       const total = c.n_total ?? c.n;
       out.push({
-        id: "spg-cara", group: "spg", title: `${c.n} jawaban dihitung dari ${c.n_people ?? c.n} orang — ini dasar semua angka`,
-        sub: survey!.config.who,
+        id: "spg-data", group: "spg", title: `${c.n} jawaban dari ${c.n_people ?? c.n} SPG`, sub: survey!.config.who,
         body: (
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <InfoCard t="Bulan yang dinilai" d={`Formulir diisi awal bulan berikutnya untuk menilai bulan sebelumnya. Jadi "${mon}" = penilaian atas ${mon}.`} />
-              <InfoCard t="Isian ganda tidak dihitung dua kali" d={`Orang yang sama di outlet yang sama pada bulan yang sama dihitung sekali (isian terakhir). ${total !== c.n ? `Dari ${total} baris masuk, ${total - c.n} dikeluarkan.` : "Bulan ini tidak ada yang dikeluarkan."} SPG yang berpindah outlet tetap dihitung.`} />
-              <InfoCard t="Privasi" d="Yang tampil adalah angka per kelompok. Kelompok kurang dari 3 orang disembunyikan, dan nama SPG tidak pernah muncul di layar ini." />
-            </div>
-            <CoverageCard summary={spg!.summary} />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <BigStat value={String(total)} label="isian masuk" />
+            <BigStat value={String(c.n)} label="dihitung" />
+            <BigStat value={String(total - c.n)} label="isian ganda dikeluarkan" muted />
           </div>
         ),
         notes: [
-          `Jawaban yang dihitung bulan ini: ${c.n}. Yang masuk ${total}, dari ${c.n_people ?? c.n} orang berbeda.`,
-          "Bagian ini sengaja ditaruh di depan supaya tidak ada yang bertanya 'ini datanya lengkap atau tidak' di tengah presentasi.",
-          "Kalau ada yang bertanya kenapa jawaban September terus bertambah: sebagian diisi di bulan Oktober, karena formulir untuk bulan yang dinilai diisi bulan berikutnya.",
+          `Bulan yang dinilai = ${mon}; formulirnya diisi awal bulan berikutnya, jadi sebagian masuk di bulan Oktober.`,
+          "Isian ganda = orang yang sama di outlet yang sama pada bulan yang sama; yang terakhir dipakai. SPG yang pindah outlet tetap dihitung.",
+          "Kelompok kurang dari 3 orang disembunyikan.",
         ],
       });
 
-      const lead = kpis.filter((k) => k.pct !== null).map((k) => `${k.label} ${Math.round(k.pct as number)}%`).join(" · ");
-      const moves = kpis.filter((k) => k.delta !== null && Math.round(k.delta) !== 0)
-        .map((k) => `${k.label} ${(k.delta as number) > 0 ? "▲" : "▼"} ${Math.abs(Math.round(k.delta as number))} poin (${k.better ? "membaik" : "memburuk"})`).join(" · ");
       out.push({
-        id: "spg-gambaran", group: "spg", title: lead || `Gambaran ${mon}`, sub: moves ? `Dibanding ${prevSummary ? periodLabel(prevSummary.period) : "bulan lalu"}: ${moves}` : undefined,
+        id: "spg-gambaran", group: "spg", title: kpis.filter((k) => k.pct !== null).map((k) => `${k.label} ${Math.round(k.pct as number)}%`).join(" · ") || `Gambaran ${mon}`,
         body: <KpiRow survey={survey!} summaries={spg!.summary} period={period} targetCount={spg!.campaigns.find((x) => x.period === period)?.target_count ?? null} />,
         notes: [
-          "Mulai dari angka besar, jangan langsung ke detail. Tiga angka ini adalah ringkasan 'apakah SPG merasa didengar dan masalahnya ditangani'.",
-          ...kpis.map((k) => `${k.label}: ${k.pct === null ? "—" : `${Math.round(k.pct)}%`}${k.delta !== null && Math.round(k.delta) !== 0 ? `, ${k.delta > 0 ? "naik" : "turun"} ${Math.abs(Math.round(k.delta))} poin` : ", sama seperti bulan lalu"}. ${k.hint}`),
-          "Satu SPG = beberapa poin persen. Jangan terlalu serius pada pergeseran kecil; yang dilihat arah beberapa bulan, bukan satu bulan.",
+          ...kpis.map((k) => `${k.label}: ${r0(k.pct)}${k.delta !== null && Math.round(k.delta) !== 0 ? ` (${k.delta > 0 ? "naik" : "turun"} ${Math.abs(Math.round(k.delta))} poin)` : ""}. ${k.hint}`),
+          "Satu SPG = beberapa poin persen; yang dilihat arah beberapa bulan, bukan satu bulan.",
         ],
       });
 
       out.push({
-        id: "spg-tren", group: "spg", title: "Arah beberapa bulan terakhir — naik, turun, atau datar?", sub: "Klik titik atau bulan untuk berpindah bulan.",
-        body: <TrendCard survey={survey!} summary={spg!.summary} period={period} setPeriod={setPeriod} title="Indikator utama dari bulan ke bulan" subtitle="Persen SPG per bulan." />,
-        notes: ["Satu bulan bisa kebetulan; arah beberapa bulan yang bermakna.", "Tanyakan ke peserta: apakah ada kejadian di bulan yang turun (promo, pergantian SPV, perubahan jadwal) yang menjelaskannya?"],
+        id: "spg-tren", group: "spg", title: "Arah beberapa bulan terakhir",
+        body: <TrendCard survey={survey!} summary={spg!.summary} period={period} setPeriod={setPeriod} title="Indikator utama per bulan" subtitle="Persen SPG. Klik bulan untuk berpindah." />,
+        notes: ["Tanyakan: adakah kejadian di bulan yang turun (promo, pergantian SPV, perubahan jadwal)?"],
       });
 
       if (rows.length) {
@@ -248,32 +209,27 @@ export function PresentDeck({ data }: { data: DeckData }) {
           note: r.weakest ? `Terlemah: ${label(r.weakest.key)} (${Math.round(r.weakest.pct)}%)` : undefined }));
         const prevLabel = segPrev && rows.some((r) => r.scorePrev !== null) ? periodLabel(segPrev.period) : null;
         out.push({
-          id: "spg-rapor", group: "spg",
-          title: `${nm(lowest.spv)} skor terendah (${fmtNum(lowest.score)}), ${nm(highest.spv)} tertinggi (${fmtNum(highest.score)})`,
-          sub: hi.biggestDrop || hi.biggestRise
-            ? [hi.biggestDrop && `Turun terbesar: ${nm(hi.biggestDrop.spv)} (${signed(hi.biggestDrop.delta)})`, hi.biggestRise && `Naik terbesar: ${nm(hi.biggestRise.spv)} (${signed(hi.biggestRise.delta)})`].filter(Boolean).join(" · ")
-            : "Rata-rata enam penilaian SPG (skala 1–5).",
+          id: "spg-rapor", group: "spg", title: `${nm(lowest.spv)} terendah, ${nm(highest.spv)} tertinggi`,
+          sub: hi.biggestDrop ? `Turun terbesar: ${nm(hi.biggestDrop.spv)} (▼ ${fmtNum(Math.abs(hi.biggestDrop.delta))})` : undefined,
           body: (
-            <ChartCard title="Skor tiap SPV" subtitle={`Rata-rata 6 penilaian SPG (skala 1–5), ${mon}${prevLabel ? ` dibanding ${prevLabel}` : ""}.${segCur?.hidden ? ` ${segCur.hidden} SPV dengan kurang dari 3 SPG menjawab tidak ditampilkan.` : ""}`}
+            <ChartCard title="Skor tiap SPV (skala 1–5)" subtitle={`${mon}${prevLabel ? ` vs ${prevLabel}` : ""}`}
               legend={<Legend items={[{ label: mon, color: "var(--v-s1)" }, ...(prevLabel ? [{ label: prevLabel, color: "var(--v-muted)", kind: "ring" as const }] : []), { label: "terendah", color: "var(--v-s2)" }]} />}
               table={{ head: ["SPV", "SPG menjawab", "Skor", "Bulan lalu"], rows: rows.map((r) => [nm(r.spv), r.n, fmtNum(r.score), fmtNum(r.scorePrev)]) }}>
               <DotPlot rows={dots} domain={[3.5, 5]} ticks={[3.5, 4, 4.5, 5]} currentLabel={mon.split(" ")[0]} previousLabel={prevLabel ?? "Bulan lalu"} highlight={lowest.spv} />
             </ChartCard>
           ),
           notes: [
-            "Ini inti Bagian 1. Skor tinggi bukan berarti sempurna — nilai 5 mendominasi, jadi bedakan SPV dari porsi nilai rendah, bukan hanya rata-rata.",
             `Dibanding bulan lalu: ${hi.down} SPV turun, ${hi.up} naik, ${hi.flat} relatif sama.`,
-            "Sampaikan sebagai bahan pembinaan, bukan peringkat untuk dipermalukan. Selisih 0,1–0,2 pada ±10 SPG masih bisa kebetulan.",
-            hideNames ? "Nama SPV sedang disamarkan (SPV A, B, …)." : "Nama SPV tampil. Kalau forum terbuka untuk para SPV, aktifkan 'Samarkan nama' di atas.",
+            "Nilai 5 mendominasi; bedakan dari porsi nilai rendah, bukan rata-rata saja. Selisih 0,1–0,2 bisa kebetulan.",
+            hideNames ? "Nama SPV disamarkan." : "Forum terbuka untuk para SPV? Aktifkan 'Samarkan nama'.",
           ],
         });
 
         out.push({
-          id: "spg-lemah", group: "spg",
-          title: hi.weakestCell ? `Titik terlemah: ${nm(hi.weakestCell.spv)} pada "${hi.weakestCell.scale}" — hanya ${Math.round(hi.weakestCell.pct)}% SPG memberi nilai 4–5` : "Enam penilaian per SPV",
-          sub: "Persen SPG yang memberi nilai 4–5. Hijau tua = baik, merah muda = perlu perhatian.",
+          id: "spg-lemah", group: "spg", title: "Titik lemah tiap SPV",
+          sub: hi.weakestCell ? `Terlemah: ${nm(hi.weakestCell.spv)} — "${hi.weakestCell.scale}" ${Math.round(hi.weakestCell.pct)}%` : undefined,
           body: (
-            <ChartCard title="Enam penilaian + penanganan kendala" subtitle={`Per SPV, ${mon}.`}
+            <ChartCard title="% SPG memberi nilai 4–5" subtitle="Hijau tua = baik · merah muda = perlu perhatian"
               table={{ head: ["SPV", ...SPV_SCALES.map(label), "Kendala dituntaskan", "Kendala belum terjawab"], rows: rows.map((r) => [nm(r.spv), ...SPV_SCALES.map((k) => pct(r.scales[k])), pct(r.followed), pct(r.unresolved)]) }}>
               <div className="overflow-x-auto">
                 <table className="w-full border-separate text-xs" style={{ borderSpacing: 2 }}>
@@ -298,33 +254,30 @@ export function PresentDeck({ data }: { data: DeckData }) {
             </ChartCard>
           ),
           notes: [
-            "Peringkat tadi hanya 'siapa'. Tabel ini menjawab 'di bagian mana'. Satu SPV bisa tinggi rata-rata tapi lemah di satu aspek.",
-            hi.weakestCell ? `Sel terlemah: ${nm(hi.weakestCell.spv)} pada "${hi.weakestCell.scale}" (${Math.round(hi.weakestCell.pct)}%).` : "",
-            "Kolom 'Kendala belum terjawab' arah warnanya dibalik: makin kecil makin baik.",
-            "Arahkan diskusi ke pembinaan spesifik (misalnya cara merespons, cara memberi arahan), bukan ke penilaian orangnya.",
-          ].filter(Boolean),
+            "Peringkat = siapa; tabel ini = di bagian mana. Tiap SPV punya titik lemah yang berbeda.",
+            ...rows.filter((r) => r.weakest).map((r) => `${nm(r.spv)}: terlemah "${label(r.weakest!.key)}" ${Math.round(r.weakest!.pct)}%${r.followed !== null ? `, kendala dituntaskan ${Math.round(r.followed)}%` : ""}.`),
+            "Kolom 'Kendala belum terjawab' arahnya dibalik: makin kecil makin baik.",
+          ],
         });
       }
 
       if (bi && bi.span.length) {
-        const total = bi.span.reduce((a, b) => a + b.n, 0);
         const top = bi.span[0];
         const levels = VISIT.map((v, i) => ({ key: v, label: v === "Tidak Pernah" ? "Tidak pernah" : v, color: `var(--v-ord-${Math.min(6, i + 2)})`, ink: `var(--v-ordink-${Math.min(6, i + 2)})` }));
         out.push({
-          id: "spg-kendali", group: "spg",
-          title: `${nm(top.spv)} membina ${top.n} SPG (${r0(top.share)}) — ${r0(top.top)} di antaranya dikunjungi lebih dari 3x sebulan`,
-          sub: `Rentang kendali dan frekuensi kunjungan per SPV, ${mon}. Diurut dari SPG terbanyak.`,
+          id: "spg-kendali", group: "spg", title: `${top.n} SPG menilai ${nm(top.spv)} — terbanyak`,
+          sub: `${r0(top.top)} dari mereka dikunjungi lebih dari 3x sebulan`,
           body: (
-            <ChartCard title="Berapa SPG dibina dan seberapa sering dikunjungi" subtitle="Panjang baris = 100% SPG milik SPV itu; warna = frekuensi kunjungan sebulan terakhir (makin gelap makin sering)."
+            <ChartCard title="SPG per SPV & frekuensi kunjungan" subtitle="Makin gelap = makin sering dikunjungi"
               legend={<Legend items={levels.map((l) => ({ label: l.label, color: l.color }))} />}
               table={{ head: ["SPV", "SPG", "Porsi", ...levels.map((l) => l.label)], rows: bi.span.map((r) => [nm(r.spv), r.n, r0(r.share), ...VISIT.map((v) => r0(r.dist[v]))]) }}>
-              <StackRows levels={levels} rows={bi.span.map((r) => ({ key: r.spv, label: nm(r.spv), sub: `${r.n} SPG · ${r0(r.share)} dari ${total}`, parts: r.dist }))} />
+              <StackRows levels={levels} rows={bi.span.map((r) => ({ key: r.spv, label: nm(r.spv), sub: `${r.n} SPG · ${r0(r.share)}`, parts: r.dist }))} />
             </ChartCard>
           ),
           notes: [
-            "Rentang kendali (span of control) = berapa orang dibina satu atasan. Makin lebar, makin tipis waktu per orang.",
-            `${nm(top.spv)} memegang ${top.n} SPG; SPV dengan SPG paling sedikit memegang ${bi.span.at(-1)!.n}.`,
-            "SPV dengan skor terendah tidak selalu yang paling jarang berkunjung. Kalau sering datang tetapi skornya rendah, masalahnya ada di kualitas kunjungan, bukan jumlahnya.",
+            "Rentang kendali = berapa orang dibina satu atasan. Makin lebar, makin tipis waktu per orang.",
+            `${top.n} SPG memilih ${nm(top.spv)} di formulir; jumlah di master karyawan bisa berbeda (lihat Akar masalah).`,
+            "Skor terendah tidak selalu yang paling jarang berkunjung — kalau sering datang tapi skornya rendah, masalahnya kualitas kunjungan.",
           ],
         });
       }
@@ -332,15 +285,13 @@ export function PresentDeck({ data }: { data: DeckData }) {
       if (bi && bi.drivers.length) {
         const d0 = bi.drivers[0];
         const big = d0.rows.filter((r) => r.pct !== null && r.n >= MIN_RANK_N);
-        const hiRow = big[0], loRow = big.at(-1);
         out.push({
-          id: "spg-pengungkit", group: "spg",
-          title: hiRow && loRow && hiRow !== loRow ? `Paling berkaitan dengan rasa nyaman — ${d0.title}: "${hiRow.value}" ${r0(hiRow.pct)} nyaman, "${loRow.value}" ${r0(loRow.pct)}` : "Apa yang berkaitan dengan rasa nyaman SPG",
-          sub: `Persen SPG yang nyaman berkomunikasi dengan SPV (nilai 4–5), dikelompokkan menurut jawaban lain di formulir yang sama. Selisih dihitung dari kelompok ≥ ${MIN_RANK_N} SPG.`,
+          id: "spg-pengungkit", group: "spg", title: "Apa yang membuat SPG nyaman dengan SPV?",
+          sub: big.length >= 2 ? `Paling berkaitan: ${d0.title} (${r0(big[0].pct)} vs ${r0(big.at(-1)!.pct)})` : undefined,
           body: (
             <div className="grid gap-4 lg:grid-cols-3">
               {bi.drivers.map((d) => (
-                <ChartCard key={d.key} title={d.title} subtitle={d.gap !== null ? `Selisih ${Math.round(d.gap)} poin` : "Pembanding < 10 SPG, baca hati-hati"}
+                <ChartCard key={d.key} title={d.title} subtitle={d.gap !== null ? `Selisih ${Math.round(d.gap)} poin` : "Pembanding < 10 SPG"}
                   table={{ head: ["Kelompok", "SPG", "% nyaman"], rows: d.rows.map((r) => [r.value, r.n, r0(r.pct)]) }}>
                   <PctBars outcome="Nyaman dengan SPV" rows={d.rows.map((r, i) => ({ key: r.value, label: r.value, pct: r.pct, n: r.n, accent: i === d.rows.length - 1 }))} />
                 </ChartCard>
@@ -348,79 +299,35 @@ export function PresentDeck({ data }: { data: DeckData }) {
             </div>
           ),
           notes: [
-            "Ini analisis pengungkit (driver): mencari jawaban mana yang paling membedakan SPG yang nyaman dan yang tidak.",
+            "Persen SPG yang nyaman berkomunikasi dengan SPV (nilai 4–5), dikelompokkan menurut jawaban lain di formulir yang sama.",
             ...bi.drivers.map((d) => `${d.title}: ${d.rows.map((r) => `${r.value} ${r0(r.pct)} (n=${r.n})`).join(" · ")}.`),
-            "Ini kaitan, bukan bukti sebab-akibat; kelompok kecil (n di bawah 10) dibaca hati-hati.",
+            "Ini kaitan, bukan bukti sebab-akibat. Kelompok di bawah 10 SPG dibaca hati-hati.",
           ],
-        });
-      }
-
-      const priorQ = survey!.questions.find((q) => q.key === "prior_status");
-      const followedQ = survey!.questions.find((q) => q.key === "followed");
-      const priorK = priorQ ? c.questions[priorQ.key] : undefined;
-      const belum = priorK ? ((priorK.counts["Belum terselesaikan"] ?? 0) / Math.max(1, priorK.answered)) * 100 : null;
-      const tuntas = kpis.find((k) => k.key === "followed")?.pct ?? null;
-      if (priorQ && followedQ) {
-        out.push({
-          id: "spg-isu", group: "spg",
-          title: belum !== null ? `Isu lama: ${Math.round(belum)}% SPG bilang belum terselesaikan${tuntas !== null ? `; kendala baru yang diselesaikan ${Math.round(tuntas)}%` : ""}` : "Isu lama dan kendala yang dilaporkan",
-          sub: "Pertanyaan ini mengukur apakah suara SPG ditindaklanjuti — yang paling menentukan apakah mereka mau mengisi lagi.",
-          body: (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <LikertCard question={priorQ} levels={PRIOR_LEVELS} mode="diverging" summary={spg!.summary} period={period} setPeriod={setPeriod}
-                title="Isu yang pernah disampaikan" subtitle="Apakah sudah ditindaklanjuti? Merah ke kiri = belum terselesaikan." />
-              <LikertCard question={followedQ} levels={FOLLOWED_LEVELS} mode="diverging" summary={spg!.summary} period={period} setPeriod={setPeriod}
-                title="Kendala yang dilaporkan ke SPV" subtitle="Dari SPG yang melapor sebulan terakhir. Merah ke kiri = belum ada tindak lanjut." />
-            </div>
-          ),
-          notes: [
-            "Bagian ini sering terlewat padahal paling menentukan. Kalau SPG melapor dan tidak ada kabar, bulan depan mereka berhenti jujur.",
-            belum !== null ? `Dari yang pernah memberi masukan, ${Math.round(belum)}% menjawab belum terselesaikan.` : "",
-            tuntas !== null ? `Dari yang melapor kendala sebulan terakhir, ${Math.round(tuntas)}% diselesaikan.` : "",
-          ].filter(Boolean),
         });
       }
 
       if (bi && bi.funnel.total) {
         const f = bi.funnel;
         out.push({
-          id: "spg-corong", group: "spg",
-          title: `${f.reported} SPG melapor kendala, ${f.solved} diselesaikan — ${f.unresolved} SPG masih menunggu solusi`,
-          sub: `Perjalanan kendala dari lapangan sampai tuntas, ${mon}.`,
+          id: "spg-corong", group: "spg", title: `${f.unresolved} SPG masih menunggu solusi`,
+          sub: `${f.reported} melapor kendala · ${f.solved} diselesaikan`,
           body: (
-            <ChartCard title="Corong kendala" subtitle="Lebar batang sebanding dengan jumlah SPG; persen terhadap semua SPG yang menjawab."
-              table={{ head: ["Langkah", "SPG"], rows: [["Semua SPG", f.total], ["Melapor kendala ke SPV", f.reported], ["Diselesaikan", f.solved], ["Sedang diproses", f.inProgress], ["Belum ditindaklanjuti", f.notFollowed], ["Masih punya kendala tanpa solusi", f.unresolved]] }}>
+            <ChartCard title="Corong kendala" subtitle="Persen terhadap semua SPG yang menjawab"
+              table={{ head: ["Langkah", "SPG"], rows: [["Semua SPG", f.total], ["Melapor kendala", f.reported], ["Diselesaikan", f.solved], ["Sedang diproses", f.inProgress], ["Belum ditindaklanjuti", f.notFollowed], ["Masih tanpa solusi", f.unresolved]] }}>
               <Funnel steps={[
-                { key: "all", label: "Semua SPG yang menjawab", value: f.total },
-                { key: "rep", label: "Melapor kendala ke SPV sebulan terakhir", value: f.reported },
+                { key: "all", label: "Semua SPG", value: f.total },
+                { key: "rep", label: "Melapor kendala ke SPV", value: f.reported },
                 { key: "ok", label: "Diselesaikan", value: f.solved, tone: "good", indent: true },
                 { key: "wip", label: "Sedang diproses", value: f.inProgress, tone: "warn", indent: true },
-                { key: "no", label: "Belum ada tindak lanjut", value: f.notFollowed, tone: "bad", indent: true },
-                { key: "open", label: "Masih punya kendala yang belum mendapat solusi", value: f.unresolved, tone: "bad", note: "Pertanyaan terpisah di formulir — bisa termasuk kendala lama, bukan hanya yang dilaporkan bulan ini." },
+                { key: "no", label: "Belum ditindaklanjuti", value: f.notFollowed, tone: "bad", indent: true },
+                { key: "open", label: "Masih punya kendala tanpa solusi", value: f.unresolved, tone: "bad" },
               ]} />
             </ChartCard>
           ),
           notes: [
-            `${f.reported} dari ${f.total} SPG melapor kendala dalam sebulan — volume laporan yang diterima SPV besar; ini juga beban kerja SPV, bukan hanya keluhan.`,
-            `Yang paling penting ditindaklanjuti: ${f.unresolved} SPG yang masih menunggu solusi. Isiannya bisa dibuka satu per satu di tab Jawaban lengkap.`,
-          ],
-        });
-      }
-
-      const defs = survey!.config.themes ?? [];
-      if (defs.length) {
-        const wIdx = spg!.themes.findIndex((t) => t.period === period);
-        const win = wIdx >= 0 ? spg!.themes.slice(Math.max(0, wIdx - 7), wIdx + 1) : [];
-        const top = topThemes(themeMatrix(defs, win, win.map((t) => t.period)), 3);
-        out.push({
-          id: "spg-suara", group: "spg",
-          title: top.length ? `Yang paling sering disebut SPG: ${top.map((t) => `${t.label} — ${t.latest} orang`).join("; ")}` : "Keluhan dan usulan SPG",
-          sub: "Dihitung dari kata kunci di komentar bebas, bukan penilaian AI. Satu orang bisa menyebut lebih dari satu tema.",
-          body: <ThemeCard survey={survey!} themes={spg!.themes} period={period} setPeriod={setPeriod} unit="SPG" title="Tema keluhan & usulan" subtitle="Jumlah SPG yang menyebut tiap tema. Warna = persen dari SPG yang menjawab bulan itu." />,
-          notes: [
-            "Angka di sel = jumlah orang. Warna = persen dari yang menjawab bulan itu, karena jumlah penjawab tiap bulan berbeda.",
-            "Cari yang warnanya makin gelap dari kiri ke kanan: itu keluhan yang makin sering, bukan yang sekadar banyak.",
-            "Kutipan komentar sengaja tidak ditampilkan di layar presentasi. Kalau ada yang minta contoh, buka tab Komentar di dashboard (khusus HR).",
+            `${f.reported} dari ${f.total} SPG melapor kendala dalam sebulan — volume laporan ke SPV besar.`,
+            "'Masih tanpa solusi' adalah pertanyaan terpisah; bisa termasuk kendala lama.",
+            "Isian mereka bisa dibuka satu per satu di tab Jawaban lengkap.",
           ],
         });
       }
@@ -428,195 +335,159 @@ export function PresentDeck({ data }: { data: DeckData }) {
       if (bi && bi.tg && bi.tg.any > 0) {
         const tg = bi.tg;
         const g0 = tg.groups[0];
-        // Tema yang paling TIDAK merata antar-SPV: keluhan "kebijakan" yang menumpuk di satu area menandakan praktik lokal.
         const uneven = bi.topThemeKeys.map((t) => {
           const vals = bi.bySpv.map((r) => ({ s: r.segment, v: r.values[t.key] })).filter((x): x is { s: string; v: number } => x.v !== null);
           if (vals.length < 2) return null;
           const mx = vals.reduce((a, b) => (b.v > a.v ? b : a)), mn = vals.reduce((a, b) => (b.v < a.v ? b : a));
           return { t, mx, mn, spread: mx.v - mn.v };
         }).filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.spread - a.spread)[0];
-        const unevenText = uneven && uneven.spread >= 30 ? `Tidak merata: "${uneven.t.label}" disebut ${r0(uneven.mx.v)} SPG di area ${nm(uneven.mx.s)}, tetapi ${r0(uneven.mn.v)} di area ${nm(uneven.mn.s)}.` : null;
         out.push({
-          id: "spg-siapa", group: "spg",
-          title: `${r0(g0.pct)} SPG menyebut ${g0.group.toLowerCase()}${g0.group === "Hak & kesejahteraan" ? " — keputusan manajemen, bukan SPV" : ""}`,
-          sub: `${tg.any} dari ${tg.total} SPG (${r0((tg.any / Math.max(1, tg.total)) * 100)}) menulis setidaknya satu keluhan bertema.${unevenText ? ` ${unevenText}` : ""}`,
+          id: "spg-keluhan", group: "spg", title: `${r0(g0.pct)} SPG mengeluhkan ${g0.group.toLowerCase()}`,
+          sub: g0.themes.slice(0, 3).map((t) => `${t.label.split(" (")[0]} ${t.n}`).join(" · "),
           body: (
             <div className="grid gap-4 xl:grid-cols-5">
-              <ChartCard className="xl:col-span-2" title="Siapa yang bisa menyelesaikannya" subtitle="Persen SPG yang menyebut ≥ 1 tema di tiap kelompok."
+              <ChartCard className="xl:col-span-2" title="Keluhan per kelompok" subtitle="% SPG yang menyebut ≥ 1 tema"
                 table={{ head: ["Kelompok", "SPG", "%", "Tema teratas"], rows: tg.groups.map((g) => [g.group, g.n, r0(g.pct), g.themes.slice(0, 3).map((t) => `${t.label} (${t.n})`).join(", ")]) }}>
-                <PctBars outcome="Menyebut kelompok ini" rows={tg.groups.map((g, i) => ({ key: g.group, label: g.group, sub: g.themes.slice(0, 2).map((t) => t.label.toLowerCase()).join(", "), pct: g.pct, n: g.n, accent: i === 0 }))} />
+                <PctBars outcome="Menyebut kelompok ini" rows={tg.groups.map((g, i) => ({ key: g.group, label: g.group, pct: g.pct, n: g.n, accent: i === 0 }))} />
               </ChartCard>
               {bi.bySpv.length > 0 && (
-                <ChartCard className="xl:col-span-3" title="Tema teratas per SPV" subtitle="Persen SPG di area tiap SPV yang menyebut tema itu: merata = masalah perusahaan, menumpuk di satu area = masalah lokal."
+                <ChartCard className="xl:col-span-3" title="Tema teratas per area SPV" subtitle="Merata = masalah perusahaan · menumpuk = masalah lokal"
                   table={{ head: ["SPV", "SPG", ...bi.topThemeKeys.map((t) => t.label)], rows: bi.bySpv.map((r) => [nm(r.segment), r.n, ...bi.topThemeKeys.map((t) => r0(r.values[t.key]))]) }}>
-                  <SeqHeat cols={bi.topThemeKeys.map((t) => ({ key: t.key, label: t.label }))} rows={bi.bySpv.map((r) => ({ key: r.segment, label: nm(r.segment), sub: `${r.n} SPG`, values: r.values }))} />
+                  <SeqHeat cols={bi.topThemeKeys.map((t) => ({ key: t.key, label: t.label.split(" (")[0] }))} rows={bi.bySpv.map((r) => ({ key: r.segment, label: nm(r.segment), sub: `${r.n}`, values: r.values }))} />
                 </ChartCard>
               )}
             </div>
           ),
           notes: [
-            "Pisahkan keluhan menurut siapa yang bisa menyelesaikannya: kebijakan perusahaan (hak & kesejahteraan), operasional (stok, kemasan, fasilitas), penjualan, dan kepercayaan.",
-            "Keluhan yang merata di semua SPV = masalah perusahaan; jangan dibebankan ke SPV. Yang menumpuk di satu area = masalah lokal yang bisa diselesaikan di area itu.",
-            ...(unevenText ? [`${unevenText} Keluhan yang terdengar seperti kebijakan tetapi menumpuk di satu area patut dicek: mungkin cara penjadwalan atau penyampaian di area itu berbeda.`] : []),
-            "Tema dihitung dari kata kunci di komentar bebas, per orang. Satu orang bisa masuk ke beberapa kelompok.",
+            `${tg.any} dari ${tg.total} SPG menulis setidaknya satu keluhan bertema (dihitung dari kata kunci, per orang).`,
+            ...(uneven && uneven.spread >= 30 ? [`Tidak merata: "${uneven.t.label}" ${r0(uneven.mx.v)} di area ${nm(uneven.mx.s)} vs ${r0(uneven.mn.v)} di area ${nm(uneven.mn.s)}. Cek juga berapa SPG di area itu yang menulis komentar — sedikit komentar bisa terlihat seperti tidak ada keluhan.`] : []),
+            "Keluhan hak & kesejahteraan adalah keputusan manajemen — jangan dibebankan ke SPV.",
           ],
         });
       }
-
-      const acts = (spg!.actions.filter((a) => a.period === period)).sort((a, b) => Number(!!b.is_focus) - Number(!!a.is_focus));
-      out.push({
-        id: "spg-aksi", group: "spg",
-        title: acts.length
-          ? `${acts.length} tindak lanjut untuk ${mon}; ${acts.some((a) => a.is_focus) ? `${acts.filter((a) => a.is_focus).length} ditetapkan sebagai fokus` : "belum ada yang ditetapkan sebagai fokus"}`
-          : `Belum ada tindak lanjut untuk ${mon}`,
-        sub: "Maksimal 3 fokus supaya yang dikerjakan benar-benar selesai.",
-        body: acts.length ? (
-          <ul className="grid gap-2 md:grid-cols-2">
-            {acts.map((a) => <ActionItem key={a.id} a={a} />)}
-          </ul>
-        ) : <p className="text-sm text-slate-500">Belum ada usulan atau fokus yang dicatat. Tambahkan dari tab Tindak lanjut di dashboard SPG → SPV.</p>,
-        notes: [
-          "Ini jembatan dari data ke keputusan. Usulan boleh banyak, fokus maksimal tiga.",
-          "Minta peserta menyebut penanggung jawab dan tenggat untuk tiap fokus — kalau tidak, tidak akan bergerak.",
-        ],
-      });
     }
 
-    /* ═══ Bagian 2 ═══ */
-    const weakNote = hi.weakestCell ? `${nm(hi.weakestCell.spv)} pada "${hi.weakestCell.scale}" (${Math.round(hi.weakestCell.pct)}%)` : null;
-    out.push({
-      id: "jembatan", group: "koor", title: "Sekarang naik satu tingkat: siapa yang membina para SPV?",
-      sub: "SPV menilai Koordinator SPV — arah umpan balik yang jarang didengar.",
-      body: (
-        <div className="grid gap-4 md:grid-cols-2">
-          <InfoCard t="Yang baru kita lihat (SPG → SPV)" d={[hi.lowest ? `SPV terendah: ${nm(hi.lowest.spv)} (${fmtNum(hi.lowest.score)}).` : "", weakNote ? `Titik terlemah: ${weakNote}.` : "", hi.biggestDrop ? `Turun terbesar: ${nm(hi.biggestDrop.spv)} (${signed(hi.biggestDrop.delta)}).` : ""].filter(Boolean).join(" ") || "Belum ada data bulan ini."} />
-          <InfoCard t="Pertanyaan untuk dibawa ke bagian berikutnya" d="Apakah para SPV mendapat arahan, pendampingan, dan keterbukaan yang cukup dari Koordinator untuk membina SPG-nya? Data berikut baru memberi gambaran awal, bukan jawaban pasti." />
-        </div>
-      ),
-      notes: [
-        "Hubungkan dua tingkat sebagai PERTANYAAN, bukan kesimpulan: yang lemah di bawah mungkin berhubungan dengan dukungan di atas, tapi datanya belum cukup untuk menyatakan sebab-akibat.",
-        "Jumlah penilai di tingkat ini kecil (hitungan SPV), jadi dibaca sebagai gambaran arah.",
-      ],
-    });
-
+    /* ═══ Bagian 2 — SPV menilai Koordinator ═══ */
     if (!isHr || !koor) {
-      out.push({
-        id: "koor-khusus-hr", group: "koor", title: "Rapor 360 Koordinator SPV hanya dibuka oleh tim HR",
-        sub: "Dengan sedikit penilai, rata-rata pun mudah ditebak siapa menilai apa, jadi hanya HR yang melihatnya.",
-        body: <p className="text-sm text-slate-500">Masuk dengan akun HR untuk menampilkan bagian ini.</p>, notes: ["Bila diminta, HR dapat menyampaikan ringkasannya secara lisan tanpa angka per penilai."],
-      });
+      out.push({ id: "koor-hr", group: "koor", title: "Penilaian Koordinator hanya dibuka tim HR", sub: "Penilainya sedikit, jadi rata-rata pun mudah ditebak.", body: <span />, notes: [] });
     } else if (!lv) {
-      out.push({
-        id: "koor-kosong", group: "koor", title: `Belum ada putaran 360 untuk ${mon}`, sub: "Pilih bulan lain di bagian atas.",
-        body: <p className="text-sm text-slate-500">Putaran yang tersedia: {[...new Set(koor.responses.map((r) => periodLabel(r.period)))].join(", ") || "belum ada"}.</p>, notes: [],
-      });
+      out.push({ id: "koor-kosong", group: "koor", title: `Belum ada penilaian Koordinator untuk ${mon}`, sub: "Pilih bulan lain di bagian atas.", body: <span />, notes: [] });
     } else {
-      const rounds = [...new Set(koor.responses.filter((r) => !r.excluded).map((r) => r.period))].sort();
-      out.push({
-        id: "koor-cara", group: "koor", title: `${lv.raters} SPV menilai ${leaderName} di ${mon} — gambaran awal, bukan vonis`,
-        sub: "Skala 1–5. Hanya rata-rata yang ditampilkan, tanpa nama penilai.",
-        body: (
-          <div className="grid gap-3 md:grid-cols-3">
-            <InfoCard t="Yang dinilai" d="Lima hal: arahan strategis, penyelesaian masalah, mentoring & feedback, keterbukaan, dan keadilan." />
-            <InfoCard t="Jumlah penilai kecil" d={`${lv.raters} penilai bulan ini${lv.previousRaters !== null ? `, ${lv.previousRaters} pada putaran sebelumnya` : ""}. Satu orang bisa menggeser rata-rata cukup jauh, jadi lihat polanya, bukan angka desimalnya.`} />
-            <InfoCard t="Putaran yang ada" d={rounds.map((p) => `${periodLabel(p)}: ${koor.responses.filter((r) => r.period === p && !r.excluded).length} jawaban`).join(" · ")} />
-          </div>
-        ),
-        notes: [
-          "Jelaskan dulu keterbatasan: jumlah penilai sedikit, putaran baru dua. Ini agar angka tidak dibaca sebagai hukuman.",
-          "Penilaian diri dan kutipan penilai tidak ditampilkan di layar ini kecuali dipilih oleh pembicara.",
-        ],
-      });
-
       const dots: DotRow[] = lv.aspects.map((a) => ({ key: a.key, label: a.label, current: a.current, previous: a.previous, n: lv.raters }));
       const vals = lv.aspects.flatMap((a) => [a.current, a.previous]).filter((x): x is number => x !== null);
       const lo = Math.max(1, Math.floor(Math.min(...vals, 5) - 0.5));
       const prevLabel = lv.previousPeriod ? periodLabel(lv.previousPeriod) : null;
-      const dAvg = lv.avg !== null && lv.previousAvg !== null ? lv.avg - lv.previousAvg : null;
       out.push({
-        id: "koor-skor", group: "koor",
-        title: `Rata-rata ${fmtNum(lv.avg)}${dAvg !== null && Math.abs(dAvg) >= MOVE_EPS ? ` (${dAvg > 0 ? "naik" : "turun"} dari ${fmtNum(lv.previousAvg)})` : ""}; terlemah ${lv.weakest ? `${lv.weakest.label.toLowerCase()} (${fmtNum(lv.weakest.current)})` : "—"}, terkuat ${lv.strongest ? `${lv.strongest.label.toLowerCase()} (${fmtNum(lv.strongest.current)})` : "—"}`,
-        sub: lv.previousRaters !== null && lv.previousRaters !== lv.raters ? `Perhatian: jumlah penilai berbeda (${lv.raters} vs ${lv.previousRaters}), jadi perbandingan antar-putaran hanya perkiraan.` : undefined,
+        id: "koor-skor", group: "koor", title: `${leaderName}: ${fmtNum(lv.avg, 2)} dari 5`,
+        sub: `${lv.raters} SPV menilai${lv.weakest ? ` · terendah: ${lv.weakest.label.toLowerCase()} ${fmtNum(lv.weakest.current)}` : ""}`,
         body: (
-          <ChartCard title={`Penilaian SPV terhadap ${leaderName}`} subtitle={`Skala 1–5, ${mon}${prevLabel ? ` dibanding ${prevLabel}` : ""}.`}
+          <ChartCard title="Penilaian SPV per aspek" subtitle={`Skala 1–5 · ${mon}${prevLabel ? ` vs ${prevLabel}` : ""}`}
             legend={<Legend items={[{ label: mon, color: "var(--v-s1)" }, ...(prevLabel ? [{ label: prevLabel, color: "var(--v-muted)", kind: "ring" as const }] : [])]} />}
             table={{ head: ["Aspek", mon, prevLabel ?? "Putaran lalu"], rows: lv.aspects.map((a) => [a.label, fmtNum(a.current), fmtNum(a.previous)]) }}>
             <DotPlot rows={dots} domain={[lo, 5]} ticks={Array.from({ length: 5 - lo + 1 }, (_, i) => lo + i)} currentLabel={mon.split(" ")[0]} previousLabel={prevLabel ?? "Putaran lalu"} unit="SPV" labelWidth={190} />
           </ChartCard>
         ),
         notes: [
-          lv.weakest ? `Aspek terendah: ${lv.weakest.label} (${fmtNum(lv.weakest.current)}).` : "",
-          lv.spread ? `Rata-rata per penilai berkisar ${fmtNum(lv.spread.min)} sampai ${fmtNum(lv.spread.max)} — penilainya tidak seragam; itu informasi penting, jangan hanya melihat rata-rata.` : "",
-          "Tekankan: angka ini masukan untuk dukungan dan pembinaan Koordinator, bukan penilaian kinerja formal.",
+          `Rata-rata ${fmtNum(lv.avg)}${lv.previousAvg !== null ? `, putaran lalu ${fmtNum(lv.previousAvg)}` : ""}. Penilai: ${lv.raters}${lv.previousRaters !== null ? ` (putaran lalu ${lv.previousRaters})` : ""} — perbandingan hanya perkiraan.`,
+          lv.spread ? `Rata-rata per penilai ${fmtNum(lv.spread.min)} sampai ${fmtNum(lv.spread.max)}: pendapat para SPV tidak seragam.` : "",
+          "Masukan untuk dukungan dan pembinaan, bukan penilaian kinerja formal.",
         ].filter(Boolean),
       });
-
       out.push({
-        id: "koor-kutipan", group: "koor", title: "Dalam kata-kata mereka", sub: "Kutipan tanpa nama penilai. Tampilkan hanya yang aman dibacakan di forum ini.",
-        body: !quotes ? (
-          <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-slate-700">
-            Kutipan disembunyikan. Tekan <b>Tampilkan kutipan</b> di bagian atas bila memang akan dibacakan. Dengan penilai sedikit, gaya bahasa pun bisa dikenali — pilih dulu dan baca sebelum ditayangkan.
-          </div>
-        ) : (
+        id: "koor-kutipan", group: "koor", title: "Kata para SPV", sub: quotes ? "Tanpa nama penilai." : "Kutipan disembunyikan — tekan \"Tampilkan kutipan\" bila aman dibacakan.",
+        body: quotes ? (
           <div className="grid gap-4 md:grid-cols-2">
             <QuoteList t="Yang sudah baik" tone="good" items={lv.strengths} />
             <QuoteList t="Yang perlu diperbaiki" tone="bad" items={lv.improvements} />
           </div>
-        ),
-        notes: ["Baca kutipan lebih dulu di tab Komentar/Rapor 360 sebelum tampil ke forum.", "Sampaikan yang baik lebih dulu, lalu yang perlu diperbaiki, dengan nada pembinaan."],
+        ) : <span />,
+        notes: ["Dengan 6 penilai, gaya bahasa bisa dikenali. Baca dulu sebelum ditayangkan.", "Sampaikan yang baik dulu, lalu yang perlu diperbaiki."],
       });
     }
 
-    /* ═══ Catatan kualitas data ═══ */
+    /* ═══ Bagian 3 — Akar masalah (data dari HR) ═══ */
+    diags.forEach((d, i) => {
+      out.push({
+        id: `akar-${d.ord}`, group: "akar", kicker: `Akar masalah ${i + 1} dari ${diags.length}`, title: fill(d.title, d),
+        body: (
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+              <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <OwnerBadge owner={d.owner} />
+                <p className="mt-3 text-5xl font-semibold leading-none text-slate-900 dark:text-white">{d.metric}</p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{fill(d.metric_label, d)}</p>
+                {d.evidence.length > 0 && <ul className="mt-4 space-y-1.5 border-t border-slate-100 pt-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200">{d.evidence.slice(0, 3).map((e, j) => <li key={j}>• {fill(e, d)}</li>)}</ul>}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                <Column title="Penyebab" tone="bad" items={d.causes.slice(0, 3).map((x) => ({ t: fill(x, d) }))} />
+                <div className="hidden items-center text-2xl text-slate-400 sm:flex" aria-hidden>→</div>
+                <Column title="Solusi" tone="good" items={d.solutions.slice(0, 4).map((s) => ({ t: fill(s.text, d), s: [s.pic, s.due].filter(Boolean).join(" · ") }))} />
+              </div>
+            </div>
+            {quotes && d.quotes.length > 0 && (
+              <div className="flex flex-wrap gap-2">{d.quotes.slice(0, 3).map((q, j) => <span key={j} className="rounded-lg bg-white px-3 py-1.5 text-sm italic text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">“{q}”</span>)}</div>
+            )}
+          </div>
+        ),
+        notes: [...d.notes.map((n) => fill(n, d)), ...(d.quotes.length && !quotes ? [`Kata SPG/SPV: ${d.quotes.map((q) => `“${q}”`).join(" · ")}`] : []), d.source ? `Sumber: ${d.source}.` : ""].filter(Boolean),
+      });
+    });
+
+    /* ═══ Penutup ═══ */
     if (bi && bi.ceiling.length) {
       out.push({
-        id: "kualitas", group: "putus",
-        title: `${bi.ceiling.length} pertanyaan dijawab hampir seragam — tidak lagi membedakan SPV`,
-        sub: `${bi.ceiling.map((c) => `"${c.label}": ${r0(c.pct)} menjawab "${c.value}"`).join(" · ")}. Catatan untuk formulir bulan depan.`,
+        id: "kualitas", group: "putus", title: `${bi.ceiling.length} pertanyaan perlu diganti`, sub: "Jawabannya hampir seragam — tidak lagi membedakan SPV.",
         body: (
-          <div className="grid gap-4 md:grid-cols-2">
-            <ChartCard title="Pertanyaan dengan jawaban hampir seragam" subtitle="Satu pilihan dipilih oleh ≥ 95% SPG."
-              table={{ head: ["Pertanyaan", "Jawaban dominan", "%", "n"], rows: bi.ceiling.map((c) => [c.label, c.value, r0(c.pct), c.n]) }}>
-              <PctBars outcome="Memilih jawaban dominan" rows={bi.ceiling.map((c) => ({ key: c.key, label: c.label, sub: `"${c.value}"`, pct: c.pct, n: c.n }))} />
-            </ChartCard>
-            <div className="space-y-3">
-              <InfoCard t="Kenapa ini penting" d="Kalau hampir semua menjawab 'Ya', pertanyaan itu tidak bisa membedakan SPV yang benar-benar melakukan dari yang tidak — bisa karena SPG sungkan, atau pertanyaannya terlalu mudah dijawab 'Ya'." />
-              <InfoCard t="Usulan perubahan" d="Ganti Ya/Tidak dengan frekuensi ('berapa kali') atau contoh konkret ('apa yang terakhir kali diajarkan?'). Jawaban yang menuntut contoh lebih sulit diisi asal." />
-            </div>
-          </div>
+          <ChartCard title="Satu jawaban dipilih ≥ 95% SPG" table={{ head: ["Pertanyaan", "Jawaban dominan", "%", "n"], rows: bi.ceiling.map((c) => [c.label, c.value, r0(c.pct), c.n]) }}>
+            <PctBars outcome="Memilih jawaban dominan" rows={bi.ceiling.map((c) => ({ key: c.key, label: c.label, sub: `"${c.value}"`, pct: c.pct, n: c.n }))} />
+          </ChartCard>
         ),
-        notes: ["Ini catatan desain survei, bukan temuan tentang SPV. Sampaikan singkat.", "Mengubah pertanyaan membuat angka bulan depan tidak bisa dibandingkan langsung dengan sebelumnya — catat bulan perubahannya."],
+        notes: [
+          "Kalau hampir semua menjawab 'Ya', pertanyaan itu tidak bisa membedakan SPV yang benar-benar melakukan dari yang tidak.",
+          "Usulan: ganti Ya/Tidak dengan frekuensi ('berapa kali') atau contoh konkret ('apa yang terakhir diajarkan?'). Catat bulan perubahannya.",
+        ],
       });
     }
 
-    /* ═══ Keputusan ═══ */
-    const focus = (spg?.actions ?? []).filter((a) => a.period === period && a.is_focus);
+    // Dua langkah pertama per masalah di layar; sisanya di catatan pembicara supaya tabel tetap terbaca dari jauh.
+    const planAll = diags.map((d) => ({ d, items: d.solutions.map((s) => ({ problem: fill(d.title, d), ...s, text: fill(s.text, d) })) }));
+    const plan = planAll.flatMap((x) => x.items.slice(0, 2));
+    const planRest = planAll.flatMap((x) => x.items.slice(2));
     out.push({
-      id: "putus", group: "putus", title: "Apa yang kita putuskan hari ini?",
-      sub: "Satu penanggung jawab dan satu tenggat untuk tiap fokus, lalu kabari balik ke SPG.",
-      body: (
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Fokus yang sudah dipilih</h3>
-            {focus.length ? <ul className="space-y-2">{focus.map((a) => <ActionItem key={a.id} a={a} />)}</ul>
-              : <p className="rounded-lg bg-white p-3 text-sm text-slate-500 shadow-sm dark:bg-slate-900">Belum ada yang ditetapkan sebagai fokus bulan ini. Putuskan maksimal tiga hari ini.</p>}
-          </div>
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Pertanyaan untuk diputuskan</h3>
-            <ol className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
-              {[
-                "Dari tema yang paling sering disebut SPG, mana yang bisa dituntaskan bulan ini — dan siapa penanggung jawabnya?",
-                hi.lowest ? `Pendampingan apa untuk ${nm(hi.lowest.spv)}${hi.weakestCell ? ` (terutama "${hi.weakestCell.scale}")` : ""}?` : "Pendampingan apa untuk SPV yang skornya paling rendah?",
-                lv?.weakest ? `Dukungan apa yang dibutuhkan ${leaderName} pada "${lv.weakest.label.toLowerCase()}"?` : `Dukungan apa yang dibutuhkan ${leaderName}?`,
-                "Kapan dan lewat apa hasilnya dikabarkan balik ke SPG?",
-              ].map((t, i) => <li key={i} className="flex gap-3 rounded-lg bg-white p-3 shadow-sm dark:bg-slate-900"><span className="font-semibold text-blue-600">{i + 1}</span><span>{t}</span></li>)}
-            </ol>
-          </div>
+      id: "putus", group: "putus", title: plan.length ? "Rencana tindakan untuk disetujui" : "Apa yang kita putuskan hari ini?",
+      sub: plan.length ? "Setujui, ubah PIC/tenggat, atau coret — lalu kabari SPG." : "Maksimal 3 fokus, masing-masing dengan PIC dan tenggat.",
+      body: plan.length ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-slate-100 text-left text-xs text-slate-500 dark:border-slate-800">
+              <th className="px-3 py-2 font-medium">Tindakan</th><th className="px-3 py-2 font-medium">PIC</th><th className="px-3 py-2 font-medium">Tenggat</th><th className="px-3 py-2 font-medium">Untuk masalah</th>
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {plan.map((p, i) => (
+                <tr key={i}>
+                  <td className="px-3 py-1.5 font-medium text-slate-900 dark:text-white">{p.text}</td>
+                  <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300">{p.pic ?? "—"}</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap text-slate-600 dark:text-slate-300">{p.due ?? "—"}</td>
+                  <td className="px-3 py-1.5 text-xs text-slate-500">{p.problem}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      ) : (
+        <ol className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 md:grid-cols-2">
+          {[
+            "Tema keluhan mana yang dituntaskan bulan ini, oleh siapa?",
+            hi.lowest ? `Pendampingan apa untuk ${nm(hi.lowest.spv)}${hi.lowest.weakest ? ` ("${label(hi.lowest.weakest.key)}")` : ""}?` : "Pendampingan apa untuk SPV dengan skor terendah?",
+            lv?.weakest ? `Dukungan apa untuk ${leaderName} soal ${lv.weakest.label.toLowerCase()}?` : `Dukungan apa untuk ${leaderName}?`,
+            "Kapan hasilnya dikabarkan ke SPG?",
+          ].map((t, i) => <li key={i} className="flex gap-3 rounded-lg bg-white p-3 shadow-sm dark:bg-slate-900"><span className="font-semibold text-blue-600">{i + 1}</span><span>{t}</span></li>)}
+        </ol>
       ),
       notes: [
-        "Akhiri dengan permintaan keputusan, bukan sekadar laporan. Catat hasilnya langsung di tab Tindak lanjut.",
-        "Janjikan kabar balik ke SPG dengan tanggal. Survei yang tidak pernah dijawab balik membuat orang berhenti mengisi.",
+        "Akhiri dengan keputusan, bukan laporan. Yang disetujui dicatat di tab Tindak lanjut (maks. 3 fokus).",
+        ...(planRest.length ? [`Langkah lanjutan: ${planRest.map((p) => `${p.text}${p.pic ? ` (${p.pic})` : ""}`).join(" · ")}.`] : []),
+        "Janjikan tanggal kabar balik ke SPG — survei yang tidak pernah dijawab balik membuat orang berhenti mengisi jujur.",
       ],
     });
     return out;
@@ -661,12 +532,11 @@ export function PresentDeck({ data }: { data: DeckData }) {
           ))}
         </nav>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-slate-500">Bulan yang dinilai</span>
           <select className={inputClass} style={{ width: "auto" }} value={period} onChange={(e) => { setPeriod(e.target.value); setIdx(0); }} aria-label="Bulan yang dinilai">
             {periods.map((p) => <option key={p} value={p}>{periodLabel(p)}</option>)}
           </select>
           <Button size="sm" variant={hideNames ? "primary" : "secondary"} aria-pressed={hideNames} onClick={() => setHideNames((v) => !v)}>{hideNames ? "Nama disamarkan" : "Samarkan nama"}</Button>
-          {isHr && koor && <Button size="sm" variant={quotes ? "primary" : "secondary"} aria-pressed={quotes} onClick={() => setQuotes((v) => !v)}>{quotes ? "Kutipan tampil" : "Tampilkan kutipan"}</Button>}
+          {isHr && <Button size="sm" variant={quotes ? "primary" : "secondary"} aria-pressed={quotes} onClick={() => setQuotes((v) => !v)}>{quotes ? "Kutipan tampil" : "Tampilkan kutipan"}</Button>}
           <Button size="sm" variant={notes ? "primary" : "secondary"} aria-pressed={notes} onClick={() => setNotes((v) => !v)}>Catatan pembicara</Button>
           <Button size="sm" variant="secondary" onClick={toggleFull}>{full ? "Keluar layar penuh" : "Layar penuh"}</Button>
         </div>
@@ -675,9 +545,9 @@ export function PresentDeck({ data }: { data: DeckData }) {
       {slide && (
         <article key={slide.id} aria-live="polite" className="rounded-2xl border border-slate-200/80 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-950">
           <header className="px-4 pb-3 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{KICKER[slide.group]}</p>
-            <h2 className="mt-1 max-w-4xl text-xl font-semibold leading-snug text-slate-900 dark:text-white md:text-2xl">{slide.title}</h2>
-            {slide.sub && <p className="mt-1 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{slide.sub}</p>}
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">{slide.kicker ?? KICKER[slide.group]}</p>
+            <h2 className="mt-1 max-w-4xl text-2xl font-semibold leading-snug text-slate-900 dark:text-white md:text-3xl">{slide.title}</h2>
+            {slide.sub && <p className="mt-1 max-w-4xl text-base text-slate-600 dark:text-slate-300">{slide.sub}</p>}
           </header>
           <div className="px-4 pb-4">{slide.body}</div>
         </article>
@@ -685,7 +555,7 @@ export function PresentDeck({ data }: { data: DeckData }) {
 
       {notes && slide && slide.notes.length > 0 && (
         <aside className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30" aria-label="Catatan pembicara">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">Catatan pembicara — tidak ikut dibaca peserta</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">Catatan pembicara — tidak untuk ditayangkan</p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-950 dark:text-amber-100">{slide.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
         </aside>
       )}
@@ -699,7 +569,7 @@ export function PresentDeck({ data }: { data: DeckData }) {
                 className={cn("h-2.5 rounded-full transition-all", i === at ? "w-6 bg-blue-600" : "w-2.5 bg-slate-300 hover:bg-slate-400 dark:bg-slate-700")} />
             ))}
           </div>
-          <span className="text-[11px] text-slate-500">{at + 1} / {total} · panah kiri/kanan untuk berpindah · N = catatan</span>
+          <span className="text-[11px] text-slate-500">{at + 1} / {total} · panah kiri/kanan · N = catatan pembicara</span>
         </div>
         <Button variant="primary" onClick={() => go(at + 1)} disabled={at >= total - 1}>Berikutnya →</Button>
       </div>
@@ -711,35 +581,42 @@ export function PresentDeck({ data }: { data: DeckData }) {
 
 function FlowBox({ who, does, value }: { who: string; does: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-lg font-semibold text-slate-900 dark:text-white">{who}</p>
-      <p className="text-xs text-slate-500">{does}</p>
-      <p className="mt-2 text-sm font-medium text-blue-700 dark:text-blue-300">{value}</p>
+    <div className="rounded-xl border border-slate-200 bg-white p-5 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-xl font-semibold text-slate-900 dark:text-white">{who}</p>
+      <p className="text-sm text-slate-500">{does}</p>
+      <p className="mt-3 text-2xl font-semibold text-blue-700 dark:text-blue-300">{value}</p>
     </div>
   );
 }
-const Arrow = () => <div className="flex items-center justify-center text-2xl text-slate-400" aria-hidden>→</div>;
+const Arrow = () => <div className="flex items-center justify-center text-3xl text-slate-400" aria-hidden>→</div>;
 
-function InfoCard({ t, d }: { t: string; d: string }) {
+function BigStat({ value, label, muted }: { value: string; label: string; muted?: boolean }) {
+  return (
+    <div className="rounded-xl border border-slate-200/80 bg-white p-5 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className={cn("text-5xl font-semibold leading-none", muted ? "text-slate-400" : "text-slate-900 dark:text-white")}>{value}</p>
+      <p className="mt-2 text-sm text-slate-500">{label}</p>
+    </div>
+  );
+}
+
+const OWNER_TONE: [RegExp, string][] = [
+  [/manajemen/i, "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300"],
+  [/^hr/i, "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"],
+  [/spv|koordinator/i, "bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300"],
+];
+function OwnerBadge({ owner }: { owner: string }) {
+  const tone = OWNER_TONE.find(([re]) => re.test(owner))?.[1] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
+  return <span className={cn("self-start rounded-full px-2.5 py-0.5 text-xs font-semibold", tone)}>{owner}</span>;
+}
+
+function Column({ title, tone, items }: { title: string; tone: "good" | "bad"; items: { t: string; s?: string }[] }) {
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-sm font-semibold text-slate-900 dark:text-white">{t}</p>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{d}</p>
+      <p className={cn("text-xs font-semibold uppercase tracking-wide", tone === "good" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400")}>{title}</p>
+      <ul className="mt-2 space-y-2">
+        {items.map((x, i) => <li key={i} className="text-sm leading-snug text-slate-800 dark:text-slate-100">{x.t}{x.s && <span className="block text-xs text-slate-500">{x.s}</span>}</li>)}
+      </ul>
     </div>
-  );
-}
-
-function ActionItem({ a }: { a: SurveyAction }) {
-  return (
-    <li className="rounded-lg border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-        {a.is_focus && <span className="rounded bg-blue-600 px-1.5 py-0.5 font-medium text-white">Fokus</span>}
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">{ACTION_STATUS_LABEL[a.status]}</span>
-        {a.theme && <span className="text-slate-500">{a.theme}</span>}
-      </div>
-      <p className="mt-1 text-sm font-medium text-slate-900 dark:text-white">{a.title}</p>
-      <p className="mt-0.5 text-xs text-slate-500">PIC: {a.pic || "belum ditentukan"}{a.due_date ? ` · tenggat ${a.due_date}` : ""}</p>
-    </li>
   );
 }
 

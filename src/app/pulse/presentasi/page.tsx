@@ -8,7 +8,7 @@ import { AppShell, Card } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { PresentDeck, type DeckData } from "@/components/pulse/present-deck";
 import { useRole } from "@/lib/roles";
-import { loadActions, loadCampaigns, loadResponses, loadSegments, loadSpgCountBySpv, loadSummary, loadSurveys, loadThemes } from "@/lib/rr/pulse";
+import { loadActions, loadCampaigns, loadDiagnoses, loadResponses, loadSegments, loadSpgCountBySpv, loadSummary, loadSurveys, loadThemes } from "@/lib/rr/pulse";
 
 export default function PresentasiPage() {
   const { role, loading: roleLoading } = useRole();
@@ -24,7 +24,7 @@ export default function PresentasiPage() {
         const surveys = await loadSurveys();
         const s = surveys.find((x) => x.config.kind === "spv_report");
         const k = surveys.find((x) => x.config.kind === "360");
-        const [spg, responses, spgResponses] = await Promise.all([
+        const [spg, responses, spgResponses, diagnoses] = await Promise.all([
           s ? Promise.all([
             loadSummary(s.id), s.segments.includes("spv") ? loadSegments(s.id, "spv") : Promise.resolve([]),
             s.config.themes?.length ? loadThemes(s.id) : Promise.resolve([]), loadActions(s.id), loadSpgCountBySpv(), loadCampaigns(s.id),
@@ -32,10 +32,11 @@ export default function PresentasiPage() {
           isHr && k ? loadResponses(k.id) : Promise.resolve([]),
           // Jawaban mentah SPG hanya untuk HR: dipakai analisis kaitan (kunjungan, corong kendala, tema per SPV).
           isHr && s ? loadResponses(s.id) : Promise.resolve([]),
+          isHr && s ? loadDiagnoses(s.id) : Promise.resolve([]),
         ]);
         if (!alive) return;
         setData({
-          spg: s && spg ? { survey: s, summary: spg[0], segments: spg[1], themes: spg[2], actions: spg[3], roster: spg[4], campaigns: spg[5], responses: spgResponses } : null,
+          spg: s && spg ? { survey: s, summary: spg[0], segments: spg[1], themes: spg[2], actions: spg[3], roster: spg[4], campaigns: spg[5], responses: spgResponses, diagnoses } : null,
           koor: k ? { survey: k, responses } : null,
           isHr,
         });
