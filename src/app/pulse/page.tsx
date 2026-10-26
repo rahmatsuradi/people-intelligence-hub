@@ -32,10 +32,11 @@ import { PulseDashboard, SpgDashboard } from "@/components/pulse/dashboards";
 import { Details } from "@/components/pulse/details";
 import { Ikhtisar } from "@/components/pulse/ikhtisar";
 import { People } from "@/components/pulse/people";
+import { ResponseBrowser } from "@/components/pulse/responses";
 import { Report360 } from "@/components/pulse/report-360";
 import { SpvReport } from "@/components/pulse/spv-report";
 
-type Tab = "dash" | "rapor" | "tindak" | "orang" | "komentar" | "detail" | "kirim";
+type Tab = "dash" | "rapor" | "tindak" | "orang" | "komentar" | "jawaban" | "detail" | "kirim";
 const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area", jabatan: "Kelompok jabatan" };
 const GUIDE_KEY = "pulse-guide-hidden";
 const HOME = "ikhtisar";
@@ -158,19 +159,19 @@ export default function PulsePage() {
   });
 
   const tabs: [Tab, string][] = kind === "360" ? [
-    ["rapor", "Rapor 360"], ["komentar", "Komentar"], ["detail", "Pertanyaan"], ["kirim", "Kirim survei"],
+    ["rapor", "Rapor 360"], ["komentar", "Komentar"], ["jawaban", "Jawaban lengkap"], ["detail", "Pertanyaan"], ["kirim", "Kirim survei"],
   ] : kind === "archive" ? [
-    ["detail", "Hasil survei"], ["komentar", "Komentar"],
+    ["detail", "Hasil survei"], ["komentar", "Komentar"], ["jawaban", "Jawaban lengkap"],
   ] : [
     ["dash", "Dashboard"],
     ...(kind === "spv_report" ? [["rapor", "Rapor SPV"] as [Tab, string]] : []),
     ["tindak", `Tindak lanjut (${openCount})`],
     ...(isHr && kind === "pulse" ? [["orang", "Per orang & apresiasi"] as [Tab, string]] : []),
-    ...(isHr ? [["komentar", "Komentar"] as [Tab, string]] : []),
+    ...(isHr ? [["komentar", "Komentar"] as [Tab, string], ["jawaban", "Jawaban lengkap"] as [Tab, string]] : []),
     ["detail", "Pertanyaan"],
     ...(isHr ? [["kirim", "Kirim survei"] as [Tab, string]] : []),
   ];
-  const visibleTabs = tabs.filter(([k]) => k !== "komentar" || isHr);
+  const visibleTabs = tabs.filter(([k]) => (k !== "komentar" && k !== "jawaban") || isHr);
   const current = summary.find((p) => p.period === period);
   const dashProps = survey ? {
     survey, summary, period, setPeriod, themes, segmentsBy, targetCount: campaign?.target_count ?? null, signals: sig,
@@ -275,6 +276,7 @@ export default function PulsePage() {
                   {tab === "orang" && isHr && <People survey={survey} responses={responses} period={period} employeeNames={employeeNames} />}
                   {tab === "komentar" && isHr && <Comments survey={survey} responses={responses} period={period || periodOf(responses)}
                     conclusions={kind === "360" || kind === "archive" ? undefined : conclusions} onConclusionSaved={() => loadConclusions(survey.id).then(setConclusions)} />}
+                  {tab === "jawaban" && isHr && <ResponseBrowser key={survey.id} survey={survey} responses={responses} period={period || periodOf(responses)} />}
                   {tab === "detail" && <Details survey={survey} current={kind === "archive" ? summary.at(-1) : current} />}
                   {tab === "kirim" && isHr && <Campaigns survey={survey} summary={summary} campaigns={campaigns} reload={reload} />}
                 </div>
