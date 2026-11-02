@@ -472,11 +472,11 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* ROW 2: Employee Sentiment (eNPS) */}
+        {/* ROW 2: Pulse Check (dulu "Employee Sentiment (eNPS)") */}
         <Card padding={false}>
           <div
             className="cursor-pointer rounded-2xl p-5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
-            onClick={() => router.push('/employer-branding/engagement')}
+            onClick={() => router.push('/pulse')}
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-lg">
@@ -484,7 +484,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-semibold text-slate-900 dark:text-white">Employee Sentiment (eNPS)</h3>
+                  <h3 className="font-semibold text-slate-900 dark:text-white">Pulse Check</h3>
                   {enpsDelta !== null && (
                     <TrendBadge tone={enpsDelta < 0 ? "bad" : enpsDelta > 0 ? "good" : "neutral"}>
                       {enpsDelta > 0 ? "▲ +" : enpsDelta < 0 ? "▼ " : "● "}{enpsDelta} poin vs survei lalu
@@ -507,9 +507,9 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-sm text-slate-400">Belum ada data eNPS. Mulai survei pertama untuk melihat sentimen karyawan di sini.</p>
-                <Button variant="primary" size="sm" className="mt-3" onClick={(e) => { e.stopPropagation(); router.push('/employer-branding/engagement'); }}>
-                  Mulai Survei Pertama
+                <p className="text-sm text-slate-400">Belum ada data. Buka Pulse Check untuk membuat link survei bulanan dan membaca hasilnya.</p>
+                <Button variant="primary" size="sm" className="mt-3" onClick={(e) => { e.stopPropagation(); router.push('/pulse'); }}>
+                  Buka Pulse Check
                 </Button>
               </div>
             )}

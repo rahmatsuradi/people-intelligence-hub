@@ -252,7 +252,6 @@ export function AppShell({
         { id: "employer-branding", label: "AI Content Generator", href: "/employer-branding" },
         { id: "ai-trends", label: "Trend & Ide Konten", href: "/employer-branding/ai-trends" },
         { id: "editorial-plan", label: "Editorial Plan", href: "/employer-branding/editorial" },
-        { id: "engagement", label: "Employee Engagement", href: "/employer-branding/engagement" },
         { id: "pulse", label: "Pulse Check & Feedback", href: "/pulse" },
       ],
     },
