@@ -555,6 +555,15 @@ export function appreciationCounts(texts: string[], employeeNames: string[], lim
   return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, limit);
 }
 
+/** Pertanyaan berisi nama rekan yang diapresiasi. Lencir memisah luar divisi (appreciated_names) dan satu divisi. */
+export const APPRECIATION_KEYS = ["appreciated_names", "appreciated_names_team"];
+
+/** Semua nama yang diapresiasi dalam satu isian, digabung supaya orang yang sama tidak dihitung dua kali per isian. */
+export function appreciatedText(answers: Record<string, AnswerValue>): string | null {
+  const parts = APPRECIATION_KEYS.map((k) => answers[k]).filter((v): v is string => typeof v === "string" && !!v.trim());
+  return parts.length ? parts.join(", ") : null;
+}
+
 /* ─── Kelompok jabatan (Pulse Office) ─── */
 
 export const JABATAN_GROUPS = ["Manajemen", "Supervisor", "Admin & CS", "Produksi & teknik", "Host live", "Marketing, VM & HR", "Tidak tercatat"] as const;

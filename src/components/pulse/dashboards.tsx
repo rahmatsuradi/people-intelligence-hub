@@ -142,7 +142,7 @@ function groupCard(survey: Survey, segKey: string, segmentsBy: Record<string, Se
 export function PulseDashboard(p: DashProps) {
   const { survey, summary, period } = p;
   const [segKey, setSegKey] = useState(survey.segments[0] ?? "");
-  const SEG: Record<string, string> = { tenure: "Lama kerja", jabatan: "Kelompok jabatan", spv: "SPV area" };
+  const SEG: Record<string, string> = { tenure: "Lama kerja", jabatan: "Kelompok jabatan", spv: "SPV area", divisi: "Divisi" };
   const kpis = headlineKpis(survey, summary, period);
   const happy = kpis.find((k) => k.key === "happiness");
   const stress = kpis.find((k) => k.key === "stress_freq");

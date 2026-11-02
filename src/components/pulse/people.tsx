@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Card, cn, inputClass } from "@/components/app-shell";
-import { appreciationCounts, periodLabel, personTrends, type Survey, type SurveyResponse } from "@/lib/rr/pulse";
+import { APPRECIATION_KEYS, appreciatedText, appreciationCounts, periodLabel, personTrends, type Survey, type SurveyResponse } from "@/lib/rr/pulse";
 import { INSTANCE } from "@/lib/instance";
 import { shortMonth } from "./charts";
 
@@ -17,10 +17,10 @@ export function People({ survey, responses, period, employeeNames }: { survey: S
   const kq = survey.headline.map((k) => survey.questions.find((x) => x.key === k)).filter((x) => x && (x.favorable?.length || x.risk?.length || x.favorableMin !== undefined));
   const periods = [...new Set(responses.map((r) => r.period))].sort().slice(-8);
   const shown = trends.filter((t) => (!onlyAlerts || t.alerts.length) && (!q || t.name.toLowerCase().includes(q.toLowerCase())));
-  const texts = (p: string | null) => responses.filter((r) => !r.excluded && (!p || r.period === p)).map((r) => r.answers.appreciated_names).filter((v): v is string => typeof v === "string");
+  const texts = (p: string | null) => responses.filter((r) => !r.excluded && (!p || r.period === p)).map((r) => appreciatedText(r.answers)).filter((v): v is string => !!v);
   const month = appreciationCounts(texts(period), employeeNames, 8);
   const all = appreciationCounts(texts(null), employeeNames, 8);
-  const hasAppreciation = survey.questions.some((x) => x.key === "appreciated_names");
+  const hasAppreciation = survey.questions.some((x) => APPRECIATION_KEYS.includes(x.key));
 
   return (
     <div className="space-y-4">

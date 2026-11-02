@@ -145,7 +145,7 @@ describe("periodLabel", () => {
 });
 
 /* ─── Tahap 2: KPI, formulir publik, sinyal, apresiasi ─── */
-import { appreciationCounts, isVisible, kpi, kpiBetter, kpiTrend, signals, validateSubmission } from "./pulse";
+import { appreciatedText, appreciationCounts, isVisible, kpi, kpiBetter, kpiTrend, signals, validateSubmission } from "./pulse";
 
 const happyK: SurveyQuestion = { ...happiness, favorable: ["Bahagia", "Sangat Bahagia"], kpiLabel: "Indeks bahagia", required: true };
 const stressK: SurveyQuestion = {
@@ -243,6 +243,12 @@ describe("appreciationCounts", () => {
     expect(appreciationCounts(["Billy setiawan, Deni ramdani", "deni, Deni Ramdani", "Sudarti & semua tim", "irfan"], staff)).toEqual([
       { name: "Deni Ramdani", count: 2 }, { name: "Ilal Marfudi Agustiawan (Billy)", count: 1 }, { name: "Irfan", count: 1 }, { name: "Sudarti", count: 1 },
     ]);
+  });
+  it("apresiasi satu divisi & luar divisi (Lencir) digabung; orang yang disebut di keduanya tetap sekali", () => {
+    const text = appreciatedText({ appreciated_names: "Deni", appreciated_names_team: "Sudarti, deni ramdani" });
+    expect(text).toBe("Deni, Sudarti, deni ramdani");
+    expect(appreciationCounts([text!], staff)).toEqual([{ name: "Deni Ramdani", count: 1 }, { name: "Sudarti", count: 1 }]);
+    expect(appreciatedText({ appreciated_names: " " })).toBeNull();
   });
 });
 

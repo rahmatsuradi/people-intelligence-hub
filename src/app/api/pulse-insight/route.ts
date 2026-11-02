@@ -15,15 +15,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireHr } from "@/lib/require-hr";
 import { callGroq, GROQ_MODEL } from "@/lib/cv-groq";
-import { appreciationCounts, summarize, type SegmentPeriod, type Survey, type SurveyAction, type SurveyResponse } from "@/lib/rr/pulse";
+import { APPRECIATION_KEYS, appreciatedText, appreciationCounts, summarize, type SegmentPeriod, type Survey, type SurveyAction, type SurveyResponse } from "@/lib/rr/pulse";
 import { buildInsightPrompt, collectComments, makeScrubber, parseInsight } from "@/lib/rr/pulse-insight";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area" };
+const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area", divisi: "Divisi" };
 /** Teks yang isinya identitas (outlet, SPV, nama rekan), bukan pendapat — tidak dikirim ke AI. */
-const IDENTITY_TEXT = ["store", "joined_since", "spv", "work_hours", "appreciated_names"];
+const IDENTITY_TEXT = ["store", "joined_since", "spv", "work_hours", "training_doc", ...APPRECIATION_KEYS];
 
 export async function POST(request: NextRequest) {
   const me = await requireHr(request);
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: `AI gagal membuat insight: ${(e as Error).message}` }, { status: 502 });
   }
-  const praised = inPeriod.map((r) => r.answers.appreciated_names).filter((v): v is string => typeof v === "string");
+  const praised = inPeriod.map((r) => appreciatedText(r.answers)).filter((v): v is string => !!v);
   if (praised.length) content.apresiasi = appreciationCounts(praised, staff);
   content.dasar = { period: period!, responden: inPeriod.length, komentar: comments.length };
 
