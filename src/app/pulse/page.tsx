@@ -37,7 +37,7 @@ import { Report360 } from "@/components/pulse/report-360";
 import { SpvReport } from "@/components/pulse/spv-report";
 
 type Tab = "dash" | "rapor" | "tindak" | "orang" | "komentar" | "jawaban" | "detail" | "kirim";
-const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area", jabatan: "Kelompok jabatan" };
+const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area", jabatan: "Kelompok jabatan", divisi: "Divisi" };
 const GUIDE_KEY = "pulse-guide-hidden";
 const HOME = "ikhtisar";
 
