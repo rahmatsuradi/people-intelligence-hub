@@ -8,7 +8,7 @@ interface FormData { title: string; description: string | null; periodLabel: str
 const box = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 const input = "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 
-export function SurveyForm({ token }: { token: string }) {
+export function SurveyForm({ token, invite }: { token: string; invite?: string }) {
   const [data, setData] = useState<FormData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [step, setStep] = useState(0);
@@ -22,10 +22,15 @@ export function SurveyForm({ token }: { token: string }) {
   const [website, setWebsite] = useState("");
 
   useEffect(() => {
-    fetch(`/api/survei?token=${encodeURIComponent(token)}`)
-      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error ?? "Gagal memuat formulir."); setData(j); })
+    fetch(`/api/survei?token=${encodeURIComponent(token)}${invite ? `&u=${encodeURIComponent(invite)}` : ""}`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error ?? "Gagal memuat formulir.");
+        setData(j);
+        if (j.inviteName) setName((n) => n || j.inviteName);
+      })
       .catch((e: Error) => setLoadError(e.message));
-  }, [token]);
+  }, [token, invite]);
 
   // Langkah 0 = identitas; berikutnya satu bagian (section) per langkah — nyaman di HP.
   const sections = useMemo(() => {
@@ -71,7 +76,7 @@ export function SurveyForm({ token }: { token: string }) {
     // Hanya jawaban untuk pertanyaan yang sedang tampil yang dikirim.
     const visible = new Set(data.questions.filter((q) => isVisible(q, answers)).map((q) => q.key));
     const payload = Object.fromEntries(Object.entries(answers).filter(([k]) => visible.has(k)));
-    const r = await fetch("/api/survei", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, name, contact, answers: payload, website }) });
+    const r = await fetch("/api/survei", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, invite, name, contact, answers: payload, website }) });
     const j = await r.json().catch(() => ({}));
     setSending(false);
     if (!r.ok) { setSendError(j.error ?? "Gagal mengirim. Coba lagi."); return; }

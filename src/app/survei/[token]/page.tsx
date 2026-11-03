@@ -17,8 +17,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function SurveiPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function SurveiPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ u?: string | string[] }> }) {
   const { token } = await params;
+  // ?u=… = link pribadi dari pengingat WA: nama terisi otomatis dan jawaban tercatat untuk orang itu.
+  const { u } = await searchParams;
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -31,7 +33,7 @@ export default async function SurveiPage({ params }: { params: Promise<{ token: 
         </div>
       </header>
       <div className="mx-auto max-w-2xl px-4 py-6">
-        <SurveyForm token={token} />
+        <SurveyForm token={token} invite={typeof u === "string" ? u : undefined} />
       </div>
     </main>
   );

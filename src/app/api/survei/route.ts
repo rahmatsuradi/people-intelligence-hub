@@ -63,9 +63,17 @@ export async function GET(request: NextRequest) {
   const { row, error } = await findCampaign(request.nextUrl.searchParams.get("token") ?? "");
   if (error) return error;
   const s = row!.pi_surveys!;
+  // Link pribadi dari pengingat WA: nama orangnya diisikan ke formulir. Gagal = formulir biasa.
+  const u = request.nextUrl.searchParams.get("u") ?? "";
+  let inviteName: string | null = null;
+  if (/^[a-z0-9]{20,64}$/.test(u)) {
+    const { data: inv } = await supabaseAdmin!.from("pi_survey_invites").select("pi_survey_recipients(name, full_name)").eq("token", u).eq("campaign_id", row!.id).maybeSingle();
+    const who = (inv as unknown as { pi_survey_recipients: { name: string; full_name: string | null } | null } | null)?.pi_survey_recipients;
+    inviteName = who ? (who.full_name || who.name) : null;
+  }
   return NextResponse.json({
     title: s.title, description: s.description, period: row!.period, periodLabel: periodLabel(row!.period), closesAt: row!.closes_at,
-    questions: s.questions.map(publicQuestion),
+    questions: s.questions.map(publicQuestion), inviteName,
   });
 }
 
@@ -73,7 +81,7 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\
 
 export async function POST(request: NextRequest) {
   if (limited(request, "post", 8, 10 * 60_000)) return NextResponse.json({ error: "Terlalu banyak kiriman dari perangkat ini. Coba lagi nanti." }, { status: 429 });
-  const body = (await request.json().catch(() => ({}))) as { token?: string; name?: string; contact?: string; answers?: Record<string, unknown>; website?: string };
+  const body = (await request.json().catch(() => ({}))) as { token?: string; invite?: string; name?: string; contact?: string; answers?: Record<string, unknown>; website?: string };
   if (body.website) return NextResponse.json({ ok: true }); // isian jebakan bot — diam-diam diabaikan
   const { row, error } = await findCampaign(body.token ?? "");
   if (error) return error;
@@ -92,11 +100,35 @@ export async function POST(request: NextRequest) {
     answers.jabatan = jabatanGroup(hitsByName.length === 1 ? (hitsByName[0].position as string | null) : null);
   }
 
-  const { error: insErr } = await supabaseAdmin!.from("pi_survey_responses").insert({
+  // Link pribadi dari pengingat WA (pi_survey_invites): orangnya sudah diketahui. Jawaban diberi
+  // email yang sama dengan jawaban lamanya supaya riwayat per orang tidak terpecah.
+  let invite: { id: string; response_id: string | null; email: string | null } | null = null;
+  if (body.invite && /^[a-z0-9]{20,64}$/.test(body.invite)) {
+    const { data: inv } = await supabaseAdmin!.from("pi_survey_invites").select("id, response_id, pi_survey_recipients(email)")
+      .eq("token", body.invite).eq("campaign_id", row!.id).maybeSingle();
+    const r = inv as unknown as { id: string; response_id: string | null; pi_survey_recipients: { email: string | null } | null } | null;
+    if (r) invite = { id: r.id, response_id: r.response_id, email: r.pi_survey_recipients?.email?.trim().toLowerCase() || null };
+  }
+
+  const { data: saved, error: insErr } = await supabaseAdmin!.from("pi_survey_responses").insert({
     tenant_id: row!.tenant_id, survey_id: row!.survey_id, campaign_id: row!.id, period: row!.period,
-    submitted_at: new Date().toISOString(), respondent_name: name, respondent_email: contact,
+    submitted_at: new Date().toISOString(), respondent_name: name, respondent_email: invite?.email || contact,
     employee_id: hitsByName.length === 1 ? hitsByName[0].id : null, answers, source: INSTANCE.surveySource,
-  });
-  if (insErr) return NextResponse.json({ error: "Jawaban gagal disimpan. Coba kirim ulang." }, { status: 500 });
+  }).select("id").single();
+  if (insErr || !saved) return NextResponse.json({ error: "Jawaban gagal disimpan. Coba kirim ulang." }, { status: 500 });
+
+  // Tandai orang ini sudah mengisi supaya pengingat WA berhenti. Mengisi ulang lewat link yang sama:
+  // isian terakhir yang dihitung, isian sebelumnya ditandai ganda (tidak dihapus). Gagal di sini
+  // tidak membatalkan jawaban yang sudah tersimpan.
+  if (invite) {
+    await supabaseAdmin!.from("pi_survey_invites").update({ response_id: saved.id }).eq("id", invite.id);
+    if (invite.response_id && invite.response_id !== saved.id) {
+      const { data: prev } = await supabaseAdmin!.from("pi_survey_responses").select("flags").eq("id", invite.response_id).maybeSingle();
+      if (prev) {
+        const flags = [...new Set([...((prev.flags as string[] | null) ?? []), "isian_ganda"])];
+        await supabaseAdmin!.from("pi_survey_responses").update({ excluded: true, flags }).eq("id", invite.response_id);
+      }
+    }
+  }
   return NextResponse.json({ ok: true });
 }

@@ -5,6 +5,7 @@ import { Button, Card, Label, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { createCampaign, periodLabel, updateCampaign, type Campaign, type PeriodSummary, type Survey } from "@/lib/rr/pulse";
 import { INSTANCE } from "@/lib/instance";
+import { Reminders } from "./reminders";
 
 const addMonths = (period: string, n: number) => {
   const [y, m] = period.split("-").map(Number);
@@ -115,6 +116,7 @@ export function Campaigns({ survey, summary, campaigns, reload }: { survey: Surv
               </div>
             </div>
             <input readOnly className={cn(inputClass, "mt-3 font-mono text-xs")} value={link(c)} onFocus={(e) => e.currentTarget.select()} />
+            {!closed && <Reminders survey={survey} campaign={c} link={link(c)} />}
           </Card>
         );
       })}
