@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { periodLabel, type Campaign, type Survey } from "@/lib/rr/pulse";
@@ -21,10 +21,13 @@ interface Row { r: Recipient; inviteId: string | null; link: string; phone: stri
  * Aturan jadwal: nextReminder() di pulse-remind.ts.
  */
 export function Reminders({ survey, campaign, link }: { survey: Survey; campaign: Campaign; link: string }) {
+  // null = tabel pengingat belum dipasang; galat lain hanya ditampilkan, data yang sudah ada tidak dibuang.
   const [data, setData] = useState<ReminderData | null | undefined>(undefined);
+  const [loadError, setLoadError] = useState("");
   const [now, setNow] = useState(() => new Date());
   const [manage, setManage] = useState(false);
   const [draft, setDraft] = useState({ name: "", phone: "" });
+  const sending = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     try {
@@ -36,11 +39,19 @@ export function Reminders({ survey, campaign, link }: { survey: Survey; campaign
         d = await loadReminderData(campaign.id);
       }
       setData(d);
-    } catch (e) { toast((e as Error).message, "error"); setData(null); }
+      setLoadError("");
+    } catch (e) { setLoadError((e as Error).message); }
   }, [campaign.id]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(t); }, []);
+  // Segarkan tiap menit dan saat HR kembali dari WhatsApp, supaya yang baru mengisi/baru dikirimi tidak tampil "kirim sekarang".
+  useEffect(() => {
+    const tick = () => { setNow(new Date()); load(); };
+    const t = setInterval(tick, 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
+  }, [load]);
 
   const rows = useMemo<Row[]>(() => {
     if (!data) return [];
@@ -54,22 +65,32 @@ export function Reminders({ survey, campaign, link }: { survey: Survey; campaign
     }).sort((a, b) => order[a.st.state] - order[b.st.state] || (a.st.at?.getTime() ?? 0) - (b.st.at?.getTime() ?? 0) || a.r.name.localeCompare(b.r.name));
   }, [data, campaign.closes_at, link, now]);
 
-  if (data === undefined) return <p className="mt-3 text-xs text-slate-400">Memuat pengingat WA…</p>;
+  if (data === undefined) {
+    return loadError
+      ? <p className="mt-3 text-xs text-red-600">Pengingat WA gagal dimuat: {loadError} <button type="button" className="underline" onClick={load}>Coba lagi</button></p>
+      : <p className="mt-3 text-xs text-slate-400">Memuat pengingat WA…</p>;
+  }
   if (data === null) return <p className="mt-3 text-xs text-slate-400">Pengingat WA belum aktif di database ini (jalankan supabase/survey-reminders.sql).</p>;
 
   const month = periodLabel(campaign.period);
+  const isClosed = campaign.status === "closed" || (!!campaign.closes_at && new Date(campaign.closes_at) <= now);
   const filled = rows.filter((x) => x.st.state === "done").length;
-  const due = rows.filter((x) => x.st.state === "due" && x.phone);
+  // Tanpa link pribadi, pesan tidak bisa dicatat atas nama orangnya (akan dianggap belum pernah dikirim).
+  const due = rows.filter((x) => x.st.state === "due" && x.phone && x.inviteId);
   const lastGroup = data.logs.filter((l) => l.kind === "grup").at(-1);
 
   // window.open harus terjadi langsung di klik (bukan setelah await), kalau tidak diblokir browser.
   const sendTo = (x: Row) => {
     if (!x.phone) { toast(`Nomor WA ${x.r.name} belum diisi`, "error"); return; }
+    if (!x.inviteId) { toast(`Link pribadi ${x.r.name} belum dibuat — muat ulang halaman`, "error"); return; }
+    if (sending.current.has(x.inviteId)) return; // klik ganda sebelum catatan kirim tersimpan
+    sending.current.add(x.inviteId);
     const text = personalMessage(x.st.stage ?? "harian", { name: x.r.name, title: survey.title, month, link: x.link, closesAt: campaign.closes_at, now, brand: INSTANCE.shortName });
     window.open(waLink(x.phone, text), "_blank", "noopener");
-    logWaSend(campaign.id, x.inviteId).then((err) => { if (err) toast(err, "error"); else load(); });
+    logWaSend(campaign.id, x.inviteId).then((err) => { sending.current.delete(x.inviteId!); if (err) toast(err, "error"); else load(); });
   };
   const sendGroup = () => {
+    if (isClosed) { toast("Formulir ini sudah ditutup", "error"); return; }
     const text = groupMessage({ title: survey.title, month, link, closesAt: campaign.closes_at, now, brand: INSTANCE.shortName, filled, total: rows.length });
     window.open(waLink(null, text), "_blank", "noopener");
     logWaSend(campaign.id, null).then((err) => { if (err) toast(err, "error"); else load(); });
@@ -104,7 +125,7 @@ export function Reminders({ survey, campaign, link }: { survey: Survey; campaign
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="primary" disabled={!due.length} onClick={() => due[0] && sendTo(due[0])}>{due.length ? `Kirim berikutnya: ${due[0].r.name} (${due.length})` : "Tidak ada yang perlu dikirim"}</Button>
-          <Button size="sm" onClick={sendGroup}>Kirim ke grup WA</Button>
+          <Button size="sm" disabled={isClosed} onClick={sendGroup}>Kirim ke grup WA</Button>
           <Button size="sm" variant="ghost" onClick={() => setManage(!manage)}>{manage ? "Selesai" : "Kelola penerima"}</Button>
         </div>
       </div>
@@ -121,7 +142,7 @@ export function Reminders({ survey, campaign, link }: { survey: Survey; campaign
                 <div className="flex items-center gap-2">
                   {chip(x)}
                   {x.st.state !== "done" && x.st.state !== "closed" && (
-                    <Button size="sm" variant={x.st.state === "due" ? "primary" : "ghost"} disabled={!x.phone} onClick={() => sendTo(x)}>Kirim WA</Button>
+                    <Button size="sm" variant={x.st.state === "due" ? "primary" : "ghost"} disabled={!x.phone || !x.inviteId} onClick={() => sendTo(x)}>Kirim WA</Button>
                   )}
                 </div>
               </li>

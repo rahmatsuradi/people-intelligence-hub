@@ -5,6 +5,7 @@ import { Button, Card, Label, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { createCampaign, periodLabel, updateCampaign, type Campaign, type PeriodSummary, type Survey } from "@/lib/rr/pulse";
 import { INSTANCE } from "@/lib/instance";
+import { surveyLinkPath } from "@/lib/rr/survey-link";
 import { Reminders } from "./reminders";
 
 const addMonths = (period: string, n: number) => {
@@ -30,7 +31,8 @@ export function Campaigns({ survey, summary, campaigns, reload }: { survey: Surv
   const [form, setForm] = useState({ period: suggested.slice(0, 7), closes: defaultClose(suggested), target: "" });
   const [saving, setSaving] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const link = (c: Campaign) => `${origin}/survei/${c.token}`;
+  // Nama form di link (mis. /survei/monthly-pulse-check-lencir-oktober-2026/<token>) hanya hiasan agar jelas di WhatsApp.
+  const link = (c: Campaign) => `${origin}${surveyLinkPath(survey, INSTANCE.shortName, periodLabel(c.period), c.token)}`;
   const count = (p: string) => summary.find((s) => s.period === p)?.n ?? 0;
 
   const waText = (c: Campaign) =>

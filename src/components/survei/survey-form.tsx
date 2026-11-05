@@ -97,6 +97,7 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
           <label className="block text-sm font-medium text-slate-800 dark:text-slate-100">Nama lengkap <span className="text-red-600">*</span></label>
           <input className={`${input} mt-1.5`} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
           {missing.includes("__name") && <p className="mt-1 text-xs text-red-600">Nama lengkap wajib diisi.</p>}
+          {invite && <p className="mt-1 text-xs text-slate-500">Ini link pribadi. Bukan kamu? Minta link grup dari HR supaya jawabanmu tercatat atas namamu sendiri.</p>}
           <label className="mt-4 block text-sm font-medium text-slate-800 dark:text-slate-100">Email atau nomor WA <span className="text-xs font-normal text-slate-400">(boleh dikosongkan)</span></label>
           <input className={`${input} mt-1.5`} value={contact} onChange={(e) => setContact(e.target.value)} />
           <input className="hidden" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} aria-hidden="true" />

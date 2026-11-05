@@ -26,6 +26,7 @@ const WIB = 7 * HOUR;
 /** Nomor WA → format internasional tanpa "+" (62812…). null bila bukan nomor HP Indonesia yang masuk akal. */
 export function normalizePhone(raw: string | null | undefined): string | null {
   let d = (raw ?? "").replace(/\D/g, "");
+  if (d.startsWith("620")) d = "62" + d.slice(3); // "+62 (0)812…" / "+62 0812…" — nol di depan ikut tertulis
   if (d.startsWith("0")) d = "62" + d.slice(1);
   else if (d.startsWith("8")) d = "62" + d;
   return /^628\d{7,11}$/.test(d) ? d : null;
@@ -68,31 +69,45 @@ export function nextReminder(p: { sends: (string | Date)[]; closesAt: string | D
   if (close && p.now > close) return { state: "closed", at: null, stage: null, sent };
   const finalStart = close ? new Date(close.getTime() - REMIND.finalWindowHours * HOUR) : null;
 
-  let at: Date;
-  let stage: ReminderStage;
-  if (!sent) {
-    at = toSendWindow(p.now);
-    stage = "undangan";
-  } else {
+  // Saat paling awal pesan berikutnya boleh keluar, SEBELUM jam kirim.
+  let cand = p.now;
+  if (sent) {
     const last = new Date(Math.max(...p.sends.map((s) => new Date(s).getTime())));
     const inFinal = !!finalStart && last >= finalStart;
-    let cand = new Date(last.getTime() + (inFinal ? REMIND.finalGapHours : REMIND.dailyGapHours) * HOUR);
+    cand = new Date(last.getTime() + (inFinal ? REMIND.finalGapHours : REMIND.dailyGapHours) * HOUR);
+    // Pesan terakhir tercatat malam hari: pengingat harian jatuh paling lambat 20.00 hari itu, bukan lompat sehari.
+    if (!inFinal) cand = clampToDayEnd(cand);
     // Pengingat harian yang melewati awal 2 hari terakhir dimajukan ke awal masa ketat.
     if (finalStart && !inFinal && cand > finalStart) cand = new Date(Math.max(finalStart.getTime(), last.getTime() + REMIND.finalGapHours * HOUR));
-    at = toSendWindow(cand);
-    stage = finalStart && at >= finalStart ? "ketat" : "harian";
   }
+  // Yang sudah lewat waktunya baru boleh dikirim SEKARANG kalau sekarang masih jam kirim; kalau tidak, menunggu 08.00.
+  const at = toSendWindow(cand < p.now ? p.now : cand);
+  // Tahap pesan mengikuti waktu pesan benar-benar keluar, bukan jadwal lamanya.
+  const stage: ReminderStage = !sent ? "undangan" : finalStart && at >= finalStart ? "ketat" : "harian";
   if (close && at > close) return { state: "none", at: null, stage: null, sent };
   return { state: at <= p.now ? "due" : "wait", at, stage, sent };
+}
+
+/** Waktu yang jatuh setelah 20.00 WIB ditarik mundur ke 20.00 hari yang sama. */
+function clampToDayEnd(at: Date): Date {
+  const w = new Date(at.getTime() + WIB);
+  if (w.getUTCHours() * 60 + w.getUTCMinutes() <= REMIND.endHour * 60) return at;
+  return new Date(Date.UTC(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate()) - WIB + REMIND.endHour * HOUR);
 }
 
 const dateLabel = (d: string | Date) => new Date(d).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long" });
 const timeLabel = (d: string | Date) => new Date(d).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" });
 
-/** "tinggal 5 jam" / "tinggal 2 hari" menuju batas isi. */
-export function timeLeft(closesAt: string | Date, now: Date): string {
-  const h = Math.max(0, (new Date(closesAt).getTime() - now.getTime()) / HOUR);
-  return h < 24 ? `tinggal ${Math.max(1, Math.round(h))} jam` : `tinggal ${Math.round(h / 24)} hari`;
+const wibDay = (d: Date) => Math.floor((d.getTime() + WIB) / (24 * HOUR));
+
+/** "ditutup hari ini pukul 23.59 WIB" / "ditutup besok …" / "ditutup Selasa, 10 November pukul …" — hari menurut kalender WIB. */
+export function closingPhrase(closesAt: string | Date, now: Date): string {
+  const close = new Date(closesAt);
+  const clock = `pukul ${timeLabel(close)} WIB`;
+  const days = wibDay(close) - wibDay(now);
+  if (days <= 0) return `ditutup hari ini ${clock}`;
+  if (days === 1) return `ditutup besok ${clock}`;
+  return `ditutup ${dateLabel(close)} ${clock}`;
 }
 
 export interface MessageCtx { name: string; title: string; month: string; link: string; closesAt: string | null; now: Date; brand: string }
@@ -107,8 +122,8 @@ export function personalMessage(stage: ReminderStage, c: MessageCtx): string {
   if (stage === "harian") {
     return `Halo ${c.name}, pengingat ya 🙂\n\n*${c.title} ${c.month}* belum kamu isi. Cuma ±3 menit:\n${c.link}\n\n${batas}\n\nTerima kasih!`;
   }
-  const left = c.closesAt ? timeLeft(c.closesAt, c.now) : "sebentar lagi";
-  return `Halo ${c.name}, ${left} lagi *${c.title} ${c.month}* ditutup ⏰\n\nKamu belum mengisi — mohon diisi sekarang ya, ±3 menit:\n${c.link}\n\nTerima kasih 🙏`;
+  const closing = c.closesAt ? closingPhrase(c.closesAt, c.now) : "ditutup sebentar lagi";
+  return `Halo ${c.name}, *${c.title} ${c.month}* ${closing} ⏰\n\nKamu belum mengisi — mohon diisi sekarang ya, ±3 menit:\n${c.link}\n\nTerima kasih 🙏`;
 }
 
 /** Pesan grup: tanpa menyebut nama siapa yang belum mengisi. */
@@ -118,39 +133,49 @@ export function groupMessage(c: Omit<MessageCtx, "name"> & { filled: number; tot
     return `Halo rekan-rekan ${c.brand} 👋\n\nYuk isi *${c.title} ${c.month}* (±3 menit) lewat link ini:\n${c.link}\n\n` +
       `Jawabanmu hanya dibaca tim HR. Owner hanya melihat ringkasan angka tanpa nama.${batas}\n\nTerima kasih 🙏`;
   }
-  const left = c.closesAt ? `, ${timeLeft(c.closesAt, c.now)} lagi` : "";
+  const closing = c.closesAt ? ` — ${closingPhrase(c.closesAt, c.now)}` : "";
   return `Halo rekan-rekan ${c.brand} 👋\n\nTerima kasih untuk ${c.filled} dari ${c.total} orang yang sudah mengisi *${c.title} ${c.month}* 🙌\n\n` +
-    `Yang belum, yuk isi sekarang${left} (±3 menit):\n${c.link}${batas}`;
+    `Yang belum, yuk isi sekarang (±3 menit)${closing}:\n${c.link}`;
 }
 
 const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/\(.*?\)/g, " ").replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
 
 /**
- * Siapa yang sudah mengisi link ini: lewat link pribadinya (invite.response_id), lewat email
- * yang sama, atau lewat link grup dengan nama yang cocok tepat ke SATU orang (nama lengkap,
- * nama panggilan, atau kata pertama yang unik). Nama yang cocok ke beberapa orang tidak ditebak.
+ * Siapa yang sudah mengisi link ini: lewat link pribadinya (invite.response_id — pasti), atau
+ * lewat link grup dengan nama yang diketik. Kesalahan "dianggap sudah mengisi" lebih buruk daripada
+ * "dianggap belum" (pengingatnya berhenti diam-diam), jadi pencocokan nama sengaja ketat:
+ *   1. nama lengkap atau nama panggilan, utuh, yang cocok ke SATU orang;
+ *   2. kata pertama yang cocok ke SATU orang, DAN kata-kata lainnya yang diketik masih bagian dari
+ *      nama orang itu (awalan boleh, mis. "Ani L." untuk "Ani Lestari").
+ * Email yang diketik di kolom kontak tidak dipakai (bisa saja email orang lain).
  */
 export function respondedRecipients(
-  recipients: { id: string; name: string; full_name: string | null; email?: string | null }[],
+  recipients: { id: string; name: string; full_name: string | null }[],
   invites: { recipient_id: string; response_id: string | null }[],
-  responses: { respondent_name: string | null; respondent_email?: string | null }[],
+  responses: { respondent_name: string | null }[],
 ): Set<string> {
   const done = new Set(invites.filter((i) => i.response_id).map((i) => i.recipient_id));
-  const byEmail = new Map(recipients.filter((r) => r.email?.trim()).map((r) => [r.email!.trim().toLowerCase(), r.id]));
-  const keys = new Map<string, string[]>();
-  const add = (k: string, id: string) => { if (k) keys.set(k, [...new Set([...(keys.get(k) ?? []), id])]); };
+  const whole = new Map<string, Set<string>>();
+  const first = new Map<string, Set<string>>();
+  const tokens = new Map<string, string[]>();
+  const put = (m: Map<string, Set<string>>, k: string, id: string) => { if (k) m.set(k, (m.get(k) ?? new Set()).add(id)); };
   for (const r of recipients) {
-    add(norm(r.full_name), r.id);
-    add(norm(r.name), r.id);
-    add(norm(r.full_name).split(" ")[0], r.id);
-    add(norm(r.name).split(" ")[0], r.id);
+    const parts = [norm(r.full_name), norm(r.name)].filter(Boolean);
+    for (const p of parts) { put(whole, p, r.id); put(first, p.split(" ")[0], r.id); }
+    tokens.set(r.id, [...new Set(parts.flatMap((p) => p.split(" ")))]);
   }
+  const only = (s: Set<string> | undefined) => (s?.size === 1 ? [...s][0] : null);
   for (const resp of responses) {
-    const email = byEmail.get((resp.respondent_email ?? "").trim().toLowerCase());
-    if (email) { done.add(email); continue; }
     const n = norm(resp.respondent_name);
-    const hit = keys.get(n)?.length === 1 ? keys.get(n)! : keys.get(n.split(" ")[0])?.length === 1 ? keys.get(n.split(" ")[0])! : null;
-    if (hit) done.add(hit[0]);
+    if (!n) continue;
+    // Satu kata yang sama dengan kata pertama orang lain ("Dedi" untuk Dedi P. dan Dedi S.) = ambigu.
+    let id = only(new Set([...(whole.get(n) ?? []), ...(first.get(n) ?? [])]));
+    if (!id) {
+      const words = n.split(" ");
+      const cand = only(first.get(words[0]));
+      if (cand && words.slice(1).every((w) => tokens.get(cand)!.some((t) => t.startsWith(w)))) id = cand;
+    }
+    if (id) done.add(id);
   }
   return done;
 }
