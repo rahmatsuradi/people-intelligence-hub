@@ -4,7 +4,10 @@
    noindex: link survei tidak boleh terindeks mesin pencari.
 
    Bentuk LAMA /survei/<token>, tetap berfungsi untuk link yang sudah dibagikan. Link baru
-   memakai /survei/<nama-form>/<token> (lihat [slug]/[token]/page.tsx).
+   memakai /survei/<nama-form>/<token> (lihat [token]/page.tsx di folder ini).
+
+   Folder ini bernama [slug] (bukan [token]) karena Next.js mewajibkan nama bagian dinamis yang
+   sama di tingkat yang sama untuk /survei/<x> dan /survei/<x>/<token>. Di sini <x> adalah token.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import type { Metadata } from "next";
@@ -19,8 +22,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function SurveiRoute({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ u?: string | string[] }> }) {
-  const { token } = await params;
+export default async function SurveiRoute({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ u?: string | string[] }> }) {
+  const { slug: token } = await params; // link lama: satu-satunya bagian di URL adalah token
   // ?u=… = link pribadi dari pengingat WA: nama terisi otomatis dan jawaban tercatat untuk orang itu.
   const { u } = await searchParams;
   return <SurveiPage token={token} invite={typeof u === "string" ? u : undefined} />;
