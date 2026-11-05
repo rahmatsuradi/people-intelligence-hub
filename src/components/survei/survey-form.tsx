@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { isVisible, type AnswerValue, type SurveyQuestion } from "@/lib/rr/pulse";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { isVisible, maxChoicesOf, type AnswerValue, type SurveyQuestion } from "@/lib/rr/pulse";
+import { clearDraft, draftKey, loadDraft, saveDraft } from "@/lib/rr/survey-draft";
 
 interface FormData { title: string; description: string | null; periodLabel: string; closesAt: string | null; questions: SurveyQuestion[] }
 
 const box = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 const input = "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+
+/** localStorage bisa melempar galat bila browser memblokirnya; formulir tetap harus jalan tanpa draf. */
+const browserStore = (): Storage | null => { try { return window.localStorage; } catch { return null; } };
 
 export function SurveyForm({ token, invite }: { token: string; invite?: string }) {
   const [data, setData] = useState<FormData | null>(null);
@@ -20,6 +24,10 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
   const [sendError, setSendError] = useState("");
   const [done, setDone] = useState(false);
   const [website, setWebsite] = useState("");
+  const [restored, setRestored] = useState(false);
+  // Penahan klik ganda: `sending` baru berlaku setelah render, klik kedua bisa lebih cepat dari itu.
+  const submitting = useRef(false);
+  const key = draftKey(token, invite);
 
   useEffect(() => {
     fetch(`/api/survei?token=${encodeURIComponent(token)}${invite ? `&u=${encodeURIComponent(invite)}` : ""}`)
@@ -28,9 +36,26 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
         if (!r.ok) throw new Error(j.error ?? "Gagal memuat formulir.");
         setData(j);
         if (j.inviteName) setName((n) => n || j.inviteName);
+        // Lanjutkan isian yang terhenti (halaman dimuat ulang saat berpindah aplikasi di HP).
+        const store = browserStore();
+        const draft = store && loadDraft(store, key);
+        if (draft) {
+          const steps = new Set((j.questions as SurveyQuestion[]).map((q) => q.section ?? "Pertanyaan")).size;
+          setStep(Math.min(draft.step, steps));
+          if (draft.name) setName(draft.name);
+          setContact(draft.contact);
+          setAnswers(draft.answers);
+          setRestored(draft.step > 0 || Object.keys(draft.answers).length > 0);
+        }
       })
       .catch((e: Error) => setLoadError(e.message));
-  }, [token, invite]);
+  }, [token, invite, key]);
+
+  useEffect(() => {
+    if (!data || done) return;
+    const store = browserStore();
+    if (store) saveDraft(store, key, { step, name, contact, answers });
+  }, [data, done, key, step, name, contact, answers]);
 
   // Langkah 0 = identitas; berikutnya satu bagian (section) per langkah — nyaman di HP.
   const sections = useMemo(() => {
@@ -71,16 +96,25 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
   const next = () => { if (checkStep()) { setStep(step + 1); window.scrollTo({ top: 0, behavior: "smooth" }); } };
 
   const submit = async () => {
-    if (!checkStep()) return;
+    if (submitting.current || !checkStep()) return;
+    submitting.current = true;
     setSending(true); setSendError("");
     // Hanya jawaban untuk pertanyaan yang sedang tampil yang dikirim.
     const visible = new Set(data.questions.filter((q) => isVisible(q, answers)).map((q) => q.key));
     const payload = Object.fromEntries(Object.entries(answers).filter(([k]) => visible.has(k)));
-    const r = await fetch("/api/survei", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, invite, name, contact, answers: payload, website }) });
-    const j = await r.json().catch(() => ({}));
-    setSending(false);
-    if (!r.ok) { setSendError(j.error ?? "Gagal mengirim. Coba lagi."); return; }
-    setDone(true);
+    try {
+      const r = await fetch("/api/survei", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, invite, name, contact, answers: payload, website }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setSendError(j.error ?? "Gagal mengirim. Coba lagi."); return; }
+      const store = browserStore();
+      if (store) clearDraft(store, key);
+      setDone(true);
+    } catch {
+      setSendError("Koneksi terputus. Jawabanmu masih tersimpan di sini — coba kirim lagi.");
+    } finally {
+      submitting.current = false;
+      setSending(false);
+    }
   };
 
   return (
@@ -90,6 +124,7 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
         {step === 0 && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{data.description}</p>}
         <div className="mt-3 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-blue-600 transition-all" style={{ width: `${((step + 1) / total) * 100}%` }} /></div>
         <p className="mt-1 text-xs text-slate-500">Langkah {step + 1} dari {total}{step > 0 ? ` · ${sections[step - 1][0]}` : ""}</p>
+        {restored && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">Jawabanmu yang tadi dipulihkan. Lanjutkan dari sini.</p>}
       </div>
 
       {step === 0 ? (
@@ -109,7 +144,7 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
         visibleIn(sections[step - 1][1]).map((q) => (
           <div key={q.key} className={`${box} ${missing.includes(q.key) ? "border-red-300 dark:border-red-800" : ""}`}>
             <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{q.label}{q.required && <span className="text-red-600"> *</span>}</p>
-            {q.type === "multi" && <p className="text-xs text-slate-400">Boleh pilih lebih dari satu</p>}
+            {q.type === "multi" && <p className="text-xs text-slate-400">{maxChoicesOf(q) ? `Pilih paling banyak ${maxChoicesOf(q)}` : "Boleh pilih lebih dari satu"}</p>}
             <div className="mt-3"><Field q={q} value={answers[q.key]} onChange={(v) => set(q.key, v)} /></div>
             {missing.includes(q.key) && <p className="mt-2 text-xs text-red-600">Wajib diisi.</p>}
           </div>
@@ -148,12 +183,14 @@ function Field({ q, value, onChange }: { q: SurveyQuestion; value: AnswerValue |
     );
   }
   const vals = Array.isArray(value) ? value.map(String) : value !== undefined ? [String(value)] : [];
+  const max = maxChoicesOf(q);
   return (
     <div className="space-y-2">
       {(q.options ?? []).map((o) => {
         const picked = vals.includes(o.value);
+        const full = !picked && max !== null && vals.length >= max; // sudah penuh: batalkan pilihan lain dulu
         return (
-          <button key={o.value} type="button" className={`${opt} ${picked ? on : off}`}
+          <button key={o.value} type="button" disabled={full} className={`${opt} ${picked ? on : off} ${full ? "opacity-40" : ""}`}
             onClick={() => q.type === "multi"
               ? onChange(picked ? vals.filter((v) => v !== o.value) : [...vals, o.value])
               : onChange(picked ? undefined : o.value)}>

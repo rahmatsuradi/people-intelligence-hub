@@ -398,6 +398,16 @@ export function isVisible(q: SurveyQuestion, answers: Record<string, AnswerValue
 export const MAX_TEXT = 2000;
 
 /**
+ * Batas jumlah pilihan pertanyaan multi, dibaca dari tulisannya ("pilih maksimal 3"), supaya
+ * yang tertulis di formulir dan yang ditegakkan selalu sama tanpa mengubah definisi tersimpan.
+ */
+export function maxChoicesOf(q: Pick<SurveyQuestion, "type" | "label">): number | null {
+  if (q.type !== "multi") return null;
+  const m = /maksimal\s+(\d+)/i.exec(q.label);
+  return m ? Number(m[1]) : null;
+}
+
+/**
  * Validasi jawaban dari formulir publik. Hanya key yang ada di definisi survei yang
  * disimpan, pilihan harus salah satu opsi, skala harus di rentangnya, dan jawaban untuk
  * pertanyaan yang tidak tampil (syarat showIf tak terpenuhi) dibuang — bukan disimpan
@@ -419,8 +429,10 @@ export function validateSubmission(survey: Pick<Survey, "questions">, raw: Recor
     }
     const allowed = q.options?.map((o) => o.value);
     if (q.type === "multi") {
-      const arr = (Array.isArray(v) ? v : [v]).map(String).filter((x) => !allowed || allowed.includes(x));
-      return arr.length ? [...new Set(arr)] : null;
+      const arr = [...new Set((Array.isArray(v) ? v : [v]).map(String).filter((x) => !allowed || allowed.includes(x)))];
+      const max = maxChoicesOf(q);
+      if (max && arr.length > max) { errors.push(`${q.label}: pilih maksimal ${max}`); return null; }
+      return arr.length ? arr : null;
     }
     const s = String(v);
     if (allowed && !allowed.includes(s)) { errors.push(`${q.label}: pilihan tidak dikenal`); return null; }

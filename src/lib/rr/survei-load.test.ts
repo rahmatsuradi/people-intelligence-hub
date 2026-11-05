@@ -316,6 +316,17 @@ describe("kerja bersamaan lainnya", () => {
     expect(rows.slice(0, 2).every((x) => x.excluded && (x.flags as string[]).includes("isian_ganda"))).toBe(true);
   });
 
+  it("'pilih maksimal 3' pada definisi asli Lencir: 4 pilihan ditolak, 3 diterima", async () => {
+    const { campaign } = seed(def, "pulse_bulanan");
+    const q = def.find((x) => x.key === "engagement_activity")!;
+    const vals = q.options!.map((o) => o.value);
+    const base = fill(def.filter((x) => x.required), rnd(71));
+    const ip = nextIp();
+    expect((await call("POST", ip, { token: campaign.token, name: "Pilih Banyak", answers: { ...base, engagement_activity: vals.slice(0, 4) } })).status).toBe(400);
+    expect((await call("POST", ip, { token: campaign.token, name: "Pilih Pas", answers: { ...base, engagement_activity: vals.slice(0, 3) } })).status).toBe(200);
+    expect(responsesOf(String(campaign.id))).toHaveLength(1);
+  });
+
   it("kiriman dengan nama sama di milidetik yang sama (klik ganda / dua orang bernama sama) tidak gagal", async () => {
     const { campaign } = seed(def, "pulse_bulanan");
     vi.useFakeTimers({ toFake: ["Date"] });
