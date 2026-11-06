@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { INSTANCE } from "@/lib/instance";
-import { jabatanGroup, periodLabel, validateSubmission, type SurveyConfig, type SurveyQuestion } from "@/lib/rr/pulse";
+import { jabatanGroup, periodLabel, questionsForPeriod, validateSubmission, type SurveyConfig, type SurveyQuestion } from "@/lib/rr/pulse";
 import { isSurveySlug, surveyLinkSlug } from "@/lib/rr/survey-link";
 
 export const runtime = "nodejs";
@@ -74,7 +74,7 @@ async function findCampaign(ref: string): Promise<{ row?: CampaignRow; error?: N
 
 /** Hanya bagian definisi yang dibutuhkan untuk menampilkan formulir. */
 function publicQuestion(q: SurveyQuestion) {
-  return { key: q.key, label: q.label, type: q.type, section: q.section, required: q.required, showIf: q.showIf, min: q.min, max: q.max,
+  return { key: q.key, label: q.label, type: q.type, section: q.section, required: q.required, showIf: q.showIf, min: q.min, max: q.max, minLabel: q.minLabel, maxLabel: q.maxLabel,
     options: q.options?.map((o) => ({ value: o.value, label: o.label })) };
 }
 
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
   }
   return NextResponse.json({
     title: s.title, description: s.description, period: row!.period, periodLabel: periodLabel(row!.period), closesAt: row!.closes_at,
-    questions: s.questions.map(publicQuestion), inviteName,
+    questions: questionsForPeriod(s.questions, row!.period).filter((q) => !q.hidden).map(publicQuestion), inviteName,
   });
 }
 
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
   const name = (body.name ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
   if (name.length < 2) return NextResponse.json({ error: "Nama lengkap wajib diisi." }, { status: 400 });
   const contact = (body.contact ?? "").trim().slice(0, 120) || null;
-  const { answers, errors } = validateSubmission(row!.pi_surveys!, body.answers ?? {});
+  const { answers, errors } = validateSubmission({ questions: questionsForPeriod(row!.pi_surveys!.questions, row!.period) }, body.answers ?? {});
   if (errors.length) return NextResponse.json({ error: errors[0], errors }, { status: 400 });
 
   // Tautkan ke master karyawan hanya bila namanya cocok tepat ke SATU orang.

@@ -178,7 +178,7 @@ function Field({ q, value, onChange }: { q: SurveyQuestion; value: AnswerValue |
               className={`h-11 min-w-11 flex-1 rounded-xl border text-sm font-medium ${value === n ? on : off}`}>{n}</button>
           ))}
         </div>
-        <div className="mt-1 flex justify-between text-[11px] text-slate-400"><span>{q.min ?? 1} = sangat rendah</span><span>{q.max ?? 5} = sangat tinggi</span></div>
+        <div className="mt-1 flex justify-between text-[11px] text-slate-400"><span>{q.min ?? 1} = {q.minLabel ?? "sangat rendah"}</span><span>{q.max ?? 5} = {q.maxLabel ?? "sangat tinggi"}</span></div>
       </div>
     );
   }

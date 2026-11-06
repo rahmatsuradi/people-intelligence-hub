@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import { isVisible, validateSubmission, type AnswerValue, type SurveyQuestion } from "./pulse";
+import { isVisible, questionsForPeriod, validateSubmission, type AnswerValue, type SurveyQuestion } from "./pulse";
 import { surveyLinkPath, surveyLinkSlug } from "./survey-link";
 
 type Row = Record<string, unknown>;
@@ -130,10 +130,10 @@ function threeSixtyDefinition(): SurveyQuestion[] {
 }
 
 /** Jawaban acak yang sah, mengikuti aturan formulir: hanya pertanyaan yang tampil yang dijawab. */
-function fill(questions: SurveyQuestion[], r: () => number): Record<string, AnswerValue> {
+function fill(questions: SurveyQuestion[], r: () => number, period = "2026-10-01"): Record<string, AnswerValue> {
   const a: Record<string, AnswerValue> = {};
   const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)];
-  for (const q of questions) {
+  for (const q of questionsForPeriod(questions, period)) {
     if (!isVisible(q, a)) continue;
     if (!q.required && r() < 0.2) continue;
     if (q.type === "choice") a[q.key] = pick(q.options!).value;
@@ -179,7 +179,7 @@ describe.each(SUITES)("$name", ({ key, brand, questions }) => {
     const res = await call("GET", nextIp(), undefined, `?token=${path.split("/").pop()}`);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.questions).toHaveLength(def.length);
+    expect(body.questions).toHaveLength(questionsForPeriod(def, "2026-10-01").filter((q) => !q.hidden).length);
     // Yang dikirim ke peserta hanya yang dibutuhkan formulir — bukan skor/ambang penilaian.
     expect(JSON.stringify(body.questions)).not.toMatch(/"(score|favorable|risk|kpiLabel|kpiHint|higherIsBetter)"/);
   });
@@ -322,7 +322,7 @@ describe("kerja bersamaan lainnya", () => {
   });
 
   it("'pilih maksimal 3' pada definisi asli Lencir: 4 pilihan ditolak, 3 diterima", async () => {
-    const { campaign } = seed(def, "pulse_bulanan");
+    const { campaign } = seed(def, "pulse_bulanan", { period: "2026-12-01" });
     const q = def.find((x) => x.key === "engagement_activity")!;
     const vals = q.options!.map((o) => o.value);
     const base = fill(def.filter((x) => x.required), rnd(71));
@@ -353,6 +353,19 @@ describe("kerja bersamaan lainnya", () => {
     const slug = surveyLinkSlug({ key: tutup.survey.key, title: tutup.survey.title, config: {} }, "Rica Rico");
     expect((await call("GET", nextIp(), undefined, `?token=${slug}`)).status).toBe(410);
     expect((await call("GET", nextIp(), undefined, "?token=form-yang-tidak-ada")).status).toBe(404);
+  });
+
+  it("pertanyaan per 3 bulan dan pertanyaan lama tidak ditanyakan, tapi definisinya tetap ada", async () => {
+    const hasKey = (body: { questions: SurveyQuestion[] }, k: string) => body.questions.some((x) => x.key === k);
+    const okt = seed(def, "pulse_bulanan", { period: "2026-10-01" });
+    const des = seed(def, "pulse_bulanan", { period: "2026-12-01" });
+    const a = await (await call("GET", nextIp(), undefined, `?token=${okt.campaign.token}`)).json();
+    const b = await (await call("GET", nextIp(), undefined, `?token=${des.campaign.token}`)).json();
+    expect(hasKey(a, "engagement_activity")).toBe(false);
+    expect(hasKey(b, "engagement_activity")).toBe(true);
+    for (const body of [a, b]) { expect(hasKey(body, "stress_detail")).toBe(false); expect(hasKey(body, "problem_detail")).toBe(true); }
+    expect(new Set(a.questions.map((q: SurveyQuestion) => q.section)).size).toBeGreaterThan(3);
+    expect(a.questions.every((q: SurveyQuestion) => q.section !== "Arsip")).toBe(true);
   });
 
   it("kiriman dengan nama sama di milidetik yang sama (klik ganda / dua orang bernama sama) tidak gagal", async () => {

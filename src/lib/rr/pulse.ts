@@ -42,8 +42,13 @@ export interface SurveyQuestion {
   risk?: string[];
   kpiLabel?: string;
   kpiHint?: string;
-  /** Diisi sistem/HR (mis. kelompok jabatan, label "major feedback"), tidak ditanyakan di formulir. */
+  /** Diisi sistem/HR (mis. kelompok jabatan, label "major feedback"), atau pertanyaan lama yang sudah tidak ditanyakan tapi jawabannya tetap dibaca. */
   hidden?: boolean;
+  /** Hanya ditanyakan di bulan akhir kuartal (bulan yang dinilai Mar/Jun/Sep/Des). */
+  quarterly?: boolean;
+  /** Keterangan ujung skala, bawaan "sangat rendah" / "sangat tinggi". */
+  minLabel?: string;
+  maxLabel?: string;
 }
 
 export interface SurveyConfig {
@@ -396,6 +401,12 @@ export function isVisible(q: SurveyQuestion, answers: Record<string, AnswerValue
 }
 
 export const MAX_TEXT = 2000;
+
+/** Pertanyaan yang berlaku untuk bulan yang dinilai ini. */
+export function questionsForPeriod<T extends Pick<SurveyQuestion, "quarterly">>(questions: T[], period: string): T[] {
+  const month = Number(period.slice(5, 7));
+  return questions.filter((q) => !q.quarterly || month % 3 === 0);
+}
 
 /**
  * Batas jumlah pilihan pertanyaan multi, dibaca dari tulisannya ("pilih maksimal 3"), supaya
