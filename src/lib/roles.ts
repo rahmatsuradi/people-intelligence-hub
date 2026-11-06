@@ -25,7 +25,12 @@ export function fetchMyRole(): Promise<Role | null> {
       const { data } = await client.from("pi_user_roles").select("role").eq("user_id", auth.user.id).maybeSingle();
       const role = data?.role;
       return role === "hr" || role === "owner" ? role : null;
-    })().catch(() => null);
+    })().catch(() => null).then((role) => {
+      // Hasil kosong tidak disimpan: halaman yang dibuka sebelum login (sesi habis) akan menghasilkan
+      // null, dan setelah login tanpa muat ulang akun HR terbaca "belum diberi akses".
+      if (!role) cached = null;
+      return role;
+    });
   }
   return cached;
 }
