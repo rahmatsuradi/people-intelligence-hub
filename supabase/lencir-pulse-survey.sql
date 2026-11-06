@@ -8,7 +8,7 @@
 --   - tambah masalah terberat (untuk SEMUA orang, bukan hanya yang stres), 9 penilaian
 --     kondisi kerja (dari keluhan terbanyak di Action List), tindak lanjut, keinginan
 --     bertahan, dan permintaan dihubungi HR;
---   - apresiasi diringkas; engagement & pelatihan hanya di bulan akhir kuartal.
+--   - apresiasi diringkas; engagement tetap tiap bulan; pelatihan tidak ditanyakan lagi.
 --   - Pertanyaan lama TIDAK dihapus: `hidden` + section "Arsip", supaya jawaban lama tetap
 --     terbaca di laporan. happiness & stress_freq tidak berubah supaya tren tidak putus.
 -- Kunci sama dengan Pulse Rica Rico (happiness, stress_freq, appreciated_names) karena
@@ -84,7 +84,7 @@ values (
     {"key":"appreciated_names","label":"Siapa rekan yang ingin kamu apresiasi? (boleh satu divisi atau divisi lain)","type":"text","section":"Apresiasi"},
     {"key":"appreciate_reason","label":"Apresiasi untuk hal apa?","type":"text","section":"Apresiasi","showIf":{"key":"appreciated_names"}},
 
-    {"key":"engagement_activity","label":"Aktivitas engagement seperti apa yang paling ingin kamu ikuti ke depannya? (pilih maksimal 3)","type":"multi","section":"Engagement & pelatihan","quarterly":true,
+    {"key":"engagement_activity","label":"Aktivitas engagement seperti apa yang paling ingin kamu ikuti ke depannya? (pilih maksimal 3)","type":"multi","section":"Engagement",
      "options":[
        {"value":"Sport Activity / Olahraga Bersama (Badminton, Tenis, Bowling, dll)","label":"Olahraga bersama (badminton, tenis, bowling, dll)"},
        {"value":"Games & Competition (Board game, Escape room, Go Kart, dll)","label":"Games & kompetisi (board game, escape room, go kart, dll)"},
@@ -92,10 +92,9 @@ values (
        {"value":"Movie / Entertainment Night (Nonton bioskop bersama, Karaoke, stand-up comedy, dll)","label":"Nonton / hiburan (bioskop, karaoke, stand-up comedy, dll)"},
        {"value":"Wellness Activity (Yoga, Pilates, dll)","label":"Wellness (yoga, pilates, dll)"},
        {"value":"Food Hunting (Makan bersama tim, Cafe hopping, Food festival, dll)","label":"Food hunting (makan bersama, cafe hopping, food festival, dll)"}]},
-    {"key":"engagement_other","label":"Ada aktivitas lain yang kamu inginkan?","type":"text","section":"Engagement & pelatihan","quarterly":true},
-    {"key":"engagement_time","label":"Waktu pelaksanaan yang paling nyaman untuk mengikuti kegiatan engagement?","type":"choice","section":"Engagement & pelatihan","quarterly":true,
+    {"key":"engagement_other","label":"Ada aktivitas lain yang kamu inginkan?","type":"text","section":"Engagement"},
+    {"key":"engagement_time","label":"Waktu pelaksanaan yang paling nyaman untuk mengikuti kegiatan engagement?","type":"choice","section":"Engagement",
      "options":[{"value":"Hari Jumat Sore"},{"value":"Setelah Jam Kerja"},{"value":"Sabtu"}]},
-    {"key":"training_wish","label":"Pelatihan apa yang ingin kamu ikuti untuk mendukung pengembangan diri dan pekerjaanmu?","type":"text","section":"Engagement & pelatihan","quarterly":true},
 
     {"key":"stress_source","label":"Hal apa yang paling sering bikin kamu merasa tertekan belakangan ini?","type":"choice","section":"Arsip","hidden":true,
      "options":[{"value":"Berhubungan dengan pekerjaan"},{"value":"Tidak berhubungan dengan pekerjaan"},{"value":"Keduanya"}]},
@@ -110,7 +109,8 @@ values (
     {"key":"appreciate_cross_reason","label":"Tindakan atau bantuan rekan luar divisi yang diapresiasi","type":"text","section":"Arsip","hidden":true},
     {"key":"help_wish","label":"Apakah ada yang bisa kami lakukan untuk membantu mengurangi stres atau meningkatkan kebahagiaanmu?","type":"choice","section":"Arsip","hidden":true,"options":[{"value":"Ya"},{"value":"Tidak"}]},
     {"key":"workplace_idea","label":"Menurutmu, apa yang bisa membuat lingkungan kerja kita jadi tempat kerja yang lebih baik?","type":"text","section":"Arsip","hidden":true},
-    {"key":"training_doc","label":"Link Google Docs rincian program pelatihan tersebut","type":"text","section":"Arsip","hidden":true}
+    {"key":"training_doc","label":"Link Google Docs rincian program pelatihan tersebut","type":"text","section":"Arsip","hidden":true},
+    {"key":"training_wish","label":"Pelatihan apa yang ingin kamu ikuti untuk mendukung pengembangan diri dan pekerjaanmu?","type":"text","section":"Arsip","hidden":true}
   ]$q$::jsonb
 )
 on conflict (tenant_id, key) do update

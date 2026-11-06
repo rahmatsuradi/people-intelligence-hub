@@ -357,13 +357,21 @@ describe("kerja bersamaan lainnya", () => {
 
   it("pertanyaan per 3 bulan dan pertanyaan lama tidak ditanyakan, tapi definisinya tetap ada", async () => {
     const hasKey = (body: { questions: SurveyQuestion[] }, k: string) => body.questions.some((x) => x.key === k);
-    const okt = seed(def, "pulse_bulanan", { period: "2026-10-01" });
-    const des = seed(def, "pulse_bulanan", { period: "2026-12-01" });
+    // Definisi Lencir kini tanpa pertanyaan kuartalan; mekanismenya diuji dengan menandai satu pertanyaan.
+    const kuartalan = def.map((q) => (q.key === "engagement_activity" ? { ...q, quarterly: true } : q));
+    const okt = seed(kuartalan, "pulse_bulanan", { period: "2026-10-01" });
+    const des = seed(kuartalan, "pulse_bulanan", { period: "2026-12-01" });
     const a = await (await call("GET", nextIp(), undefined, `?token=${okt.campaign.token}`)).json();
     const b = await (await call("GET", nextIp(), undefined, `?token=${des.campaign.token}`)).json();
     expect(hasKey(a, "engagement_activity")).toBe(false);
     expect(hasKey(b, "engagement_activity")).toBe(true);
-    for (const body of [a, b]) { expect(hasKey(body, "stress_detail")).toBe(false); expect(hasKey(body, "problem_detail")).toBe(true); }
+    for (const body of [a, b]) {
+      expect(hasKey(body, "stress_detail")).toBe(false);
+      expect(hasKey(body, "training_wish")).toBe(false);
+      expect(hasKey(body, "training_doc")).toBe(false);
+      expect(hasKey(body, "problem_detail")).toBe(true);
+      expect(hasKey(body, "engagement_time")).toBe(true);
+    }
     expect(new Set(a.questions.map((q: SurveyQuestion) => q.section)).size).toBeGreaterThan(3);
     expect(a.questions.every((q: SurveyQuestion) => q.section !== "Arsip")).toBe(true);
   });
