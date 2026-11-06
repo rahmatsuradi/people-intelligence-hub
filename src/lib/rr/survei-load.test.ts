@@ -406,6 +406,27 @@ describe("kerja bersamaan lainnya", () => {
     expect(rows.find((x) => x.respondent_name === "Nomor Dipakai Dua")!.respondent_email).toBe("081355550002"); // ambigu: tidak ditebak
   });
 
+  it("pergantian daftar pertanyaan: bulan berjalan memakai daftar lama, bulan berikutnya daftar baru", async () => {
+    const q: SurveyQuestion[] = [
+      choice("happiness", "Rasa bahagia", ["Bahagia", "Tidak Bahagia"], { required: true }),
+      text("stress_reason", "Pertanyaan lama", { until: "2026-10-01" }),
+      scale("drv_jadwal", "Pertanyaan baru wajib", { since: "2026-11-01", required: true }),
+    ];
+    const okt = seed(q, "survei_ganti_daftar", { period: "2026-10-01" });
+    const nov = seed(q, "survei_ganti_daftar_2", { period: "2026-11-01" });
+    const keys = async (c: typeof okt) => (await (await call("GET", nextIp(), undefined, `?token=${c.campaign.token}`)).json()).questions.map((x: SurveyQuestion) => x.key);
+    expect(await keys(okt)).toEqual(["happiness", "stress_reason"]);
+    expect(await keys(nov)).toEqual(["happiness", "drv_jadwal"]);
+    const ip = nextIp();
+    // Oktober: pertanyaan baru tidak wajib dan jawabannya tidak disimpan; pertanyaan lama diterima.
+    expect((await call("POST", ip, { token: okt.campaign.token, name: "Isi Oktober", answers: { happiness: "Bahagia", stress_reason: "lama", drv_jadwal: 4 } })).status).toBe(200);
+    expect(responsesOf(String(okt.campaign.id))[0].answers).toEqual({ happiness: "Bahagia", stress_reason: "lama" });
+    // November: pertanyaan baru wajib, pertanyaan lama dibuang.
+    expect((await call("POST", ip, { token: nov.campaign.token, name: "Isi Kurang", answers: { happiness: "Bahagia" } })).status).toBe(400);
+    expect((await call("POST", ip, { token: nov.campaign.token, name: "Isi November", answers: { happiness: "Bahagia", stress_reason: "lama", drv_jadwal: 4 } })).status).toBe(200);
+    expect(responsesOf(String(nov.campaign.id))[0].answers).toEqual({ happiness: "Bahagia", drv_jadwal: 4 });
+  });
+
   it("kiriman dengan nama sama di milidetik yang sama (klik ganda / dua orang bernama sama) tidak gagal", async () => {
     const { campaign } = seed(def, "pulse_bulanan");
     vi.useFakeTimers({ toFake: ["Date"] });

@@ -46,6 +46,10 @@ export interface SurveyQuestion {
   hidden?: boolean;
   /** Hanya ditanyakan di bulan akhir kuartal (bulan yang dinilai Mar/Jun/Sep/Des). */
   quarterly?: boolean;
+  /** Ditanyakan mulai/sampai bulan yang dinilai ini (YYYY-MM-01). Dipakai saat daftar pertanyaan berganti
+   *  sementara link bulan berjalan sudah ada jawabannya, supaya satu bulan tidak memakai dua daftar. */
+  since?: string;
+  until?: string;
   /** Keterangan ujung skala, bawaan "sangat rendah" / "sangat tinggi". */
   minLabel?: string;
   maxLabel?: string;
@@ -411,9 +415,9 @@ export function isValidContact(value: string): boolean {
 }
 
 /** Pertanyaan yang berlaku untuk bulan yang dinilai ini. */
-export function questionsForPeriod<T extends Pick<SurveyQuestion, "quarterly">>(questions: T[], period: string): T[] {
+export function questionsForPeriod<T extends Pick<SurveyQuestion, "quarterly" | "since" | "until">>(questions: T[], period: string): T[] {
   const month = Number(period.slice(5, 7));
-  return questions.filter((q) => !q.quarterly || month % 3 === 0);
+  return questions.filter((q) => (!q.quarterly || month % 3 === 0) && (!q.since || period >= q.since) && (!q.until || period <= q.until));
 }
 
 /**
