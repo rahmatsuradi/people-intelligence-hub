@@ -402,6 +402,14 @@ export function isVisible(q: SurveyQuestion, answers: Record<string, AnswerValue
 
 export const MAX_TEXT = 2000;
 
+/** Kolom kontak formulir (wajib): email, atau nomor telepon 9–15 angka. */
+export function isValidContact(value: string): boolean {
+  const v = value.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return true;
+  const digits = v.match(/\d/g)?.length ?? 0;
+  return /^[+\d\s().-]+$/.test(v) && digits >= 9 && digits <= 15;
+}
+
 /** Pertanyaan yang berlaku untuk bulan yang dinilai ini. */
 export function questionsForPeriod<T extends Pick<SurveyQuestion, "quarterly">>(questions: T[], period: string): T[] {
   const month = Number(period.slice(5, 7));

@@ -14,7 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { INSTANCE } from "@/lib/instance";
-import { jabatanGroup, periodLabel, questionsForPeriod, validateSubmission, type SurveyConfig, type SurveyQuestion } from "@/lib/rr/pulse";
+import { isValidContact, jabatanGroup, periodLabel, questionsForPeriod, validateSubmission, type SurveyConfig, type SurveyQuestion } from "@/lib/rr/pulse";
+import { normalizePhone } from "@/lib/rr/pulse-remind";
 import { isSurveySlug, surveyLinkSlug } from "@/lib/rr/survey-link";
 
 export const runtime = "nodejs";
@@ -108,7 +109,8 @@ export async function POST(request: NextRequest) {
 
   const name = (body.name ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
   if (name.length < 2) return NextResponse.json({ error: "Nama lengkap wajib diisi." }, { status: 400 });
-  const contact = (body.contact ?? "").trim().slice(0, 120) || null;
+  const contact = (body.contact ?? "").trim().slice(0, 120);
+  if (!isValidContact(contact)) return NextResponse.json({ error: "Email atau nomor WA wajib diisi." }, { status: 400 });
   const { answers, errors } = validateSubmission({ questions: questionsForPeriod(row!.pi_surveys!.questions, row!.period) }, body.answers ?? {});
   if (errors.length) return NextResponse.json({ error: errors[0], errors }, { status: 400 });
 
@@ -136,6 +138,18 @@ export async function POST(request: NextRequest) {
     } else if (r) flags.push("link_pribadi_nama_beda");
   }
 
+  // Lewat link grup: nomor/email yang cocok ke SATU penerima memakai email penerima itu, supaya riwayat
+  // per orang menyambung dengan jawaban lamanya. Tidak cocok = kontak disimpan apa adanya. Hanya
+  // identitas riwayat; status "sudah isi" di pengingat WA tetap tidak memakai kontak yang diketik.
+  let knownEmail = invite?.email ?? null;
+  if (!invite) {
+    const { data: recipients } = await supabaseAdmin!.from("pi_survey_recipients").select("email, phone").eq("tenant_id", row!.tenant_id);
+    const phone = normalizePhone(contact);
+    const hits = ((recipients ?? []) as { email: string | null; phone: string | null }[])
+      .filter((r) => (phone && r.phone === phone) || r.email?.trim().toLowerCase() === contact.toLowerCase());
+    if (hits.length === 1 && hits[0].email) knownEmail = hits[0].email.trim().toLowerCase();
+  }
+
   // Indeks unik (survei, waktu isi, email/nama) menolak dua isian dengan nama yang sama di milidetik yang sama
   // (klik ganda, kirim ulang jaringan, atau dua orang bernama sama). Coba ulang dengan waktu +1 ms dan
   // jangan menampilkan "gagal" ke peserta.
@@ -145,7 +159,7 @@ export async function POST(request: NextRequest) {
   for (let attempt = 0; attempt < 4 && !saved; attempt++) {
     const res = await supabaseAdmin!.from("pi_survey_responses").insert({
       tenant_id: row!.tenant_id, survey_id: row!.survey_id, campaign_id: row!.id, period: row!.period,
-      submitted_at: new Date(base + attempt).toISOString(), respondent_name: name, respondent_email: invite?.email || contact,
+      submitted_at: new Date(base + attempt).toISOString(), respondent_name: name, respondent_email: knownEmail || contact,
       employee_id: hitsByName.length === 1 ? hitsByName[0].id : null, answers, source: INSTANCE.surveySource, flags,
     }).select("id").single();
     saved = (res.data as { id: string } | null) ?? null;

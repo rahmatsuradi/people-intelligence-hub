@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isVisible, maxChoicesOf, type AnswerValue, type SurveyQuestion } from "@/lib/rr/pulse";
+import { isValidContact, isVisible, maxChoicesOf, type AnswerValue, type SurveyQuestion } from "@/lib/rr/pulse";
 import { clearDraft, draftKey, loadDraft, saveDraft } from "@/lib/rr/survey-draft";
 
 interface FormData { title: string; description: string | null; periodLabel: string; closesAt: string | null; questions: SurveyQuestion[] }
@@ -85,9 +85,9 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
   const visibleIn = (qs: SurveyQuestion[]) => qs.filter((q) => isVisible(q, answers));
   const checkStep = (): boolean => {
     if (step === 0) {
-      const ok = name.trim().length >= 2;
-      setMissing(ok ? [] : ["__name"]);
-      return ok;
+      const miss = [...(name.trim().length >= 2 ? [] : ["__name"]), ...(isValidContact(contact) ? [] : ["__contact"])];
+      setMissing(miss);
+      return miss.length === 0;
     }
     const miss = visibleIn(sections[step - 1][1]).filter((q) => q.required && answers[q.key] === undefined).map((q) => q.key);
     setMissing(miss);
@@ -133,12 +133,10 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
           <input className={`${input} mt-1.5`} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
           {missing.includes("__name") && <p className="mt-1 text-xs text-red-600">Nama lengkap wajib diisi.</p>}
           {invite && <p className="mt-1 text-xs text-slate-500">Ini link pribadi. Bukan kamu? Minta link grup dari HR supaya jawabanmu tercatat atas namamu sendiri.</p>}
-          <label className="mt-4 block text-sm font-medium text-slate-800 dark:text-slate-100">Email atau nomor WA <span className="text-xs font-normal text-slate-400">(boleh dikosongkan)</span></label>
-          <input className={`${input} mt-1.5`} value={contact} onChange={(e) => setContact(e.target.value)} />
+          <label className="mt-4 block text-sm font-medium text-slate-800 dark:text-slate-100">Email atau nomor WA <span className="text-red-600">*</span></label>
+          <input className={`${input} mt-1.5`} value={contact} onChange={(e) => setContact(e.target.value)} autoComplete="email" />
+          {missing.includes("__contact") && <p className="mt-1 text-xs text-red-600">Isi email atau nomor WA yang benar.</p>}
           <input className="hidden" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} aria-hidden="true" />
-          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            Jawabanmu hanya dibaca tim HR. Atasan dan owner hanya melihat ringkasan angka tanpa nama. Jawab jujur — itu yang paling membantu.
-          </p>
         </div>
       ) : (
         visibleIn(sections[step - 1][1]).map((q) => (

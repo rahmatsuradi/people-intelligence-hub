@@ -162,9 +162,11 @@ function seed(def: SurveyQuestion[], key: string, over: Row = {}) {
 }
 const responsesOf = (campaignId: string) => (h.tables.pi_survey_responses ?? []).filter((x) => x.campaign_id === campaignId);
 
+let contactN = 0;
+const nextContact = () => `0812${String(10_000_000 + contactN++)}`;
 const call = (method: "GET" | "POST", ip: string, body?: Row, qs = "") =>
   method === "POST"
-    ? route.POST(new NextRequest("http://localhost/api/survei", { method, headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify(body) }))
+    ? route.POST(new NextRequest("http://localhost/api/survei", { method, headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify({ contact: nextContact(), ...body }) }))
     : route.GET(new NextRequest(`http://localhost/api/survei${qs}`, { headers: { "x-forwarded-for": ip } }));
 
 /* ── Tes ── */
@@ -376,13 +378,41 @@ describe("kerja bersamaan lainnya", () => {
     expect(a.questions.every((q: SurveyQuestion) => q.section !== "Arsip")).toBe(true);
   });
 
+  it("email atau nomor WA wajib: kosong/ngawur ditolak, email dan nomor diterima", async () => {
+    const { campaign } = seed(def, "pulse_bulanan");
+    const answers = fill(def.filter((x) => x.required), rnd(91));
+    const ip = nextIp();
+    for (const contact of ["", "   ", "-", "abc", "12345"]) expect((await call("POST", ip, { token: campaign.token, name: "Kontak Salah", contact, answers })).status).toBe(400);
+    expect(responsesOf(String(campaign.id))).toHaveLength(0);
+    for (const [name, contact] of [["Pakai Email", "ani@contoh.test"], ["Pakai Nomor", "+62 812-3456-7890"], ["Nomor Biasa", "081234567891"]]) {
+      expect((await call("POST", ip, { token: campaign.token, name, contact, answers })).status).toBe(200);
+    }
+    expect(responsesOf(String(campaign.id)).map((x) => x.respondent_email)).toEqual(["ani@contoh.test", "+62 812-3456-7890", "081234567891"]);
+  });
+
+  it("link grup: nomor yang cocok ke satu penerima memakai email penerima, riwayatnya menyambung", async () => {
+    const { campaign } = seed(def, "pulse_bulanan");
+    (h.tables.pi_survey_recipients ??= []).push(
+      { id: "rec-nomor", tenant_id: TENANT, name: "Dikenal", email: "dikenal@uji.test", phone: "6281355550001" },
+      { id: "rec-kembar-1", tenant_id: TENANT, name: "Kembar A", email: "a@uji.test", phone: "6281355550002" },
+      { id: "rec-kembar-2", tenant_id: TENANT, name: "Kembar B", email: "b@uji.test", phone: "6281355550002" },
+    );
+    const answers = fill(def.filter((x) => x.required), rnd(92));
+    const ip = nextIp();
+    await call("POST", ip, { token: campaign.token, name: "Dikenal Sekali", contact: "0813-5555-0001", answers });
+    await call("POST", ip, { token: campaign.token, name: "Nomor Dipakai Dua", contact: "081355550002", answers });
+    const rows = responsesOf(String(campaign.id));
+    expect(rows.find((x) => x.respondent_name === "Dikenal Sekali")!.respondent_email).toBe("dikenal@uji.test");
+    expect(rows.find((x) => x.respondent_name === "Nomor Dipakai Dua")!.respondent_email).toBe("081355550002"); // ambigu: tidak ditebak
+  });
+
   it("kiriman dengan nama sama di milidetik yang sama (klik ganda / dua orang bernama sama) tidak gagal", async () => {
     const { campaign } = seed(def, "pulse_bulanan");
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-05T10:00:00.000Z"));
     try {
       const r = rnd(61);
-      const res = await Promise.all(Array.from({ length: 3 }, () => call("POST", nextIp(), { token: campaign.token, name: "Nama Kembar", answers: fill(def, r) }).then((x) => x.status)));
+      const res = await Promise.all(Array.from({ length: 3 }, () => call("POST", nextIp(), { token: campaign.token, name: "Nama Kembar", contact: "081200000000", answers: fill(def, r) }).then((x) => x.status)));
       expect(res).toEqual([200, 200, 200]);
       const rows = responsesOf(String(campaign.id));
       expect(rows).toHaveLength(3);
