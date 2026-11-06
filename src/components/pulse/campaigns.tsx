@@ -120,7 +120,8 @@ export function Campaigns({ survey, summary, campaigns, reload }: { survey: Surv
               </div>
             </div>
             <input readOnly className={cn(inputClass, "mt-3 font-mono text-xs")} value={link(c)} onFocus={(e) => e.currentTarget.select()} />
-            {!closed && <Reminders survey={survey} campaign={c} link={link(c)} />}
+            {/* Daftar penerima = peserta Pulse. SPG → SPV dan 360 punya peserta lain, jadi panelnya tidak ditampilkan di sana. */}
+            {!closed && survey.config.kind === "pulse" && <Reminders survey={survey} campaign={c} link={link(c)} />}
           </Card>
         );
       })}
