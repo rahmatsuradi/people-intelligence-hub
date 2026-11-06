@@ -31,8 +31,10 @@ export function Campaigns({ survey, summary, campaigns, reload }: { survey: Surv
   const [form, setForm] = useState({ period: suggested.slice(0, 7), closes: defaultClose(suggested), target: "" });
   const [saving, setSaving] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  // Nama form di link (mis. /survei/monthly-pulse-check-lencir-oktober-2026/<token>) hanya hiasan agar jelas di WhatsApp.
-  const link = (c: Campaign) => `${origin}${surveyLinkPath(survey, INSTANCE.shortName, periodLabel(c.period), c.token)}`;
+  // Link pendek (/survei/monthly-pulse-check-lencir) selalu membuka bulan terbaru yang terbuka; link terbuka
+  // lainnya memakai token supaya tidak diam-diam membuka bulan yang berbeda dari yang tertulis.
+  const newestOpen = campaigns.filter((c) => c.status === "open").sort((a, b) => b.period.localeCompare(a.period))[0];
+  const link = (c: Campaign) => `${origin}${surveyLinkPath(survey, INSTANCE.shortName, c.id === newestOpen?.id ? undefined : c.token)}`;
   const count = (p: string) => summary.find((s) => s.period === p)?.n ?? 0;
 
   const waText = (c: Campaign) =>

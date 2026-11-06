@@ -1,10 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Nama link survei yang terbaca: /survei/monthly-pulse-check-lencir-oktober-2026/<token>
+   Nama link survei yang terbaca: /survei/monthly-pulse-check-lencir
 
-   Bagian nama (slug) HANYA hiasan supaya link yang dibagikan di WhatsApp jelas isinya —
-   yang melindungi link tetap token acak di belakangnya. Server tidak pernah memakai slug
-   untuk mencari survei, jadi slug yang salah/lama tetap membuka formulir yang benar, dan link
-   lama tanpa slug (/survei/<token>) tetap berfungsi.
+   Link pendek ini TANPA token acak (permintaan HR, 6 Nov 2026): server mencari survei dari
+   namanya lalu membuka bulan terbaru yang masih terbuka, jadi siapa pun yang tahu/menebak
+   alamatnya bisa mengisi selama link bulan itu terbuka. Tiap link pribadi tetap memakai ?u=<token>.
+
+   Bentuk lama tetap berfungsi untuk link yang sudah dibagikan: /survei/<token> dan
+   /survei/<nama>/<token> (di bentuk ini nama hanya hiasan, survei dicari dari token).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import type { Survey } from "./pulse";
@@ -29,13 +31,19 @@ export function surveyLinkName(survey: Pick<Survey, "key" | "title" | "config">)
   return custom || NAME_BY_KEY[survey.key] || survey.title;
 }
 
-/** "monthly-pulse-check-lencir-oktober-2026" — nama form + perusahaan + bulan yang dinilai. */
-export function surveyLinkSlug(survey: Pick<Survey, "key" | "title" | "config">, brand: string, periodLabel: string): string {
-  return slugify(`${surveyLinkName(survey)} ${brand} ${periodLabel}`) || "survei";
+/** "monthly-pulse-check-lencir" — nama form + perusahaan. Bulan tidak ikut: link ini selalu membuka bulan yang sedang terbuka. */
+export function surveyLinkSlug(survey: Pick<Survey, "key" | "title" | "config">, brand: string): string {
+  return slugify(`${surveyLinkName(survey)} ${brand}`) || "survei";
 }
 
-export function surveyLinkPath(survey: Pick<Survey, "key" | "title" | "config">, brand: string, periodLabel: string, token: string): string {
-  return `/survei/${surveyLinkSlug(survey, brand, periodLabel)}/${token}`;
+/** Tanpa token = link pendek. Dengan token = terkunci ke satu bulan (untuk link terbuka selain yang terbaru). */
+export function surveyLinkPath(survey: Pick<Survey, "key" | "title" | "config">, brand: string, token?: string): string {
+  return `/survei/${surveyLinkSlug(survey, brand)}${token ? `/${token}` : ""}`;
+}
+
+/** Nama form di URL. Token tidak pernah memuat tanda hubung, jadi keduanya tidak tertukar. */
+export function isSurveySlug(ref: string): boolean {
+  return ref.length <= 90 && /^[a-z0-9]+(-[a-z0-9]+)+$/.test(ref);
 }
 
 /** Slug dari URL → judul tab/pratinjau WhatsApp. null bila bukan slug yang wajar (dipakai apa adanya = berbahaya). */

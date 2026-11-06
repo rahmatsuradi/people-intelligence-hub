@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 import { isVisible, validateSubmission, type AnswerValue, type SurveyQuestion } from "./pulse";
-import { surveyLinkPath } from "./survey-link";
+import { surveyLinkPath, surveyLinkSlug } from "./survey-link";
 
 type Row = Record<string, unknown>;
 
@@ -37,6 +37,10 @@ const h = vi.hoisted(() => {
     eq(k: string, v: unknown) { this.filters.push((r) => r[k] === v); return this; }
     neq(k: string, v: unknown) { this.filters.push((r) => r[k] !== v); return this; }
     in(k: string, vs: unknown[]) { this.filters.push((r) => vs.includes(r[k])); return this; }
+    private sortBy: [string, boolean] | null = null;
+    private max = Infinity;
+    order(k: string, o?: { ascending?: boolean }) { this.sortBy = [k, o?.ascending !== false]; return this; }
+    limit(n: number) { this.max = n; return this; }
     private shape(r: Row): Row {
       const out = { ...r };
       for (const [rel, [fk, tbl]] of Object.entries(REL[this.table] ?? {})) {
@@ -60,7 +64,8 @@ const h = vi.hoisted(() => {
       }
       const hit = all.filter((r) => this.filters.every((f) => f(r)));
       if (this.op === "update") { for (const r of hit) Object.assign(r, this.payload); return { data: null, error: null }; }
-      return { data: hit.map((r) => this.shape(r)), error: null };
+      if (this.sortBy) { const [k, asc] = this.sortBy; hit.sort((a, b) => String(a[k]).localeCompare(String(b[k])) * (asc ? 1 : -1)); }
+      return { data: hit.slice(0, this.max).map((r) => this.shape(r)), error: null };
     }
     maybeSingle() { const r = this.exec(); return Promise.resolve({ data: (r.data as Row[] | null)?.[0] ?? null, error: r.error }); }
     single() {
@@ -169,7 +174,7 @@ describe.each(SUITES)("$name", ({ key, brand, questions }) => {
 
   it("link ber-nama bisa dibuka: token diambil dari bagian akhir link", async () => {
     const { survey, campaign } = seed(def, key);
-    const path = surveyLinkPath({ key, title: String(survey.title), config: {} }, brand, "Oktober 2026", String(campaign.token));
+    const path = surveyLinkPath({ key, title: String(survey.title), config: {} }, brand, String(campaign.token));
     expect(path).toMatch(/^\/survei\/[a-z0-9-]+\/tok\d+x+$/);
     const res = await call("GET", nextIp(), undefined, `?token=${path.split("/").pop()}`);
     expect(res.status).toBe(200);
@@ -325,6 +330,29 @@ describe("kerja bersamaan lainnya", () => {
     expect((await call("POST", ip, { token: campaign.token, name: "Pilih Banyak", answers: { ...base, engagement_activity: vals.slice(0, 4) } })).status).toBe(400);
     expect((await call("POST", ip, { token: campaign.token, name: "Pilih Pas", answers: { ...base, engagement_activity: vals.slice(0, 3) } })).status).toBe(200);
     expect(responsesOf(String(campaign.id))).toHaveLength(1);
+  });
+
+  it("link pendek bernama: membuka bulan terbuka terbaru, dan jawaban masuk ke bulan itu", async () => {
+    const lama = seed(def, "survei_uji_slug", { period: "2026-09-01" });
+    const baru = seed(def, "survei_uji_slug", { period: "2026-10-01", survey_id: lama.survey.id });
+    const ditutup = seed(def, "survei_uji_slug", { period: "2026-11-01", survey_id: lama.survey.id, status: "closed" });
+    const slug = surveyLinkSlug({ key: lama.survey.key, title: lama.survey.title, config: {} }, "Rica Rico");
+    const res = await call("GET", nextIp(), undefined, `?token=${slug}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).period).toBe("2026-10-01");
+    const r = rnd(81);
+    const sent = await call("POST", nextIp(), { token: slug, name: "Lewat Link Pendek", answers: fill(def, r) });
+    expect(sent.status).toBe(200);
+    expect(responsesOf(String(baru.campaign.id))).toHaveLength(1);
+    expect(responsesOf(String(lama.campaign.id))).toHaveLength(0);
+    expect(responsesOf(String(ditutup.campaign.id))).toHaveLength(0);
+  });
+
+  it("link pendek: semua bulan ditutup = 410, nama asing = 404", async () => {
+    const tutup = seed(def, "survei_uji_tutup", { status: "closed" });
+    const slug = surveyLinkSlug({ key: tutup.survey.key, title: tutup.survey.title, config: {} }, "Rica Rico");
+    expect((await call("GET", nextIp(), undefined, `?token=${slug}`)).status).toBe(410);
+    expect((await call("GET", nextIp(), undefined, "?token=form-yang-tidak-ada")).status).toBe(404);
   });
 
   it("kiriman dengan nama sama di milidetik yang sama (klik ganda / dua orang bernama sama) tidak gagal", async () => {

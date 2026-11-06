@@ -1,23 +1,18 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   /survei/<nama-form>/<token> — link survei dengan nama yang terbaca, mis.
-   /survei/monthly-pulse-check-lencir-oktober-2026/<token>. <nama-form> hanya hiasan dan judul
-   pratinjau WhatsApp; formulir dicari dari <token> saja (lihat src/lib/rr/survey-link.ts).
+   /survei/<nama-form>/<token> — link yang terkunci ke satu bulan. Bentuk ini dipakai link yang
+   sudah dibagikan dan link terbuka selain yang terbaru; link baru memakai /survei/<nama-form>.
+   <nama-form> di sini hanya hiasan dan judul pratinjau; formulir dicari dari <token> saja.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import type { Metadata } from "next";
-import { INSTANCE } from "@/lib/instance";
 import { prettySlug } from "@/lib/rr/survey-link";
 import { SurveiPage } from "@/components/survei/survei-page";
+import { surveiMetadata } from "@/components/survei/survei-metadata";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const name = prettySlug((await params).slug);
-  return {
-    title: `${name ?? "Survei Karyawan"} — ${INSTANCE.brandName}`,
-    description: `Formulir survei karyawan ${INSTANCE.brandName}.`,
-    robots: { index: false, follow: false },
-  };
+  return surveiMetadata(prettySlug((await params).slug));
 }
 
 export default async function SurveiRoute({ params, searchParams }: { params: Promise<{ slug: string; token: string }>; searchParams: Promise<{ u?: string | string[] }> }) {

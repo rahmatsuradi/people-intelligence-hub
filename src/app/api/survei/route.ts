@@ -14,13 +14,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { INSTANCE } from "@/lib/instance";
-import { jabatanGroup, periodLabel, validateSubmission, type SurveyQuestion } from "@/lib/rr/pulse";
+import { jabatanGroup, periodLabel, validateSubmission, type SurveyConfig, type SurveyQuestion } from "@/lib/rr/pulse";
+import { isSurveySlug, surveyLinkSlug } from "@/lib/rr/survey-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/* Throttle per-IP. Token 190-bit sudah membuat penebakan tidak realistis; ini lapisan
-   kedua terhadap spam isian dari satu sumber.
+/* Throttle per-IP: penahan spam isian dari satu sumber. Link pendek bernama (tanpa token) bisa
+   ditebak, jadi lapisan ini + isian jebakan bot adalah penahan utama untuk link itu.
 
    Batasnya SENGAJA longgar: satu kantor/outlet memakai SATU alamat IP publik (wifi bersama,
    atau NAT operator seluler), jadi puluhan karyawan yang mengisi bersamaan tampak sebagai satu
@@ -46,17 +47,28 @@ interface CampaignRow {
   pi_surveys: { title: string; description: string | null; questions: SurveyQuestion[] } | null;
 }
 
-async function findCampaign(token: string): Promise<{ row?: CampaignRow; error?: NextResponse }> {
+const CAMPAIGN_COLS = "id, tenant_id, survey_id, period, status, closes_at, pi_surveys(title, description, questions)";
+const NOT_FOUND = () => ({ error: NextResponse.json({ error: "Link tidak dikenal." }, { status: 404 }) });
+const CLOSED = () => ({ error: NextResponse.json({ error: "Formulir ini sudah ditutup. Terima kasih." }, { status: 410 }) });
+
+/** `ref` = token link, atau nama form (link pendek) yang membuka bulan terbaru yang masih terbuka. */
+async function findCampaign(ref: string): Promise<{ row?: CampaignRow; error?: NextResponse }> {
   if (!supabaseAdmin) return { error: NextResponse.json({ error: "Formulir belum bisa dipakai. Hubungi HR." }, { status: 503 }) };
-  if (!/^[a-z0-9]{20,64}$/.test(token)) return { error: NextResponse.json({ error: "Link tidak dikenal." }, { status: 404 }) };
-  const { data } = await supabaseAdmin.from("pi_survey_campaigns")
-    .select("id, tenant_id, survey_id, period, status, closes_at, pi_surveys(title, description, questions)")
-    .eq("token", token).maybeSingle();
-  const row = data as unknown as CampaignRow | null;
-  if (!row?.pi_surveys) return { error: NextResponse.json({ error: "Link tidak dikenal." }, { status: 404 }) };
-  if (row.status !== "open" || (row.closes_at && new Date(row.closes_at) < new Date())) {
-    return { error: NextResponse.json({ error: "Formulir ini sudah ditutup. Terima kasih." }, { status: 410 }) };
-  }
+  let row: CampaignRow | null = null;
+  if (/^[a-z0-9]{20,64}$/.test(ref)) {
+    const { data } = await supabaseAdmin.from("pi_survey_campaigns").select(CAMPAIGN_COLS).eq("token", ref).maybeSingle();
+    row = data as unknown as CampaignRow | null;
+    if (!row?.pi_surveys) return NOT_FOUND();
+  } else if (isSurveySlug(ref)) {
+    const { data: surveys } = await supabaseAdmin.from("pi_surveys").select("id, key, title, config");
+    const ids = ((surveys ?? []) as { id: string; key: string; title: string; config: SurveyConfig }[])
+      .filter((s) => surveyLinkSlug(s, INSTANCE.shortName) === ref).map((s) => s.id);
+    if (!ids.length) return NOT_FOUND();
+    const { data } = await supabaseAdmin.from("pi_survey_campaigns").select(CAMPAIGN_COLS).in("survey_id", ids).eq("status", "open").order("period", { ascending: false }).limit(1);
+    row = (data?.[0] ?? null) as unknown as CampaignRow | null;
+    if (!row?.pi_surveys) return CLOSED();
+  } else return NOT_FOUND();
+  if (row.status !== "open" || (row.closes_at && new Date(row.closes_at) < new Date())) return CLOSED();
   return { row };
 }
 
