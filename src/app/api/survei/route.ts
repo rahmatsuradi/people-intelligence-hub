@@ -14,8 +14,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { INSTANCE } from "@/lib/instance";
-import { isValidContact, jabatanGroup, periodLabel, questionsForPeriod, validateSubmission, type SurveyConfig, type SurveyQuestion } from "@/lib/rr/pulse";
+import { isValidContact, jabatanGroup, periodLabel, questionsForPeriod, surveyPrivacyNote, validateSubmission, type SurveyConfig, type SurveyQuestion } from "@/lib/rr/pulse";
 import { normalizePhone } from "@/lib/rr/pulse-remind";
+import { findDuplicates, isOlderThan, type OtherEntry } from "@/lib/rr/survey-dupes";
 import { isSurveySlug, surveyLinkSlug } from "@/lib/rr/survey-link";
 
 export const runtime = "nodejs";
@@ -45,10 +46,10 @@ function limited(req: NextRequest, key: keyof typeof THROTTLE): boolean {
 
 interface CampaignRow {
   id: string; tenant_id: string; survey_id: string; period: string; status: "open" | "closed"; closes_at: string | null;
-  pi_surveys: { title: string; description: string | null; questions: SurveyQuestion[] } | null;
+  pi_surveys: { title: string; description: string | null; questions: SurveyQuestion[]; config: SurveyConfig | null } | null;
 }
 
-const CAMPAIGN_COLS = "id, tenant_id, survey_id, period, status, closes_at, pi_surveys(title, description, questions)";
+const CAMPAIGN_COLS = "id, tenant_id, survey_id, period, status, closes_at, pi_surveys(title, description, questions, config)";
 const NOT_FOUND = () => ({ error: NextResponse.json({ error: "Link tidak dikenal." }, { status: 404 }) });
 const CLOSED = () => ({ error: NextResponse.json({ error: "Formulir ini sudah ditutup. Terima kasih." }, { status: 410 }) });
 
@@ -63,7 +64,7 @@ async function findCampaign(ref: string): Promise<{ row?: CampaignRow; error?: N
   } else if (isSurveySlug(ref)) {
     const { data: surveys } = await supabaseAdmin.from("pi_surveys").select("id, key, title, config");
     const ids = ((surveys ?? []) as { id: string; key: string; title: string; config: SurveyConfig }[])
-      .filter((s) => surveyLinkSlug(s, INSTANCE.shortName) === ref).map((s) => s.id);
+      .filter((s) => !s.config?.privateLink && surveyLinkSlug(s, INSTANCE.shortName) === ref).map((s) => s.id);
     if (!ids.length) return NOT_FOUND();
     const { data } = await supabaseAdmin.from("pi_survey_campaigns").select(CAMPAIGN_COLS).in("survey_id", ids).eq("status", "open").order("period", { ascending: false }).limit(1);
     row = (data?.[0] ?? null) as unknown as CampaignRow | null;
@@ -75,7 +76,7 @@ async function findCampaign(ref: string): Promise<{ row?: CampaignRow; error?: N
 
 /** Hanya bagian definisi yang dibutuhkan untuk menampilkan formulir. */
 function publicQuestion(q: SurveyQuestion) {
-  return { key: q.key, label: q.label, type: q.type, section: q.section, required: q.required, showIf: q.showIf, min: q.min, max: q.max, minLabel: q.minLabel, maxLabel: q.maxLabel,
+  return { key: q.key, label: q.label, type: q.type, section: q.section, required: q.required, showIf: q.showIf, min: q.min, max: q.max, minLabel: q.minLabel, maxLabel: q.maxLabel, help: q.help, suggest: q.suggest,
     options: q.options?.map((o) => ({ value: o.value, label: o.label })) };
 }
 
@@ -92,9 +93,16 @@ export async function GET(request: NextRequest) {
     const who = (inv as unknown as { pi_survey_recipients: { name: string; full_name: string | null } | null } | null)?.pi_survey_recipients;
     inviteName = who ? (who.full_name || who.name) : null;
   }
+  const questions = questionsForPeriod(s.questions, row!.period).filter((q) => !q.hidden);
+  // Saran isian outlet: nama outlet aktif saja, bukan data karyawan. Gagal = kolom teks biasa.
+  let outlets: string[] = [];
+  if (questions.some((q) => q.suggest === "outlets")) {
+    const { data } = await supabaseAdmin!.from("pi_outlets").select("name").eq("tenant_id", row!.tenant_id).eq("status", "active").order("name");
+    outlets = ((data ?? []) as { name: string }[]).map((o) => o.name);
+  }
   return NextResponse.json({
     title: s.title, description: s.description, period: row!.period, periodLabel: periodLabel(row!.period), closesAt: row!.closes_at,
-    questions: questionsForPeriod(s.questions, row!.period).filter((q) => !q.hidden).map(publicQuestion), inviteName,
+    questions: questions.map(publicQuestion), inviteName, outlets, privacyNote: surveyPrivacyNote(s.config), contactNote: s.config?.contactNote ?? null,
   });
 }
 
@@ -155,11 +163,13 @@ export async function POST(request: NextRequest) {
   // jangan menampilkan "gagal" ke peserta.
   const base = Date.now();
   let saved: { id: string } | null = null;
+  let savedAt = "";
   let insErr: { code?: string } | null = null;
   for (let attempt = 0; attempt < 4 && !saved; attempt++) {
+    savedAt = new Date(base + attempt).toISOString();
     const res = await supabaseAdmin!.from("pi_survey_responses").insert({
       tenant_id: row!.tenant_id, survey_id: row!.survey_id, campaign_id: row!.id, period: row!.period,
-      submitted_at: new Date(base + attempt).toISOString(), respondent_name: name, respondent_email: knownEmail || contact,
+      submitted_at: savedAt, respondent_name: name, respondent_email: knownEmail || contact,
       employee_id: hitsByName.length === 1 ? hitsByName[0].id : null, answers, source: INSTANCE.surveySource, flags,
     }).select("id").single();
     saved = (res.data as { id: string } | null) ?? null;
@@ -168,27 +178,48 @@ export async function POST(request: NextRequest) {
   }
   if (!saved) return NextResponse.json({ error: "Jawaban gagal disimpan. Coba kirim ulang." }, { status: 500 });
 
-  // Tandai orang ini sudah mengisi supaya pengingat WA berhenti. Isian lain dari ORANG YANG SAMA di
-  // siklus ini (mengisi ulang lewat link pribadi, atau sebelumnya lewat link grup dengan email/nama
-  // karyawan yang sama) ditandai ganda dan tidak dihitung — isian terakhir yang dipakai, tidak ada
-  // yang dihapus. Dicocokkan hanya lewat email undangan atau employee_id, TIDAK lewat nama bebas.
-  // Gagal di sini tidak membatalkan jawaban yang sudah tersimpan.
+  // Tandai orang ini sudah mengisi supaya pengingat WA berhenti, lalu keluarkan isian lama dari orang
+  // yang sama di siklus ini (aturannya di survey-dupes.ts). Isian terakhir yang dipakai, tidak ada yang
+  // dihapus. Gagal di sini tidak membatalkan jawaban yang sudah tersimpan.
+  const db = supabaseAdmin!;
+  type Other = OtherEntry & { employee_id: string | null };
+  const me = {
+    id: saved.id, name, contact: knownEmail || contact, submittedAt: savedAt,
+    store: typeof answers.store === "string" ? answers.store : null,
+    rater: typeof answers.rater === "string" ? answers.rater : null,
+    // Link pribadi yang dipakai orang lain tidak boleh mengeluarkan isian siapa pun.
+    mayReplace: !flags.includes("link_pribadi_nama_beda"),
+  };
+  const { data: rows, error: othersErr } = await db.from("pi_survey_responses")
+    .select("id, respondent_name, respondent_email, employee_id, submitted_at, flags, store:answers->>store, rater:answers->>rater")
+    .eq("campaign_id", row!.id).eq("excluded", false).neq("id", saved.id);
+  if (othersErr) console.error("Cek isian ganda gagal:", othersErr.message);
+  const others = (rows ?? []) as unknown as Other[];
+  const { replaced, selfFlags } = findDuplicates(row!.pi_surveys!.config?.kind, me, others);
+  const addFlag = new Map(replaced.map((x) => [x.id, x.flag]));
   if (invite) {
-    const db = supabaseAdmin!;
-    const empId = hitsByName.length === 1 ? (hitsByName[0].id as string) : null;
     await db.from("pi_survey_invites").update({ response_id: saved.id }).eq("id", invite.id);
-    const earlier = new Set<string>(invite.response_id && invite.response_id !== saved.id ? [invite.response_id] : []);
-    for (const [col, val] of [["respondent_email", invite.email], ["employee_id", empId]] as const) {
-      if (!val) continue;
-      const { data } = await db.from("pi_survey_responses").select("id").eq("campaign_id", row!.id).eq("excluded", false).neq("id", saved.id).eq(col, val);
-      for (const x of (data ?? []) as { id: string }[]) earlier.add(x.id);
+    const empId = hitsByName.length === 1 ? (hitsByName[0].id as string) : null;
+    let candidates = others;
+    if (othersErr) { // cadangan bila kueri gabungan gagal: cara lama, per email undangan / employee_id / isian sebelumnya
+      const by = ([["respondent_email", invite.email], ["employee_id", empId], ["id", invite.response_id]] as const).filter(([, v]) => v);
+      const res = await Promise.all(by.map(([col, val]) => db.from("pi_survey_responses").select("id, respondent_name, respondent_email, employee_id, submitted_at, flags")
+        .eq("campaign_id", row!.id).eq("excluded", false).neq("id", saved.id).eq(col, val!)));
+      candidates = res.flatMap((r) => (r.data ?? []) as unknown as Other[]);
     }
-    for (const id of earlier) {
-      const { data: prev } = await db.from("pi_survey_responses").select("flags").eq("id", id).maybeSingle();
-      if (!prev) continue;
-      const merged = [...new Set([...((prev.flags as string[] | null) ?? []), "isian_ganda"])];
-      await db.from("pi_survey_responses").update({ excluded: true, flags: merged }).eq("id", id);
+    for (const x of candidates) {
+      const same = x.id === invite.response_id || (!!invite.email && x.respondent_email === invite.email) || (!!empId && x.employee_id === empId);
+      if (same && isOlderThan(x, me) && !addFlag.has(x.id)) addFlag.set(x.id, "isian_ganda");
     }
   }
+  for (const [id, flag] of addFlag) {
+    // Baca ulang tepat sebelum menulis supaya tanda yang baru ditambahkan kiriman lain tidak tertimpa.
+    const { data: prev } = await db.from("pi_survey_responses").select("flags").eq("id", id).maybeSingle();
+    if (!prev) continue;
+    await db.from("pi_survey_responses").update({ excluded: true, flags: [...new Set([...((prev.flags as string[] | null) ?? []), flag])] }).eq("id", id);
+  }
+  // Pengisi link pribadi sudah dikenal, jadi nama yang kebetulan sama tidak perlu dicek HR.
+  const newFlags = invite ? selfFlags.filter((f) => f !== "cek_isian_ganda") : selfFlags;
+  if (newFlags.length) await db.from("pi_survey_responses").update({ flags: [...flags, ...newFlags] }).eq("id", saved.id).eq("excluded", false);
   return NextResponse.json({ ok: true });
 }

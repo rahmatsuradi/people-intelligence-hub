@@ -178,7 +178,7 @@ export function PresentDeck({ data }: { data: DeckData }) {
           <div className="grid gap-3 sm:grid-cols-3">
             <BigStat value={String(total)} label="isian masuk" />
             <BigStat value={String(c.n)} label="dihitung" />
-            <BigStat value={String(total - c.n)} label="isian ganda dikeluarkan" muted />
+            <BigStat value={String(total - c.n)} label="isian tidak dihitung" muted />
           </div>
         ),
         notes: [

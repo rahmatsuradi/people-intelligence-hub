@@ -4,6 +4,7 @@
    Link pendek ini TANPA token acak (permintaan HR, 6 Nov 2026): server mencari survei dari
    namanya lalu membuka bulan terbaru yang masih terbuka, jadi siapa pun yang tahu/menebak
    alamatnya bisa mengisi selama link bulan itu terbuka. Tiap link pribadi tetap memakai ?u=<token>.
+   Survei dengan config.privateLink (360 SPV) tidak melayani link pendek sama sekali.
 
    Bentuk lama tetap berfungsi untuk link yang sudah dibagikan: /survei/<token> dan
    /survei/<nama>/<token> (di bentuk ini nama hanya hiasan, survei dicari dari token).

@@ -253,7 +253,7 @@ describe("appreciationCounts", () => {
 });
 
 /* ─── Tahap 3: jabatan, rapor SPV, 360, tren per orang ─── */
-import { build360, jabatanGroup, personTrends, spvScorecard, type SegmentPeriod, type SurveyResponse } from "./pulse";
+import { build360, defaultClose, flagsAfterExclude, jabatanGroup, nextPeriod, personTrends, questionsForPeriod, spvScorecard, surveyPrivacyNote, type SegmentPeriod, type SurveyResponse } from "./pulse";
 
 describe("jabatanGroup", () => {
   it("memetakan jabatan bebas ke kelompok yang bisa dibandingkan", () => {
@@ -293,6 +293,68 @@ describe("spvScorecard", () => {
 
   it("tanpa data periode = kosong", () => {
     expect(spvScorecard(s, null, null, {}, ["reach"])).toEqual([]);
+  });
+});
+
+describe("nextPeriod & defaultClose", () => {
+  const today = new Date("2026-11-07T03:00:00Z");
+  it("survei bulanan: bulan setelah data terakhir", () => {
+    expect(nextPeriod({ cadence: "bulanan" }, [{ period: "2026-09-01" }], [], today)).toBe("2026-10-01");
+  });
+  it("survei tidak bulanan menilai bulan yang sudah lewat, bukan bulan berjalan", () => {
+    expect(nextPeriod({ cadence: "tidak_tetap" }, [{ period: "2026-09-01" }], [], today)).toBe("2026-10-01");
+    expect(nextPeriod({ cadence: "tidak_tetap" }, [{ period: "2026-03-01" }], [], today)).toBe("2026-10-01");
+  });
+  it("memakai tanggal WIB, bukan UTC", () => {
+    const dini = new Date("2026-11-30T19:00:00Z"); // 1 Des 02.00 WIB
+    expect(nextPeriod({ cadence: "tidak_tetap" }, [{ period: "2026-09-01" }], [], dini)).toBe("2026-11-01");
+    expect(defaultClose("2026-11-01", new Date("2026-11-08T19:00:00Z"))).toBe("2026-12-10");
+    expect(defaultClose("2026-10-01", new Date("2026-11-08T19:00:00Z"))).toBe("2026-11-16");
+  });
+  it("batas isi menyisakan minimal seminggu, kalau tidak tanggal 10 bulan berikutnya", () => {
+    expect(defaultClose("2026-10-01", today)).toBe("2026-11-14");
+    expect(defaultClose("2026-11-01", today)).toBe("2026-12-10");
+  });
+});
+
+describe("kalimat kerahasiaan per survei", () => {
+  it("mengikuti siapa yang benar-benar bisa melihat", () => {
+    expect(surveyPrivacyNote({ visibility: "hr", kind: "360" })).toBe("Hanya tim HR yang membaca jawabanmu.");
+    expect(surveyPrivacyNote({ kind: "spv_report" })).toContain("angka per SPV");
+    expect(surveyPrivacyNote({ kind: "pulse" })).toContain("ringkasan angka tanpa nama");
+    expect(surveyPrivacyNote(null)).toContain("ringkasan angka tanpa nama");
+  });
+});
+
+describe("flagsAfterExclude", () => {
+  it("HR mengeluarkan lalu mengembalikan, tanda lain tetap", () => {
+    expect(flagsAfterExclude(["bulan_dari_tanggal_isi"], true)).toEqual(["bulan_dari_tanggal_isi", "dikeluarkan_hr"]);
+    expect(flagsAfterExclude(["bulan_dari_tanggal_isi", "dikeluarkan_hr"], false)).toEqual(["bulan_dari_tanggal_isi"]);
+    expect(flagsAfterExclude(["isian_ganda_outlet_sama"], false)).toEqual(["isian_ganda_outlet_sama", "dikembalikan_hr"]);
+    expect(flagsAfterExclude(["isian_ganda_outlet_sama", "dikembalikan_hr"], true)).toEqual(["isian_ganda_outlet_sama", "dikeluarkan_hr"]);
+    expect(flagsAfterExclude(null, true)).toEqual(["dikeluarkan_hr"]);
+  });
+});
+
+describe("questionsForPeriod: pilihan yang berakhir", () => {
+  const q = [{ key: "spv", label: "SPV", type: "choice" as const, options: [{ value: "A" }, { value: "B", until: "2026-09-01" }] }];
+  it("hilang setelah bulannya, definisi aslinya tidak berubah", () => {
+    expect(questionsForPeriod(q, "2026-10-01")[0].options!.map((o) => o.value)).toEqual(["A"]);
+    expect(questionsForPeriod(q, "2026-09-01")[0].options!.map((o) => o.value)).toEqual(["A", "B"]);
+    expect(q[0].options).toHaveLength(2);
+  });
+});
+
+describe("build360: Leader menilai diri", () => {
+  const rows = [
+    { period: "2026-10-01", respondent_name: "A", answers: { rater: "Irfan", leader_a: 5, leader_b: 5 } },
+    { period: "2026-10-01", respondent_name: "B", answers: { rater: "Doni", leader_a: 3, leader_b: 3 } },
+  ];
+  it("tidak ikut rata-rata Leader", () => {
+    const p = build360({ leader: "Irfan" }, rows, [], ["leader_a", "leader_b"]).leader.periods["2026-10-01"];
+    expect(p.raters).toBe(1);
+    expect(p.avg).toBe(3);
+    expect(p.items.leader_a).toBe(3);
   });
 });
 

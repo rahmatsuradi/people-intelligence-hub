@@ -276,7 +276,7 @@ export default function PulsePage() {
                   {tab === "orang" && isHr && <People survey={survey} responses={responses} period={period} employeeNames={employeeNames} />}
                   {tab === "komentar" && isHr && <Comments survey={survey} responses={responses} period={period || periodOf(responses)}
                     conclusions={kind === "360" || kind === "archive" ? undefined : conclusions} onConclusionSaved={() => loadConclusions(survey.id).then(setConclusions)} />}
-                  {tab === "jawaban" && isHr && <ResponseBrowser key={survey.id} survey={survey} responses={responses} period={period || periodOf(responses)} />}
+                  {tab === "jawaban" && isHr && <ResponseBrowser key={survey.id} survey={survey} responses={responses} period={period || periodOf(responses)} onChanged={reload} />}
                   {tab === "detail" && <Details survey={survey} current={kind === "archive" ? summary.at(-1) : current} />}
                   {tab === "kirim" && isHr && <Campaigns survey={survey} summary={summary} campaigns={campaigns} reload={reload} />}
                 </div>

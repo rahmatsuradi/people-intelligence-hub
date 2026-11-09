@@ -19,7 +19,14 @@ import { fetchAll } from "./master";
 
 export type QuestionType = "choice" | "multi" | "scale" | "text";
 
-export interface SurveyOption { value: string; label?: string; score?: number }
+export interface SurveyOption {
+  value: string;
+  label?: string;
+  score?: number;
+  /** Tidak ditawarkan lagi setelah bulan yang dinilai ini (YYYY-MM-01), mis. SPV yang sudah keluar.
+   *  Pilihannya tetap ada di definisi supaya laporan dan penyamaran nama bulan lama tidak berubah. */
+  until?: string;
+}
 
 export interface SurveyQuestion {
   key: string;
@@ -53,6 +60,10 @@ export interface SurveyQuestion {
   /** Keterangan ujung skala, bawaan "sangat rendah" / "sangat tinggi". */
   minLabel?: string;
   maxLabel?: string;
+  /** Petunjuk singkat di bawah pertanyaan, tampil di formulir. */
+  help?: string;
+  /** Pertanyaan teks diberi saran isian dari daftar outlet aktif; tetap boleh mengetik bebas. */
+  suggest?: "outlets";
 }
 
 export interface SurveyConfig {
@@ -74,6 +85,12 @@ export interface SurveyConfig {
   archived?: boolean;
   /** Definisi tema keluhan (dihitung database oleh pi_survey_themes). */
   themes?: ThemeDef[];
+  /** true = hanya bisa dibuka lewat link bertoken; link pendek bernama ditolak. Untuk survei kelompok kecil yang isiannya tidak boleh bisa ditebak orang luar. */
+  privateLink?: boolean;
+  /** Perkiraan lama mengisi, untuk pesan WA. Bawaan 3 menit. */
+  estimatedMinutes?: number;
+  /** Keterangan di bawah kolom kontak formulir. */
+  contactNote?: string;
 }
 
 export interface ThemeDef {
@@ -156,7 +173,29 @@ export const RESPONSE_FLAG_LABEL: Record<string, string> = {
   punya_isian_ganda_outlet_sama: "Orang ini mengisi lebih dari sekali untuk outlet ini bulan ini — isian ini yang dihitung",
   baris_kembar_persis: "Baris kembar persis dari Google Form — tidak dihitung",
   bulan_dari_tanggal_isi: "Kolom bulan di sheet kosong — bulan ditentukan dari tanggal isi formulir",
+  isian_ganda: "Isian ganda — orang yang sama mengisi lagi di bulan yang sama; tidak dihitung, isian terakhir yang dipakai",
+  cek_isian_ganda: "Nama sama dengan isian lain, tapi kontaknya beda. Bisa dua orang senama — dihitung, HR yang memutuskan",
+  link_pribadi_nama_beda: "Link pribadi dipakai dengan nama lain — cek apakah ini orang yang sama",
+  dikeluarkan_hr: "Dikeluarkan dari hitungan oleh HR",
+  dikembalikan_hr: "Dihitung lagi oleh HR — tanda di atas adalah alasan isian ini sempat tidak dihitung",
 };
+
+/** Tanda yang berarti isian ini tidak dihitung; ikut dilepas saat HR mengembalikannya. */
+const EXCLUDING_FLAGS = ["isian_ganda", "isian_ganda_outlet_sama", "baris_kembar_persis", "dikeluarkan_hr"];
+
+/** Isian setelah dikeluarkan/dikembalikan oleh HR. Alasan lama tidak dihapus: dikembalikan_hr menandai bahwa HR sudah memutuskan menghitungnya. */
+export function flagsAfterExclude(flags: string[] | null | undefined, excluded: boolean): string[] {
+  const rest = (flags ?? []).filter((f) => f !== "dikeluarkan_hr" && f !== "dikembalikan_hr");
+  if (excluded) return [...rest, "dikeluarkan_hr"];
+  return rest.some((f) => EXCLUDING_FLAGS.includes(f)) ? [...rest, "dikembalikan_hr"] : rest;
+}
+
+/** Siapa yang bisa membaca jawaban, untuk pesan WA dan halaman terima kasih. Harus sesuai aturan akses tiap survei. */
+export function surveyPrivacyNote(config: Pick<SurveyConfig, "kind" | "visibility"> | null | undefined): string {
+  if (config?.visibility === "hr") return "Hanya tim HR yang membaca jawabanmu.";
+  if (config?.kind === "spv_report") return "Nama dan jawaban tertulismu hanya bisa dibuka tim HR. Owner hanya melihat angka per SPV, tanpa nama pengisi.";
+  return "Nama dan jawaban tertulismu hanya bisa dibuka tim HR. Owner hanya melihat ringkasan angka tanpa nama.";
+}
 
 export type ActionStatus = "belum" | "berjalan" | "selesai" | "dibatalkan";
 
@@ -415,9 +454,40 @@ export function isValidContact(value: string): boolean {
 }
 
 /** Pertanyaan yang berlaku untuk bulan yang dinilai ini. */
-export function questionsForPeriod<T extends Pick<SurveyQuestion, "quarterly" | "since" | "until">>(questions: T[], period: string): T[] {
+export function questionsForPeriod<T extends Pick<SurveyQuestion, "quarterly" | "since" | "until" | "options">>(questions: T[], period: string): T[] {
   const month = Number(period.slice(5, 7));
-  return questions.filter((q) => (!q.quarterly || month % 3 === 0) && (!q.since || period >= q.since) && (!q.until || period <= q.until));
+  return questions
+    .filter((q) => (!q.quarterly || month % 3 === 0) && (!q.since || period >= q.since) && (!q.until || period <= q.until))
+    .map((q) => (q.options?.some((o) => o.until && period > o.until) ? { ...q, options: q.options.filter((o) => !o.until || period <= o.until) } : q));
+}
+
+const addMonths = (period: string, n: number) => {
+  const [y, m] = period.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 10);
+};
+
+/**
+ * Bulan yang dinilai berikutnya: sebulan setelah periode terakhir yang sudah ada. Survei yang tidak
+ * bulanan paling awal memakai bulan lalu, karena yang dinilai selalu bulan yang sudah lewat.
+ */
+/** Tanggal hari ini menurut WIB (YYYY-MM-DD); jam 00.00–06.59 WIB masih hari kemarin menurut UTC. */
+const wibDate = (d: Date) => new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
+
+export function nextPeriod(survey: Pick<Survey, "cadence">, summary: Pick<PeriodSummary, "period">[], campaigns: Pick<Campaign, "period">[], today = new Date()): string {
+  const last = [...summary.map((p) => p.period), ...campaigns.map((c) => c.period)].sort().at(-1);
+  const thisMonth = `${wibDate(today).slice(0, 7)}-01`;
+  if (!last) return thisMonth;
+  const n = addMonths(last, 1);
+  if (survey.cadence === "bulanan") return n;
+  const lastMonth = addMonths(thisMonth, -1);
+  return n > lastMonth ? n : lastMonth;
+}
+
+/** Batas isi bawaan: tanggal 10 bulan setelah bulan yang dinilai, tapi selalu menyisakan seminggu dari hari ini. */
+export function defaultClose(period: string, today = new Date()): string {
+  const tenth = `${addMonths(period, 1).slice(0, 7)}-10`;
+  const week = wibDate(new Date(today.getTime() + 7 * 864e5));
+  return tenth > week ? tenth : week;
 }
 
 /**
@@ -700,7 +770,10 @@ export function build360(config: SurveyConfig, responses: Pick<SurveyResponse, "
   const num = (v: AnswerValue | undefined) => (typeof v === "number" ? v : null);
   const txt = (v: AnswerValue | undefined) => (typeof v === "string" && v.trim() && !/^[-.\s]*$/.test(v) ? v.trim() : null);
   const leader: Leader360 = { name: config.leader ?? null, periods: {} };
+  const isLeaderSelf = (r: Pick<SurveyResponse, "answers">) => !!config.leader && r.answers.rater === config.leader;
   for (const r of responses) {
+    // Leader menilai dirinya sendiri tidak ikut rata-rata, sama seperti penilaian diri di blok rekan.
+    if (isLeaderSelf(r)) continue;
     const rater = String(r.answers.rater ?? r.respondent_name ?? "?");
     const vals = leaderItems.map((k) => num(r.answers[k])).filter((x): x is number => x !== null);
     if (!vals.length) continue;
@@ -711,7 +784,7 @@ export function build360(config: SurveyConfig, responses: Pick<SurveyResponse, "
     if (im) p.improvements.push({ rater, text: im });
   }
   for (const [period, p] of Object.entries(leader.periods)) {
-    const rs = responses.filter((r) => r.period === period);
+    const rs = responses.filter((r) => r.period === period && !isLeaderSelf(r));
     for (const k of leaderItems) p.items[k] = mean(rs.map((r) => num(r.answers[k])).filter((x): x is number => x !== null));
     p.raters = p.byRater.length;
     p.avg = mean(p.byRater.map((b) => b.avg).filter((x): x is number => x !== null));
@@ -890,6 +963,14 @@ export async function loadResponses(surveyId: string): Promise<SurveyResponse[]>
   return fetchAll<SurveyResponse>((a, b) => db.from("pi_survey_responses")
     .select("id, survey_id, period, submitted_at, respondent_name, respondent_email, employee_id, answers, flags, excluded")
     .eq("survey_id", surveyId).order("submitted_at", { ascending: false }).order("id").range(a, b));
+}
+
+/** HR mengeluarkan satu isian dari hitungan (isian uji, isian palsu) atau mengembalikannya. Tidak ada yang dihapus. */
+export async function setResponseExcluded(r: Pick<SurveyResponse, "id" | "flags">, excluded: boolean): Promise<string | null> {
+  if (!supabase) return "Belum terhubung ke penyimpanan cloud.";
+  const { data, error } = await supabase.from("pi_survey_responses").update({ excluded, flags: flagsAfterExclude(r.flags, excluded) }).eq("id", r.id).select("id");
+  if (error) return error.message;
+  return data?.length ? null : "Perubahan tidak tersimpan. Pastikan kamu masuk sebagai HR, lalu coba lagi.";
 }
 
 /** Khusus HR — nama karyawan yang mengangkat tiap action item. */

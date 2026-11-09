@@ -43,6 +43,7 @@ const h = vi.hoisted(() => {
     limit(n: number) { this.max = n; return this; }
     private shape(r: Row): Row {
       const out = { ...r };
+      for (const [, alias, key] of this.cols.matchAll(/(\w+):answers->>(\w+)/g)) out[alias] = (r.answers as Row | undefined)?.[key] ?? null;
       for (const [rel, [fk, tbl]] of Object.entries(REL[this.table] ?? {})) {
         if (this.cols.includes(`${rel}(`)) out[rel] = (tables[tbl] ?? []).find((x) => x.id === r[fk]) ?? null;
       }
@@ -323,6 +324,17 @@ describe("kerja bersamaan lainnya", () => {
     expect(rows.slice(0, 2).every((x) => x.excluded && (x.flags as string[]).includes("isian_ganda"))).toBe(true);
   });
 
+  it("isian ganda lewat link grup: kontak sama dikeluarkan, isian terakhir yang dihitung", async () => {
+    const { campaign } = seed(def, "pulse_bulanan");
+    const r = rnd(52);
+    const ip = nextIp();
+    for (let i = 0; i < 3; i++) await call("POST", ip, { token: campaign.token, name: "Isi Tiga Kali", contact: "081222333444", answers: fill(def, r) });
+    const rows = responsesOf(String(campaign.id));
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((x) => !x.excluded)).toHaveLength(1);
+    expect(rows.filter((x) => x.excluded).every((x) => (x.flags as string[]).includes("isian_ganda"))).toBe(true);
+  });
+
   it("'pilih maksimal 3' pada definisi asli Lencir: 4 pilihan ditolak, 3 diterima", async () => {
     const { campaign } = seed(def, "pulse_bulanan", { period: "2026-12-01" });
     const q = def.find((x) => x.key === "engagement_activity")!;
@@ -355,6 +367,73 @@ describe("kerja bersamaan lainnya", () => {
     const slug = surveyLinkSlug({ key: tutup.survey.key, title: tutup.survey.title, config: {} }, "Rica Rico");
     expect((await call("GET", nextIp(), undefined, `?token=${slug}`)).status).toBe(410);
     expect((await call("GET", nextIp(), undefined, "?token=form-yang-tidak-ada")).status).toBe(404);
+  });
+
+  it("survei berlink khusus: link pendek ditolak, link bertoken terbuka", async () => {
+    const { survey, campaign } = seed(def, "survei_uji_khusus");
+    (survey as Row).config = { privateLink: true, kind: "360", visibility: "hr" };
+    const slug = surveyLinkSlug({ key: survey.key, title: survey.title, config: {} }, "Rica Rico");
+    expect((await call("GET", nextIp(), undefined, `?token=${slug}`)).status).toBe(404);
+    expect((await call("POST", nextIp(), { token: slug, name: "Orang Luar", answers: {} })).status).toBe(404);
+    const res = await call("GET", nextIp(), undefined, `?token=${campaign.token}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).privacyNote).toBe("Hanya tim HR yang membaca jawabanmu.");
+  });
+
+  it("pilihan yang berakhir tidak ditawarkan di bulan baru dan ditolak server, bulan lama tetap menerimanya", async () => {
+    const q: SurveyQuestion[] = [{ key: "spv", label: "SPV", type: "choice", required: true, options: [{ value: "Aktif" }, { value: "Keluar", until: "2026-09-01" }] }];
+    const okt = seed(q, "survei_pilihan_berakhir", { period: "2026-10-01" });
+    const sep = seed(q, "survei_pilihan_berakhir_2", { period: "2026-09-01" });
+    const opts = async (t: unknown) => (await (await call("GET", nextIp(), undefined, `?token=${t}`)).json()).questions[0].options.map((o: { value: string }) => o.value);
+    expect(await opts(okt.campaign.token)).toEqual(["Aktif"]);
+    expect(await opts(sep.campaign.token)).toEqual(["Aktif", "Keluar"]);
+    const ip = nextIp();
+    expect((await call("POST", ip, { token: okt.campaign.token, name: "Uji Pilih", answers: { spv: "Keluar" } })).status).toBe(400);
+    expect((await call("POST", ip, { token: sep.campaign.token, name: "Uji Pilih", answers: { spv: "Keluar" } })).status).toBe(200);
+  });
+
+  it("saran outlet: hanya outlet aktif, dan hanya untuk pertanyaan yang memintanya", async () => {
+    const q: SurveyQuestion[] = [{ key: "store", label: "Store", type: "text", required: true, suggest: "outlets" }];
+    const { campaign } = seed(q, "survei_saran_outlet");
+    const biasa = seed([{ key: "catatan", label: "Catatan", type: "text" }], "survei_tanpa_saran");
+    (h.tables.pi_outlets ??= []).push(
+      { id: "o1", tenant_id: TENANT, name: "Mall B", status: "active" },
+      { id: "o2", tenant_id: TENANT, name: "Mall A", status: "active" },
+      { id: "o3", tenant_id: TENANT, name: "Mall Tutup", status: "closed" },
+      { id: "o4", tenant_id: "tenant-lain", name: "Mall Lain", status: "active" },
+    );
+    expect((await (await call("GET", nextIp(), undefined, `?token=${campaign.token}`)).json()).outlets).toEqual(["Mall A", "Mall B"]);
+    expect((await (await call("GET", nextIp(), undefined, `?token=${biasa.campaign.token}`)).json()).outlets).toEqual([]);
+  });
+
+  it("SPG → SPV lewat link grup: ganda per orang + outlet, SPG backup tetap dihitung", async () => {
+    const q = spgDefinition().map((x) => (x.key === "store" ? { key: "store", label: "Store", type: "text" as const, required: true } : x));
+    const { survey, campaign } = seed(q, "survei_spg_ganda");
+    (survey as Row).config = { kind: "spv_report" };
+    const answers = (store: string) => ({ ...fill(q, rnd(53)), store });
+    const ip = nextIp();
+    const send = (name: string, contact: string, store: string) => call("POST", ip, { token: campaign.token, name, contact, answers: answers(store) });
+    await send("Ani Lestari", "081200000001", "Mall A");
+    await send("ani lestari", "0812-0000-0001", "mall a"); // mengulang: yang pertama dikeluarkan
+    await send("Ani Lestari", "081200000001", "Mall B"); // SPG backup: tetap dihitung
+    await send("Ani Lestari", "081299999999", "Mall B"); // kontak beda: dihitung, ditandai untuk HR
+    const rows = responsesOf(String(campaign.id));
+    expect(rows.map((x) => x.excluded)).toEqual([true, false, false, false]);
+    expect(rows[0].flags).toContain("isian_ganda_outlet_sama");
+    expect(rows[1].flags).toContain("punya_isian_ganda_outlet_sama");
+    expect(rows[3].flags).toContain("cek_isian_ganda");
+  });
+
+  it("360: penilai sama mengisi ulang, isian lama tidak dihitung", async () => {
+    const q = threeSixtyDefinition();
+    const { survey, campaign } = seed(q, "survei_360_ganda");
+    (survey as Row).config = { kind: "360" };
+    const a: Record<string, AnswerValue> = { ...fill(q, rnd(54)), rater: "Penilai 1" };
+    for (const [k] of Object.entries(a)) if (k.startsWith("p1_")) delete a[k];
+    const ip = nextIp();
+    await call("POST", ip, { token: campaign.token, name: "Penilai Satu", contact: "081200000002", answers: a });
+    await call("POST", ip, { token: campaign.token, name: "Penilai Satu", contact: "081200000002", answers: a });
+    expect(responsesOf(String(campaign.id)).map((x) => x.excluded)).toEqual([true, false]);
   });
 
   it("pertanyaan per 3 bulan dan pertanyaan lama tidak ditanyakan, tapi definisinya tetap ada", async () => {

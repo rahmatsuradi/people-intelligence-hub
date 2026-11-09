@@ -128,7 +128,7 @@ function SurveyCard({ survey, d, period, onOpen }: { survey: Survey; d?: Loaded;
     leaderPrev = ps.length > 1 ? leader.periods[ps.at(-2) as string].avg : null;
     raters = ps.length ? leader.periods[ps.at(-1) as string].raters : 0;
   }
-  const p360 = kind === "360" && d ? Object.keys(build360(survey.config, d.responses, PEER, LEADER).leader.periods).sort().at(-1) ?? null : null;
+  const p360 = kind === "360" && d ? Object.keys(build360(survey.config, d.responses.filter((r) => !r.excluded), PEER, LEADER).leader.periods).sort().at(-1) ?? null : null;
   const when = kind === "360" ? p360 : period;
 
   return (

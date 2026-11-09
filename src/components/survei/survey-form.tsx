@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isValidContact, isVisible, maxChoicesOf, type AnswerValue, type SurveyQuestion } from "@/lib/rr/pulse";
-import { clearDraft, draftKey, loadDraft, saveDraft } from "@/lib/rr/survey-draft";
+import { clearDraft, draftKey, loadDraft, saveDraft, type SurveyDraft } from "@/lib/rr/survey-draft";
 
-interface FormData { title: string; description: string | null; periodLabel: string; closesAt: string | null; questions: SurveyQuestion[] }
+interface FormData {
+  title: string; description: string | null; periodLabel: string; closesAt: string | null; questions: SurveyQuestion[];
+  outlets?: string[]; privacyNote?: string; contactNote?: string | null;
+}
+
+const NET_ERROR = "Formulir belum terbuka. Periksa koneksi lalu coba lagi.";
+const closeDate = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
+const hasContent = (d: SurveyDraft) => d.step > 0 || Object.keys(d.answers).length > 0 || !!d.name.trim() || !!d.contact.trim();
 
 const box = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 const input = "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
@@ -14,7 +21,8 @@ const browserStore = (): Storage | null => { try { return window.localStorage; }
 
 export function SurveyForm({ token, invite }: { token: string; invite?: string }) {
   const [data, setData] = useState<FormData | null>(null);
-  const [loadError, setLoadError] = useState("");
+  const [loadError, setLoadError] = useState<{ text: string; retry: boolean } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
@@ -25,53 +33,82 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
   const [done, setDone] = useState(false);
   const [website, setWebsite] = useState("");
   const [restored, setRestored] = useState(false);
+  // Link grup: draf tidak langsung dibuka, karena HP outlet sering dipakai bergantian dan orang
+  // berikutnya tidak boleh melihat nama serta jawaban orang sebelumnya.
+  const [pendingDraft, setPendingDraft] = useState<SurveyDraft | null>(null);
   // Penahan klik ganda: `sending` baru berlaku setelah render, klik kedua bisa lebih cepat dari itu.
   const submitting = useRef(false);
   const key = draftKey(token, invite);
 
+  const restore = useCallback((d: SurveyDraft) => {
+    setStep(d.step);
+    if (d.name) setName(d.name);
+    setContact(d.contact);
+    setAnswers(d.answers);
+    setRestored(Object.keys(d.answers).length > 0);
+  }, []);
+
   useEffect(() => {
     fetch(`/api/survei?token=${encodeURIComponent(token)}${invite ? `&u=${encodeURIComponent(invite)}` : ""}`)
       .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error ?? "Gagal memuat formulir.");
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j) { setLoadError(j?.error ? { text: j.error, retry: r.status === 429 || r.status >= 500 } : { text: NET_ERROR, retry: true }); return; }
         setData(j);
         if (j.inviteName) setName((n) => n || j.inviteName);
         // Lanjutkan isian yang terhenti (halaman dimuat ulang saat berpindah aplikasi di HP).
         const store = browserStore();
         const draft = store && loadDraft(store, key);
-        if (draft) {
-          const steps = new Set((j.questions as SurveyQuestion[]).map((q) => q.section ?? "Pertanyaan")).size;
-          setStep(Math.min(draft.step, steps));
-          if (draft.name) setName(draft.name);
-          setContact(draft.contact);
-          setAnswers(draft.answers);
-          setRestored(draft.step > 0 || Object.keys(draft.answers).length > 0);
-        }
+        if (draft && hasContent(draft)) { if (invite) restore(draft); else setPendingDraft(draft); }
       })
-      .catch((e: Error) => setLoadError(e.message));
-  }, [token, invite, key]);
+      .catch(() => setLoadError({ text: NET_ERROR, retry: true }));
+  }, [token, invite, key, attempt, restore]);
 
   useEffect(() => {
-    if (!data || done) return;
+    if (!data || done || pendingDraft) return;
     const store = browserStore();
     if (store) saveDraft(store, key, { step, name, contact, answers });
-  }, [data, done, key, step, name, contact, answers]);
+  }, [data, done, pendingDraft, key, step, name, contact, answers]);
 
-  // Langkah 0 = identitas; berikutnya satu bagian (section) per langkah — nyaman di HP.
+  // Langkah 0 = identitas; berikutnya satu bagian (section) per langkah — nyaman di HP. Bagian yang
+  // semua pertanyaannya gugur (360: blok diri sendiri) dilewati, bukan ditampilkan sebagai layar kosong.
+  // Pertanyaan yang syaratnya belum dijawab masih dihitung, supaya jumlah langkah tidak melompat.
   const sections = useMemo(() => {
     const m = new Map<string, SurveyQuestion[]>();
     for (const q of data?.questions ?? []) m.set(q.section ?? "Pertanyaan", [...(m.get(q.section ?? "Pertanyaan") ?? []), q]);
-    return [...m.entries()];
-  }, [data]);
+    return [...m.entries()].filter(([, qs]) => qs.some((q) => isVisible(q, answers) || (!!q.showIf && !q.hidden && answers[q.showIf.key] === undefined)));
+  }, [data, answers]);
   const total = sections.length + 1;
+  const at = Math.min(step, sections.length); // draf lama atau jawaban yang berubah bisa menyisakan langkah di luar daftar
 
-  if (loadError) return <div className={box}><p className="text-base text-slate-700 dark:text-slate-200">{loadError}</p></div>;
+  if (loadError) {
+    return (
+      <div className={box}>
+        <p className="text-base text-slate-700 dark:text-slate-200">{loadError.text}</p>
+        {loadError.retry && <button type="button" onClick={() => { setLoadError(null); setAttempt((n) => n + 1); }} className="mt-3 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">Coba lagi</button>}
+      </div>
+    );
+  }
   if (!data) return <div className={box}><p className="text-sm text-slate-500">Memuat formulir…</p></div>;
   if (done) {
     return (
       <div className={box}>
         <p className="text-lg font-semibold text-slate-900 dark:text-white">Terima kasih, {name.split(" ")[0]}!</p>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Jawabanmu sudah tersimpan. Nama dan jawaban tertulismu hanya bisa dibuka tim HR; owner hanya melihat ringkasan angka tanpa nama.</p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Jawabanmu sudah tersimpan. {data.privacyNote}</p>
+      </div>
+    );
+  }
+
+  if (pendingDraft) {
+    return (
+      <div className={box}>
+        <p className="text-lg font-semibold text-slate-900 dark:text-white">{data.title} — {data.periodLabel}</p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Ada isian yang belum selesai di HP ini. Kalau itu milikmu, lanjutkan. Kalau bukan, mulai baru.</p>
+        <div className="mt-4 flex gap-3">
+          <button type="button" className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            onClick={() => { restore({ ...pendingDraft, step: 0 }); setPendingDraft(null); }}>Lanjutkan isian saya</button>
+          <button type="button" className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
+            onClick={() => { const store = browserStore(); if (store) clearDraft(store, key); setPendingDraft(null); }}>Mulai baru</button>
+        </div>
       </div>
     );
   }
@@ -84,16 +121,16 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
 
   const visibleIn = (qs: SurveyQuestion[]) => qs.filter((q) => isVisible(q, answers));
   const checkStep = (): boolean => {
-    if (step === 0) {
+    if (at === 0) {
       const miss = [...(name.trim().length >= 2 ? [] : ["__name"]), ...(isValidContact(contact) ? [] : ["__contact"])];
       setMissing(miss);
       return miss.length === 0;
     }
-    const miss = visibleIn(sections[step - 1][1]).filter((q) => q.required && answers[q.key] === undefined).map((q) => q.key);
+    const miss = visibleIn(sections[at - 1][1]).filter((q) => q.required && answers[q.key] === undefined).map((q) => q.key);
     setMissing(miss);
     return miss.length === 0;
   };
-  const next = () => { if (checkStep()) { setStep(step + 1); window.scrollTo({ top: 0, behavior: "smooth" }); } };
+  const next = () => { if (checkStep()) { setStep(at + 1); window.scrollTo({ top: 0, behavior: "smooth" }); } };
 
   const submit = async () => {
     if (submitting.current || !checkStep()) return;
@@ -121,29 +158,32 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
     <div className="space-y-4">
       <div className={box}>
         <p className="text-lg font-semibold text-slate-900 dark:text-white">{data.title} — {data.periodLabel}</p>
-        {step === 0 && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{data.description}</p>}
-        <div className="mt-3 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-blue-600 transition-all" style={{ width: `${((step + 1) / total) * 100}%` }} /></div>
-        <p className="mt-1 text-xs text-slate-500">Langkah {step + 1} dari {total}{step > 0 ? ` · ${sections[step - 1][0]}` : ""}</p>
+        {at === 0 && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{data.description}</p>}
+        {at === 0 && data.closesAt && <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">Batas pengisian: {closeDate(data.closesAt)}</p>}
+        <div className="mt-3 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-blue-600 transition-all" style={{ width: `${((at + 1) / total) * 100}%` }} /></div>
+        <p className="mt-1 text-xs text-slate-500">Langkah {at + 1} dari {total}{at > 0 ? ` · ${sections[at - 1][0]}` : ""}</p>
         {restored && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">Jawabanmu yang tadi dipulihkan. Lanjutkan dari sini.</p>}
       </div>
 
-      {step === 0 ? (
+      {at === 0 ? (
         <div className={box}>
           <label className="block text-sm font-medium text-slate-800 dark:text-slate-100">Nama lengkap <span className="text-red-600">*</span></label>
           <input className={`${input} mt-1.5`} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
           {missing.includes("__name") && <p className="mt-1 text-xs text-red-600">Nama lengkap wajib diisi.</p>}
           {invite && <p className="mt-1 text-xs text-slate-500">Ini link pribadi. Bukan kamu? Minta link grup dari HR supaya jawabanmu tercatat atas namamu sendiri.</p>}
           <label className="mt-4 block text-sm font-medium text-slate-800 dark:text-slate-100">Email atau nomor WA <span className="text-red-600">*</span></label>
-          <input className={`${input} mt-1.5`} value={contact} onChange={(e) => setContact(e.target.value)} autoComplete="email" />
+          <input className={`${input} mt-1.5`} value={contact} onChange={(e) => setContact(e.target.value)} autoComplete="email" placeholder="mis. 0812xxxx atau nama@gmail.com" />
+          {data.contactNote && <p className="mt-1 text-xs text-slate-500">{data.contactNote}</p>}
           {missing.includes("__contact") && <p className="mt-1 text-xs text-red-600">Isi email atau nomor WA yang benar.</p>}
           <input className="hidden" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} aria-hidden="true" />
         </div>
       ) : (
-        visibleIn(sections[step - 1][1]).map((q) => (
+        visibleIn(sections[at - 1][1]).map((q) => (
           <div key={q.key} className={`${box} ${missing.includes(q.key) ? "border-red-300 dark:border-red-800" : ""}`}>
             <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{q.label}{q.required && <span className="text-red-600"> *</span>}</p>
+            {q.help && <p className="text-xs text-slate-500">{q.help}</p>}
             {q.type === "multi" && <p className="text-xs text-slate-400">{maxChoicesOf(q) ? `Pilih paling banyak ${maxChoicesOf(q)}` : "Boleh pilih lebih dari satu"}</p>}
-            <div className="mt-3"><Field q={q} value={answers[q.key]} onChange={(v) => set(q.key, v)} /></div>
+            <div className="mt-3"><Field q={q} value={answers[q.key]} onChange={(v) => set(q.key, v)} suggestions={q.suggest === "outlets" ? data.outlets : undefined} /></div>
             {missing.includes(q.key) && <p className="mt-2 text-xs text-red-600">Wajib diisi.</p>}
           </div>
         ))
@@ -151,8 +191,8 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
 
       {sendError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{sendError}</p>}
       <div className="flex gap-3">
-        {step > 0 && <button type="button" onClick={() => setStep(step - 1)} className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Kembali</button>}
-        {step < total - 1
+        {at > 0 && <button type="button" onClick={() => setStep(at - 1)} className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">Kembali</button>}
+        {at < total - 1
           ? <button type="button" onClick={next} className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white">Lanjut</button>
           : <button type="button" onClick={submit} disabled={sending} className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">{sending ? "Mengirim…" : "Kirim jawaban"}</button>}
       </div>
@@ -160,10 +200,19 @@ export function SurveyForm({ token, invite }: { token: string; invite?: string }
   );
 }
 
-function Field({ q, value, onChange }: { q: SurveyQuestion; value: AnswerValue | undefined; onChange: (v: AnswerValue | undefined) => void }) {
+function Field({ q, value, onChange, suggestions }: { q: SurveyQuestion; value: AnswerValue | undefined; onChange: (v: AnswerValue | undefined) => void; suggestions?: string[] }) {
   const opt = "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm";
   const on = "border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200";
   const off = "border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200";
+  if (q.type === "text" && q.suggest) {
+    const list = `${q.key}-saran`;
+    return (
+      <>
+        <input className={input} list={list} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} autoComplete="off" placeholder="Ketik lalu pilih dari daftar" />
+        <datalist id={list}>{(suggestions ?? []).map((s) => <option key={s} value={s} />)}</datalist>
+      </>
+    );
+  }
   if (q.type === "text") return <textarea className={input} rows={3} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
   if (q.type === "scale") {
     const nums: number[] = [];

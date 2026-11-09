@@ -21,7 +21,7 @@ export function KpiRow({ survey, summaries, period, targetCount }: { survey: Sur
   const prev = summaries.slice(0, idx).reverse().find((p) => !p.suppressed);
   const kpis = headlineKpis(survey, summaries, period);
   const cov = coverage([cur])[0];
-  const parts = [cov.total !== cov.counted ? `${cov.total} baris masuk` : null, cov.people !== cov.counted ? `${cov.people} orang unik` : null, cov.excluded ? `${cov.excluded} dikeluarkan (isian ganda)` : null].filter(Boolean);
+  const parts = [cov.total !== cov.counted ? `${cov.total} baris masuk` : null, cov.people !== cov.counted ? `${cov.people} orang unik` : null, cov.excluded ? `${cov.excluded} tidak dihitung (isian ganda atau dikeluarkan HR)` : null].filter(Boolean);
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Tile label="Jawaban dihitung" value={`${cur.n}${targetCount ? ` / ${targetCount}` : ""}`}

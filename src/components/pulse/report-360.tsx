@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button, Card, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
-import { build360, periodLabel, saveSurveyConfig, type Survey, type SurveyResponse } from "@/lib/rr/pulse";
+import { build360, loadSurveys, periodLabel, saveSurveyConfig, type Survey, type SurveyResponse } from "@/lib/rr/pulse";
 import { heatClass, shortMonth } from "./charts";
 
 const PEER = ["teamwork", "problem", "sharing", "ownership", "teamlead"];
@@ -15,17 +15,27 @@ const heat = (x: number | null | undefined) => heatClass(x == null ? null : ((x 
 export function Report360({ survey, responses, canEdit, onSaved }: { survey: Survey; responses: SurveyResponse[]; canEdit: boolean; onSaved: () => void }) {
   const cfg = survey.config;
   const { leader, targets } = build360(cfg, responses.filter((r) => !r.excluded), PEER, LEADER);
-  const periods = [...new Set(responses.map((r) => r.period))].sort();
+  const counted = responses.filter((r) => !r.excluded);
+  const periods = [...new Set(counted.map((r) => r.period))].sort();
+  // Huruf samaran tetap sama untuk orang yang sama di semua putaran.
+  const raterOrder = [...new Set(counted.map((r) => String(r.answers.rater ?? r.respondent_name ?? "?")))].sort();
   const label = (k: string) => survey.questions.find((q) => q.key === k)?.label.split(":")[0] ?? k;
   const peerLabel = (k: string) => survey.questions.find((q) => q.key === `p1_${k}`)?.label.split(":")[0] ?? k;
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  // Komentar + nama penilai langsung menunjukkan siapa menulis apa, jadi namanya tersembunyi secara bawaan.
+  const [showRaters, setShowRaters] = useState(false);
+  const who = (name: string) => (showRaters ? name : `Penilai ${String.fromCharCode(65 + Math.max(0, raterOrder.indexOf(name)))}`);
+  // Blok yang namanya sudah tertulis di formulir ("Penilaian untuk Doni") tidak boleh dipetakan ulang di sini.
+  const fixedName = (b: string) => /^Penilaian untuk /.test(survey.questions.find((q) => q.key === `p${b.slice(1)}_teamwork`)?.section ?? "");
   const [map, setMap] = useState<Record<string, string>>(Object.fromEntries(Object.entries(cfg.targets ?? {}).map(([k, v]) => [k, v ?? ""])));
   const spvs = survey.questions.find((q) => q.key === "rater")?.options?.map((o) => o.value) ?? [];
 
   const saveMap = async () => {
-    const targetsNew = Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v || null]));
-    const err = await saveSurveyConfig(survey.id, { ...cfg, targets: targetsNew });
+    // Baca pengaturan terbaru dulu: halaman ini bisa dibuka sebelum pengaturan survei diubah di tempat lain.
+    const fresh = (await loadSurveys()).find((s) => s.id === survey.id)?.config ?? cfg;
+    const targetsNew = { ...(fresh.targets ?? {}), ...Object.fromEntries(Object.entries(map).filter(([k]) => !fixedName(k)).map(([k, v]) => [k, v || null])) };
+    const err = await saveSurveyConfig(survey.id, { ...fresh, targets: targetsNew });
     if (err) { toast(err, "error"); return; }
     toast("Pemetaan blok disimpan");
     setEditing(false);
@@ -36,6 +46,7 @@ export function Report360({ survey, responses, canEdit, onSaved }: { survey: Sur
     <div className="space-y-4">
       <Card className="border-amber-200 dark:border-amber-900">
         <p className="text-xs text-amber-800 dark:text-amber-300">Hanya tim HR yang bisa membuka survei ini. Dengan 7 SPV, angka rata-rata pun mudah ditebak siapa penilainya — jangan diteruskan mentah ke SPV maupun owner.</p>
+        <label className="mt-2 flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300"><input type="checkbox" checked={showRaters} onChange={(e) => setShowRaters(e.target.checked)} /> Tampilkan nama penilai</label>
       </Card>
 
       <Card>
@@ -61,9 +72,9 @@ export function Report360({ survey, responses, canEdit, onSaved }: { survey: Sur
         </div>
         {Object.entries(leader.periods).sort().map(([p, s]) => (
           <div key={p} className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
-            <p className="font-medium text-slate-700 dark:text-slate-200">{periodLabel(p)} — per penilai: {s.byRater.map((b) => `${b.rater} ${fmt(b.avg)}`).join(" · ")}</p>
-            {s.strengths.map((t, i) => <p key={`s${i}`} className="mt-1 text-emerald-700 dark:text-emerald-400">+ {t.rater}: {t.text}</p>)}
-            {s.improvements.map((t, i) => <p key={`i${i}`} className="mt-1 text-red-700 dark:text-red-400">− {t.rater}: {t.text}</p>)}
+            <p className="font-medium text-slate-700 dark:text-slate-200">{periodLabel(p)} — per penilai: {s.byRater.map((b) => `${who(b.rater)} ${fmt(b.avg)}`).join(" · ")}</p>
+            {s.strengths.map((t, i) => <p key={`s${i}`} className="mt-1 text-emerald-700 dark:text-emerald-400">+ {showRaters ? `${t.rater}: ` : ""}{t.text}</p>)}
+            {s.improvements.map((t, i) => <p key={`i${i}`} className="mt-1 text-red-700 dark:text-red-400">− {showRaters ? `${t.rater}: ` : ""}{t.text}</p>)}
           </div>
         ))}
       </Card>
@@ -80,7 +91,7 @@ export function Report360({ survey, responses, canEdit, onSaved }: { survey: Sur
           <div className="mx-5 mt-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
             <p className="text-xs text-slate-500">{cfg.targetNote}</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-4">
-              {Object.keys(map).sort().map((b) => (
+              {Object.keys(map).sort().filter((b) => !fixedName(b)).map((b) => (
                 <label key={b} className="text-xs text-slate-600 dark:text-slate-300">Blok {b.slice(1)}
                   <select className={cn(inputClass, "mt-1 py-1 text-xs")} value={map[b]} onChange={(e) => setMap({ ...map, [b]: e.target.value })}>
                     <option value="">Belum dipastikan</option>{spvs.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -122,8 +133,8 @@ export function Report360({ survey, responses, canEdit, onSaved }: { survey: Sur
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {PEER.map((k) => <span key={k} className={cn("rounded px-2 py-0.5 text-[11px]", heat(s.items[k]))}>{peerLabel(k)} {fmt(s.items[k])}</span>)}
                 </div>
-                {s.strengths.map((x, i) => <p key={`s${i}`} className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">+ {x.rater}: {x.text}</p>)}
-                {s.improvements.map((x, i) => <p key={`i${i}`} className="mt-1 text-xs text-red-700 dark:text-red-400">− {x.rater}: {x.text}</p>)}
+                {s.strengths.map((x, i) => <p key={`s${i}`} className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">+ {showRaters ? `${x.rater}: ` : ""}{x.text}</p>)}
+                {s.improvements.map((x, i) => <p key={`i${i}`} className="mt-1 text-xs text-red-700 dark:text-red-400">− {showRaters ? `${x.rater}: ` : ""}{x.text}</p>)}
               </div>
             ))}
           </div>

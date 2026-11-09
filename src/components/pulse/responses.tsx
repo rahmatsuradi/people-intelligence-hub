@@ -11,7 +11,8 @@
 
 import { useMemo, useState } from "react";
 import { Button, Card, cn, inputClass } from "@/components/app-shell";
-import { RESPONSE_FLAG_LABEL, isVisible, periodLabel, type AnswerValue, type Survey, type SurveyQuestion, type SurveyResponse } from "@/lib/rr/pulse";
+import { toast } from "@/components/toast";
+import { RESPONSE_FLAG_LABEL, isVisible, periodLabel, setResponseExcluded, type AnswerValue, type Survey, type SurveyQuestion, type SurveyResponse } from "@/lib/rr/pulse";
 import { personKey, personScore } from "@/lib/rr/pulse-bi";
 
 /** Jawaban yang menunjuk orang/tempat pengisi — ikut disembunyikan bersama nama. */
@@ -22,7 +23,7 @@ const isEmpty = (v: AnswerValue | undefined) => v === undefined || v === null ||
 const asText = (v: AnswerValue | undefined) => (isEmpty(v) ? "" : Array.isArray(v) ? v.join("; ") : String(v));
 const dateId = (iso: string | null) => (iso ? new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 
-export function ResponseBrowser({ survey, responses, period }: { survey: Survey; responses: SurveyResponse[]; period: string }) {
+export function ResponseBrowser({ survey, responses, period, onChanged }: { survey: Survey; responses: SurveyResponse[]; period: string; onChanged: () => void }) {
   const periods = useMemo(() => [...new Set(responses.map((r) => r.period))].sort().reverse(), [responses]);
   const [per, setPer] = useState<string>(period && periods.includes(period) ? period : "all");
   const [spv, setSpv] = useState("");
@@ -62,7 +63,7 @@ export function ResponseBrowser({ survey, responses, period }: { survey: Survey;
     const qs = survey.questions.filter((x) => showNames || !IDENTIFYING.includes(x.key));
     const head = ["Bulan dinilai", "Waktu isi", ...(showNames ? ["Nama"] : []), "Dihitung", "Catatan data", ...qs.map((x) => (x.section ? `${x.section} — ${x.label}` : x.label))];
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const rows = list.map((r) => [periodLabel(r.period), r.submitted_at ?? "", ...(showNames ? [r.respondent_name ?? ""] : []), r.excluded ? "Tidak (isian ganda)" : "Ya",
+    const rows = list.map((r) => [periodLabel(r.period), r.submitted_at ?? "", ...(showNames ? [r.respondent_name ?? ""] : []), r.excluded ? "Tidak" : "Ya",
       (r.flags ?? []).map((f) => RESPONSE_FLAG_LABEL[f] ?? f).join("; "), ...qs.map((x) => asText(r.answers[x.key]))]);
     const csv = "﻿" + [head, ...rows].map((row) => row.map((c) => esc(String(c))).join(",")).join("\n");
     const a = document.createElement("a");
@@ -91,7 +92,7 @@ export function ResponseBrowser({ survey, responses, period }: { survey: Survey;
         )}
         <input className={cn(inputClass, "w-64")} placeholder="Cari di semua jawaban…" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />
         <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300"><input type="checkbox" checked={onlyText} onChange={(e) => setOnlyText(e.target.checked)} /> Hanya yang menulis komentar</label>
-        <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300"><input type="checkbox" checked={withExcluded} onChange={(e) => setWithExcluded(e.target.checked)} /> Sertakan isian ganda</label>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300"><input type="checkbox" checked={withExcluded} onChange={(e) => setWithExcluded(e.target.checked)} /> Sertakan yang tidak dihitung</label>
         <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300"><input type="checkbox" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} /> Tampilkan nama</label>
         <Button size="sm" variant="secondary" onClick={downloadCsv} disabled={!list.length}>Unduh CSV ({list.length})</Button>
       </div>
@@ -132,7 +133,7 @@ export function ResponseBrowser({ survey, responses, period }: { survey: Survey;
             <Card><p className="text-sm text-slate-500">Pilih satu isian di kiri untuk melihat seluruh jawabannya dari awal sampai akhir.</p></Card>
           ) : (
             <>
-              <ResponseCard survey={survey} r={selected} showNames={showNames} scaleKeys={scaleKeys} />
+              <ResponseCard survey={survey} r={selected} showNames={showNames} scaleKeys={scaleKeys} onChanged={onChanged} />
               {history.length > 1 && (
                 <Card>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Riwayat orang ini ({history.length} isian)</h3>
@@ -144,7 +145,7 @@ export function ResponseBrowser({ survey, responses, period }: { survey: Survey;
                         <li key={h.id}>
                           <button type="button" onClick={() => setSel(h.id)}
                             className={cn("rounded-lg border px-2.5 py-1 text-xs", h.id === selected.id ? "border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300", h.excluded && "border-dashed")}>
-                            {periodLabel(h.period)}{sc !== null ? ` · ${sc.toLocaleString("id-ID", { maximumFractionDigits: 1 })}` : ""}{h.excluded ? " · ganda" : ""}
+                            {periodLabel(h.period)}{sc !== null ? ` · ${sc.toLocaleString("id-ID", { maximumFractionDigits: 1 })}` : ""}{h.excluded ? " · tidak dihitung" : ""}
                           </button>
                         </li>
                       );
@@ -161,7 +162,16 @@ export function ResponseBrowser({ survey, responses, period }: { survey: Survey;
 }
 
 /** Satu isian, semua pertanyaan dalam urutan formulir, dikelompokkan per bagian. Bagian yang seluruhnya kosong diringkas satu baris. */
-function ResponseCard({ survey, r, showNames, scaleKeys }: { survey: Survey; r: SurveyResponse; showNames: boolean; scaleKeys: string[] }) {
+function ResponseCard({ survey, r, showNames, scaleKeys, onChanged }: { survey: Survey; r: SurveyResponse; showNames: boolean; scaleKeys: string[]; onChanged: () => void }) {
+  const toggleCounted = async () => {
+    const excluded = !r.excluded;
+    const ask = excluded ? "Keluarkan isian ini dari hitungan? Datanya tetap tersimpan dan bisa dikembalikan." : "Hitung lagi isian ini?";
+    if (!window.confirm(ask)) return;
+    const err = await setResponseExcluded(r, excluded);
+    if (err) { toast(err, "error"); return; }
+    toast(excluded ? "Isian tidak dihitung lagi" : "Isian dihitung lagi");
+    onChanged();
+  };
   const sections: { name: string; qs: SurveyQuestion[] }[] = [];
   // 360: "Penilaian rekan — blok N" diberi nama SPV yang dinilai bila pemetaannya sudah dipastikan (config.targets).
   const sectionName = (sec: string) => {
@@ -180,7 +190,9 @@ function ResponseCard({ survey, r, showNames, scaleKeys }: { survey: Survey; r: 
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold text-slate-900 dark:text-white">{showNames ? (r.respondent_name ?? "Tanpa nama") : "Nama disembunyikan"}</h3>
-          <p className="text-xs text-slate-500">Menilai {periodLabel(r.period)} · diisi {dateId(r.submitted_at)}{r.excluded ? " · tidak dihitung (isian ganda)" : ""}</p>
+          <p className="text-xs text-slate-500">Menilai {periodLabel(r.period)} · diisi {dateId(r.submitted_at)}{r.excluded ? " · tidak dihitung" : ""}</p>
+          {showNames && r.respondent_email && <p className="text-xs text-slate-500">Kontak: {r.respondent_email}</p>}
+          <Button size="sm" variant="ghost" className="mt-1" onClick={toggleCounted}>{r.excluded ? "Hitung lagi" : "Jangan dihitung"}</Button>
         </div>
         {sc !== null && <div className="text-right"><p className="text-[11px] text-slate-500">Rata-rata skala</p><p className="text-xl font-semibold tabular-nums text-slate-900 dark:text-white">{sc.toLocaleString("id-ID", { maximumFractionDigits: 2 })}</p></div>}
       </div>
@@ -190,6 +202,7 @@ function ResponseCard({ survey, r, showNames, scaleKeys }: { survey: Survey; r: 
       <div className="mt-3 space-y-3">
         {sections.map((s, si) => {
           const filled = s.qs.filter((x) => !isEmpty(r.answers[x.key]));
+          if (!filled.length && !showNames && s.qs.some((x) => x.showIf && IDENTIFYING.includes(x.showIf.key))) return null;
           if (!filled.length) return <p key={`${s.name}-${si}`} className="rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-400 dark:bg-slate-800/50">{s.name} — tidak diisi</p>;
           return (
             <section key={`${s.name}-${si}`}>

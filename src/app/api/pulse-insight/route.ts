@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const [{ data: survey }, { data: responses }, { data: actions }, { data: campaign }] = await Promise.all([
     db.from("pi_surveys").select("id, tenant_id, key, title, audience, questions, headline, segments").eq("id", surveyId).maybeSingle(),
-    db.from("pi_survey_responses").select("period, respondent_name, answers").eq("survey_id", surveyId).range(0, 9999),
+    db.from("pi_survey_responses").select("period, respondent_name, answers").eq("survey_id", surveyId).eq("excluded", false).range(0, 9999),
     db.from("pi_survey_actions").select("title, theme, status, period").eq("survey_id", surveyId).in("status", ["belum", "berjalan"]).order("period", { ascending: false }),
     db.from("pi_survey_campaigns").select("target_count").eq("survey_id", surveyId).eq("period", period!).maybeSingle(),
   ]);
