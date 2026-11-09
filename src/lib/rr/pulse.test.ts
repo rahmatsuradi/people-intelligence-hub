@@ -345,6 +345,17 @@ describe("questionsForPeriod: pilihan yang berakhir", () => {
   });
 });
 
+describe("build360: butir tambahan", () => {
+  it("ditampilkan per butir tapi tidak mengubah rata-rata", () => {
+    const rows = [{ period: "2026-10-01", respondent_name: "B", answers: { rater: "Doni", leader_a: 4, leader_x: 1, p1_t: 4, p1_extra: 1 } }];
+    const out = build360({ leader: "Irfan", targets: { b1: "Rangga" } }, rows, ["t"], ["leader_a"], { peer: ["extra"], leader: ["leader_x"] });
+    expect(out.leader.periods["2026-10-01"].avg).toBe(4);
+    expect(out.leader.periods["2026-10-01"].items.leader_x).toBe(1);
+    expect(out.targets[0].periods["2026-10-01"].avg).toBe(4);
+    expect(out.targets[0].periods["2026-10-01"].items.extra).toBe(1);
+  });
+});
+
 describe("build360: Leader menilai diri", () => {
   const rows = [
     { period: "2026-10-01", respondent_name: "A", answers: { rater: "Irfan", leader_a: 5, leader_b: 5 } },

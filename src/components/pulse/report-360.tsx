@@ -8,19 +8,24 @@ import { heatClass, shortMonth } from "./charts";
 
 const PEER = ["teamwork", "problem", "sharing", "ownership", "teamlead"];
 const LEADER = ["leader_direction", "leader_problem", "leader_mentoring", "leader_openness", "leader_fairness"];
+// Butir tambahan sejak Oktober 2026 (nilai Rica Rico): ditampilkan, tapi tidak ikut rata-rata supaya sebanding dengan Agustus–September.
+const PEER_EXTRA = ["integrity"];
+const LEADER_EXTRA = ["leader_example"];
 const fmt = (x: number | null | undefined) => (x == null ? "—" : x.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 const heat = (x: number | null | undefined) => heatClass(x == null ? null : ((x - 1) / 4) * 100, false);
 
 /** Rapor Feedback 360 SPV — khusus HR (survei ini tidak terlihat oleh owner). */
 export function Report360({ survey, responses, canEdit, onSaved }: { survey: Survey; responses: SurveyResponse[]; canEdit: boolean; onSaved: () => void }) {
   const cfg = survey.config;
-  const { leader, targets } = build360(cfg, responses.filter((r) => !r.excluded), PEER, LEADER);
+  const { leader, targets } = build360(cfg, responses.filter((r) => !r.excluded), PEER, LEADER, { peer: PEER_EXTRA, leader: LEADER_EXTRA });
+  const leaderCols = [...LEADER, ...LEADER_EXTRA.filter((k) => survey.questions.some((q) => q.key === k))];
+  const peerCols = [...PEER, ...PEER_EXTRA.filter((k) => survey.questions.some((q) => q.key.endsWith(`_${k}`)))];
   const counted = responses.filter((r) => !r.excluded);
   const periods = [...new Set(counted.map((r) => r.period))].sort();
   // Huruf samaran tetap sama untuk orang yang sama di semua putaran.
   const raterOrder = [...new Set(counted.map((r) => String(r.answers.rater ?? r.respondent_name ?? "?")))].sort();
   const label = (k: string) => survey.questions.find((q) => q.key === k)?.label.split(":")[0] ?? k;
-  const peerLabel = (k: string) => survey.questions.find((q) => q.key === `p1_${k}`)?.label.split(":")[0] ?? k;
+  const peerLabel = (k: string) => survey.questions.find((q) => /^p\d+_/.test(q.key) && q.key.endsWith(`_${k}`))?.label.split(":")[0] ?? k;
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   // Komentar + nama penilai langsung menunjukkan siapa menulis apa, jadi namanya tersembunyi secara bawaan.
@@ -51,12 +56,12 @@ export function Report360({ survey, responses, canEdit, onSaved }: { survey: Sur
 
       <Card>
         <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Penilaian SPV terhadap Leader SPV{leader.name ? ` (${leader.name})` : ""}</h2>
-        <p className="text-xs text-slate-500">Skala 1–5. Satu baris per putaran.</p>
+        <p className="text-xs text-slate-500">Skala 1–5. Satu baris per putaran.{leaderCols.length > LEADER.length ? " * butir baru sejak Oktober 2026, tidak ikut rata-rata." : ""}</p>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-slate-500">
               <th className="py-2 pr-3 font-medium">Putaran</th><th className="py-2 pr-3 text-right font-medium">Penilai</th><th className="py-2 pr-3 text-right font-medium">Rata-rata</th>
-              {LEADER.map((k) => <th key={k} className="px-2 py-2 text-center font-medium">{label(k)}</th>)}
+              {leaderCols.map((k) => <th key={k} className="px-2 py-2 text-center font-medium">{label(k)}{LEADER_EXTRA.includes(k) ? "*" : ""}</th>)}
             </tr></thead>
             <tbody>
               {Object.entries(leader.periods).sort().map(([p, s]) => (
@@ -64,7 +69,7 @@ export function Report360({ survey, responses, canEdit, onSaved }: { survey: Sur
                   <td className="py-2 pr-3">{periodLabel(p)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{s.raters}</td>
                   <td className="py-2 pr-3 text-right font-semibold tabular-nums">{fmt(s.avg)}</td>
-                  {LEADER.map((k) => <td key={k} className={cn("px-2 py-2 text-center tabular-nums", heat(s.items[k]))}>{fmt(s.items[k])}</td>)}
+                  {leaderCols.map((k) => <td key={k} className={cn("px-2 py-2 text-center tabular-nums", heat(s.items[k]))}>{fmt(s.items[k])}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -131,7 +136,7 @@ export function Report360({ survey, responses, canEdit, onSaved }: { survey: Sur
               <div key={p} className="mb-3">
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{periodLabel(p)} — {s.raters} rekan</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
-                  {PEER.map((k) => <span key={k} className={cn("rounded px-2 py-0.5 text-[11px]", heat(s.items[k]))}>{peerLabel(k)} {fmt(s.items[k])}</span>)}
+                  {peerCols.map((k) => <span key={k} className={cn("rounded px-2 py-0.5 text-[11px]", heat(s.items[k]))}>{peerLabel(k)} {fmt(s.items[k])}</span>)}
                 </div>
                 {s.strengths.map((x, i) => <p key={`s${i}`} className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">+ {showRaters ? `${x.rater}: ` : ""}{x.text}</p>)}
                 {s.improvements.map((x, i) => <p key={`i${i}`} className="mt-1 text-xs text-red-700 dark:text-red-400">− {showRaters ? `${x.rater}: ` : ""}{x.text}</p>)}

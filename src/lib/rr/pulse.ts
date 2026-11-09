@@ -766,7 +766,9 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
  * menaikkan skornya sendiri. Blok tanpa nama (belum dipastikan) tetap ditampilkan dengan
  * label bloknya supaya datanya tidak hilang.
  */
-export function build360(config: SurveyConfig, responses: Pick<SurveyResponse, "period" | "answers" | "respondent_name">[], peerItems: string[], leaderItems: string[]): { leader: Leader360; targets: Target360[] } {
+export function build360(config: SurveyConfig, responses: Pick<SurveyResponse, "period" | "answers" | "respondent_name">[], peerItems: string[], leaderItems: string[],
+  /** Butir tambahan yang ditampilkan per butir tapi TIDAK ikut rata-rata, supaya tren dengan putaran lama tetap sebanding. */
+  extra: { peer?: string[]; leader?: string[] } = {}): { leader: Leader360; targets: Target360[] } {
   const num = (v: AnswerValue | undefined) => (typeof v === "number" ? v : null);
   const txt = (v: AnswerValue | undefined) => (typeof v === "string" && v.trim() && !/^[-.\s]*$/.test(v) ? v.trim() : null);
   const leader: Leader360 = { name: config.leader ?? null, periods: {} };
@@ -785,7 +787,7 @@ export function build360(config: SurveyConfig, responses: Pick<SurveyResponse, "
   }
   for (const [period, p] of Object.entries(leader.periods)) {
     const rs = responses.filter((r) => r.period === period && !isLeaderSelf(r));
-    for (const k of leaderItems) p.items[k] = mean(rs.map((r) => num(r.answers[k])).filter((x): x is number => x !== null));
+    for (const k of [...leaderItems, ...(extra.leader ?? [])]) p.items[k] = mean(rs.map((r) => num(r.answers[k])).filter((x): x is number => x !== null));
     p.raters = p.byRater.length;
     p.avg = mean(p.byRater.map((b) => b.avg).filter((x): x is number => x !== null));
   }
@@ -811,7 +813,7 @@ export function build360(config: SurveyConfig, responses: Pick<SurveyResponse, "
       const per = rs.map((r) => peerItems.map((k) => num(r.answers[`p${b.slice(1)}_${k}`])).filter((x): x is number => x !== null)).filter((v) => v.length);
       p.raters = per.length;
       p.avg = mean(per.map((v) => mean(v)!));
-      for (const k of peerItems) p.items[k] = mean(rs.map((r) => num(r.answers[`p${b.slice(1)}_${k}`])).filter((x): x is number => x !== null));
+      for (const k of [...peerItems, ...(extra.peer ?? [])]) p.items[k] = mean(rs.map((r) => num(r.answers[`p${b.slice(1)}_${k}`])).filter((x): x is number => x !== null));
     }
     if (Object.keys(t.periods).length) targets.push(t);
   }
