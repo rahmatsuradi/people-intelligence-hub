@@ -5,6 +5,7 @@ import { Button, Card, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { periodLabel, requestInsight, shareInsight, type Signal, type StoredInsight, type Survey } from "@/lib/rr/pulse";
 import type { InsightContent } from "@/lib/rr/pulse-insight";
+import { PEMILIK_LABEL, masalahAsText, type MasalahDasar, type MasalahTheme } from "@/lib/rr/pulse-themes";
 
 /** Sinyal otomatis berbasis aturan tetap (bukan AI) — "perlu diperhatikan". */
 export function SignalsCard({ signals }: { signals: Signal[] }) {
@@ -29,14 +30,18 @@ export function InsightCard({ survey, period, n, insight, setInsight, isHr, onAd
   onAddAction: (r: InsightContent["rekomendasi"][number]) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const generate = async () => {
     if (insight && !window.confirm("Buat ulang insight? Insight lama untuk bulan ini akan diganti dan status berbagi ke owner direset.")) return;
     setBusy(true);
-    const r = await requestInsight(survey.id, period);
+    setProgress("Menyiapkan…");
+    const r = await requestInsight(survey.id, period, setProgress);
     setBusy(false);
+    setProgress("");
     if (r.error) { toast(r.error, "error"); return; }
     setInsight(r.insight ?? null);
-    toast("Insight AI selesai dibuat");
+    if (r.warning) toast(r.warning, "error");
+    else toast("Insight AI selesai dibuat");
   };
   const toggleShare = async () => {
     if (!insight) return;
@@ -58,8 +63,9 @@ export function InsightCard({ survey, period, n, insight, setInsight, isHr, onAd
                 : "HR belum membagikan insight untuk bulan ini."}
             </p>
           </div>
-          {isHr && <Button variant="primary" onClick={generate} disabled={busy || n < 3}>{busy ? "AI sedang membaca… (±20 detik)" : "Buat insight AI"}</Button>}
+          {isHr && <Button variant="primary" onClick={generate} disabled={busy || n < 3}>{busy ? "AI sedang membaca…" : "Buat insight AI"}</Button>}
         </div>
+        {busy && <Progress text={progress} />}
       </Card>
     );
   }
@@ -79,8 +85,12 @@ export function InsightCard({ survey, period, n, insight, setInsight, isHr, onAd
           </div>
         )}
       </div>
+      {busy && <Progress text={progress} />}
 
       <p className="mt-3 text-sm leading-relaxed text-slate-800 dark:text-slate-100">{c.ringkasan}</p>
+
+      {!!c.masalah_utama?.length && <MasalahUtama tema={c.masalah_utama} dasar={c.masalah_dasar} period={period} />}
+      {isHr && !c.masalah_utama && <p className="mt-3 text-[11px] text-slate-400">Insight ini dibuat sebelum ada bagian &quot;Masalah utama dari komentar&quot;. Tekan Buat ulang untuk memetakan semua komentar (±3–4 menit).</p>}
 
       {c.temuan.length > 0 && (
         <div className="mt-4">
@@ -99,11 +109,11 @@ export function InsightCard({ survey, period, n, insight, setInsight, isHr, onAd
 
       {c.tema_komentar.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tema komentar</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{c.masalah_utama ? "Yang sudah berjalan baik menurut pengisi" : "Tema komentar"}</h3>
           <div className="mt-2 flex flex-wrap gap-2">
             {c.tema_komentar.map((t, i) => (
               <div key={i} className={cn("rounded-lg border px-3 py-2 text-xs", t.sentimen === "negatif" ? "border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/30" : t.sentimen === "positif" ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60")}>
-                <p className="font-semibold text-slate-900 dark:text-white">{t.tema} <span className="font-normal text-slate-500">· {t.jumlah} komentar</span></p>
+                <p className="font-semibold text-slate-900 dark:text-white">{t.tema} {!c.masalah_utama && <span className="font-normal text-slate-500">· {t.jumlah} komentar</span>}</p>
                 <p className="mt-0.5 max-w-xs text-slate-600 dark:text-slate-300">{t.inti}</p>
               </div>
             ))}
@@ -142,5 +152,81 @@ export function InsightCard({ survey, period, n, insight, setInsight, isHr, onAd
 
       {c.catatan_data.length > 0 && <p className="mt-4 text-[11px] text-slate-400">Catatan data: {c.catatan_data.join(" · ")}</p>}
     </Card>
+  );
+}
+
+function Progress({ text }: { text: string }) {
+  return (
+    <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+      <p className="font-medium">{text || "Memproses…"}</p>
+      <p className="mt-0.5 text-[11px] text-slate-400">Semua komentar dibaca bertahap karena jatah AI per menit terbatas. Biarkan halaman ini terbuka sampai selesai (±3–4 menit untuk ±150 jawaban).</p>
+    </div>
+  );
+}
+
+const PEMILIK_TONE: Record<MasalahTheme["pemilik"], string> = {
+  spv: "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200",
+  perusahaan: "bg-red-100 text-red-900 dark:bg-red-950/50 dark:text-red-200",
+  operasional: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100",
+};
+
+/** Masalah utama dari SEMUA komentar: jumlah orang dihitung server, kalimat dari AI. Disusun untuk dibaca di layar rapat. */
+function MasalahUtama({ tema, dasar, period }: { tema: MasalahTheme[]; dasar?: MasalahDasar; period: string }) {
+  const max = Math.max(...tema.map((t) => t.persen), 1);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(masalahAsText(periodLabel(period), tema, dasar));
+      toast("Teks masalah utama disalin — tinggal tempel ke slide");
+    } catch {
+      toast("Browser menolak menyalin. Blok teksnya lalu salin manual.", "error");
+    }
+  };
+  return (
+    <div className="mt-4">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Masalah utama dari komentar</h3>
+          {dasar && (
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              Dibaca dari semua komentar: {dasar.responden_berkomentar} dari {dasar.responden} pengisi menulis keluhan/usulan ({dasar.komentar} komentar).
+              Jumlah = orang yang menyebut, dihitung pasti; satu orang bisa menyebut beberapa masalah.
+              {dasar.tanpa_tema > 0 && ` ${dasar.tanpa_tema} pengisi tidak masuk tema mana pun — baca di tab Komentar.`}
+            </p>
+          )}
+        </div>
+        <Button size="sm" onClick={copy}>Salin untuk slide</Button>
+      </div>
+      <ol className="mt-2 space-y-2">
+        {tema.map((t, i) => (
+          <li key={t.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+              <span className="w-5 shrink-0 text-sm font-semibold tabular-nums text-slate-400">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">{t.judul}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className={cn("rounded-full px-2 py-0.5 font-medium", PEMILIK_TONE[t.pemilik])}>{PEMILIK_LABEL[t.pemilik]}</span>
+                  {t.berulang && <span className="rounded-full border border-red-300 px-2 py-0.5 font-medium text-red-700 dark:border-red-800 dark:text-red-300">Keluhan berulang, belum tuntas</span>}
+                </div>
+              </div>
+              <div className="w-40 shrink-0 text-right">
+                <p className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{t.jumlah} orang <span className="font-normal text-slate-500">· {t.persen}%</span></p>
+                <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-red-500/80" style={{ width: `${(t.persen / max) * 100}%` }} /></div>
+              </div>
+            </div>
+            <div className="ml-8 mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+              {t.inti && <p>{t.inti}</p>}
+              {t.per_kelompok.length > 0 && dasar?.kelompok_label && (
+                <p className="text-slate-500">
+                  Terbanyak di {dasar.kelompok_label}:{" "}
+                  {t.per_kelompok.slice(0, 3).map((g) => `${g.grup} ${g.persen}% (${g.jumlah}/${g.n})`).join(" · ")}
+                </p>
+              )}
+              {t.contoh.length > 0 && <p className="italic text-slate-500">Contoh (parafrase): {t.contoh.join(" · ")}</p>}
+              {t.usulan && <p><span className="font-medium text-slate-700 dark:text-slate-200">Usulan:</span> {t.usulan}</p>}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

@@ -137,7 +137,9 @@ export async function callGroqChat(
   throw new Error(`Groq gagal setelah ${MAX_ATTEMPTS} percobaan (${lastErr}).`);
 }
 
-export async function callGroq(prompt: string, maxAttempts = 3): Promise<GroqCall> {
+// opts.maxTokens: batas jawaban per panggilan (bawaan 2600, sama dengan alur CV). Insight Pulse
+// memakai nilai lain karena jawaban JSON-nya berbeda ukuran — lihat /api/pulse-insight.
+export async function callGroq(prompt: string, maxAttempts = 3, opts: { maxTokens?: number } = {}): Promise<GroqCall> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || apiKey.startsWith("gsk_xxx")) {
     throw new Error("GROQ_API_KEY belum dikonfigurasi di .env.local. Dapatkan key gratis di console.groq.com");
@@ -155,7 +157,7 @@ export async function callGroq(prompt: string, maxAttempts = 3): Promise<GroqCal
       { role: "user", content: prompt },
     ],
     temperature: 0.2,
-    max_tokens: 2600, // enough for the full JSON (≤11 competencies); lower = more CVs fit the 12k tokens/min budget
+    max_tokens: opts.maxTokens ?? 2600, // enough for the full JSON (≤11 competencies); lower = more CVs fit the 12k tokens/min budget
     response_format: { type: "json_object" }, // Groq JSON mode
   });
 

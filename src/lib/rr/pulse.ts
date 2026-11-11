@@ -875,6 +875,13 @@ export function personTrends(survey: Pick<Survey, "questions" | "headline">, res
 export interface Conclusion { id: string; survey_id: string; period: string; category: string; body: string; source: string | null }
 
 export const CONCLUSION_CATEGORIES = ["Company Benefit", "Work Environment", "Technical Issue", "Personal Issue"] as const;
+export const SPV_CATEGORY = "Kinerja SPV";
+
+/** Kategori kesimpulan per survei: 4 kategori sheet Conclusion, + "Kinerja SPV" untuk survei yang menilai SPV. */
+export function conclusionCategories(survey: Pick<Survey, "config">): string[] {
+  const k = survey.config?.kind;
+  return k === "spv_report" || k === "360" ? [...CONCLUSION_CATEGORIES, SPV_CATEGORY] : [...CONCLUSION_CATEGORIES];
+}
 
 /** Khusus HR (isinya sering menyebut nama pengangkat). */
 /** Analisis akar masalah per survei × bulan (pi_survey_diagnoses, khusus HR). `{spv}` di judul/label diganti nama SPV atau samarannya. */
@@ -1060,17 +1067,56 @@ export async function shareInsight(id: string, shared: boolean): Promise<string 
   return error ? error.message : null;
 }
 
-/** Minta insight AI lewat server (khusus HR). Nama disamarkan di server sebelum dikirim ke AI. */
-export async function requestInsight(surveyId: string, period: string): Promise<{ insight?: StoredInsight; error?: string }> {
+/**
+ * Minta insight AI lewat server (khusus HR). Nama disamarkan di server sebelum dikirim ke AI.
+ * Dua tahap (lihat /api/pulse-insight): baca semua komentar per bagian → susun insight dari tabel tema.
+ * Groq paket gratis hanya 8.000 token/menit, jadi antar-bagian bisa menunggu ±1 menit; halaman harus tetap terbuka.
+ * Bila pemetaan tema gagal, insight tetap dibuat dengan cara lama (tanpa "Masalah utama").
+ */
+export async function requestInsight(surveyId: string, period: string, onProgress: (msg: string) => void = () => {}): Promise<{ insight?: StoredInsight; error?: string; warning?: string }> {
   if (!supabase) return { error: "Belum terhubung ke penyimpanan cloud." };
   const { data } = await supabase.auth.getSession();
-  const res = await fetch("/api/pulse-insight", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
-    body: JSON.stringify({ surveyId, period }),
+  const token = data.session?.access_token ?? "";
+  const sleep = (sec: number, label: string) => new Promise<void>((resolve) => {
+    let left = Math.ceil(sec);
+    onProgress(`${label} (${left} dtk)…`);
+    const t = setInterval(() => { left -= 1; if (left <= 0) { clearInterval(t); resolve(); } else onProgress(`${label} (${left} dtk)…`); }, 1000);
   });
-  const json = await res.json().catch(() => ({}));
-  return res.ok ? { insight: json.insight } : { error: json.error ?? `HTTP ${res.status}` };
+  const call = async (payload: Record<string, unknown>) => {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch("/api/pulse-insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ surveyId, period, ...payload }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 429 && attempt < 3) { await sleep(Math.max(10, Number(json.retryAfter) || 30), "Menunggu jatah AI per menit"); continue; }
+      return { ok: res.ok, json: json as Record<string, unknown>, status: res.status };
+    }
+  };
+
+  let state: unknown = null;
+  let warning: string | undefined;
+  try {
+    let batch = 0;
+    let batches = 1;
+    while (batch < batches) {
+      onProgress(batches > 1 ? `Membaca semua komentar, bagian ${batch + 1} dari ${batches}…` : "Membaca semua komentar…");
+      const r = await call({ step: "tema", batch, state });
+      if (!r.ok) throw new Error(String(r.json.error ?? `HTTP ${r.status}`));
+      batches = Number(r.json.batches) || 0;
+      state = r.json.state ?? null;
+      batch += 1;
+      const wait = Number(r.json.waitSeconds) || 0;
+      if (wait > 0) await sleep(wait, batch < batches ? "Menunggu jatah AI sebelum bagian berikutnya" : "Menunggu jatah AI sebelum menyusun insight");
+    }
+  } catch (e) {
+    state = null;
+    warning = `Masalah utama tidak bisa dipetakan (${(e as Error).message}); insight dibuat tanpa bagian itu.`;
+  }
+  onProgress("Menyusun insight…");
+  const r = await call(state ? { state } : {});
+  return r.ok ? { insight: r.json.insight as StoredInsight, warning } : { error: String(r.json.error ?? `HTTP ${r.status}`) };
 }
 
 export async function deleteAction(id: string): Promise<string | null> {
