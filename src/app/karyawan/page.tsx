@@ -6,6 +6,7 @@ import { toast } from "@/components/toast";
 import { useRole } from "@/lib/roles";
 import { INSTANCE } from "@/lib/instance";
 import { maskBankAccount, maskNik } from "@/lib/payroll/payslip-masking";
+import { openDoc } from "@/lib/kantorku/store";
 import {
   FLAG_LABEL, STATUS_LABEL, WORK_GROUP_LABEL, filterEmployees, loadMaster, saveEmployee, summarizeFlags,
   type EmployeeStatus, type MasterEmployee, type MasterFilter, type Outlet, type WorkGroup,
@@ -185,6 +186,13 @@ export default function MasterKaryawanPage() {
   );
 }
 
+/** Dokumen dari formulir web ada di penyimpanan privat ("storage:…") dan dibuka lewat signed URL;
+    tautan Google Drive lama dibuka apa adanya. */
+function DocLink({ url, children }: { url: string; children: React.ReactNode }) {
+  if (!url.startsWith("storage:")) return <a className="text-blue-600 hover:underline" href={url} target="_blank" rel="noreferrer">{children}</a>;
+  return <button type="button" className="text-blue-600 hover:underline" onClick={() => openDoc(url).catch((e: Error) => toast(e.message, "error"))}>{children}</button>;
+}
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
@@ -264,9 +272,9 @@ function DetailModal({ employee: e, outlets, outletName, canEdit, editing, onEdi
             </section>
             {(p?.ktp_url || p?.kk_url || p?.photo_url) && (
               <section className="flex flex-wrap gap-3 border-t border-slate-100 pt-4 text-sm dark:border-slate-800">
-                {p?.ktp_url && <a className="text-blue-600 hover:underline" href={p.ktp_url} target="_blank" rel="noreferrer">KTP ↗</a>}
-                {p?.kk_url && <a className="text-blue-600 hover:underline" href={p.kk_url} target="_blank" rel="noreferrer">Kartu Keluarga ↗</a>}
-                {p?.photo_url && <a className="text-blue-600 hover:underline" href={p.photo_url} target="_blank" rel="noreferrer">Pas foto ↗</a>}
+                {p?.ktp_url && <DocLink url={p.ktp_url}>KTP ↗</DocLink>}
+                {p?.kk_url && <DocLink url={p.kk_url}>Kartu Keluarga ↗</DocLink>}
+                {p?.photo_url && <DocLink url={p.photo_url}>Pas foto ↗</DocLink>}
               </section>
             )}
             <p className="text-[11px] text-slate-400">Sumber data: {p?.source ?? "—"}</p>
