@@ -67,6 +67,17 @@ export async function saveHris(employeeId: string, patch: Partial<HrisFields>): 
   return error ? (/pi_employee_hris_kk_id_idx|duplicate key/.test(error.message) ? "Employee ID KantorKu itu sudah dipakai karyawan lain." : error.message) : null;
 }
 
+/** Gaji pokok karyawan yang sudah ada. Ditambah sebagai baris baru (berlaku hari ini), tidak
+    menimpa baris lama, supaya payroll bulan lalu tetap dihitung dengan upah saat itu. */
+export async function saveBasicSalary(employeeId: string, amount: number, effectiveDate: string): Promise<string | null> {
+  if (!supabase) return "Database belum terhubung.";
+  if (!Number.isFinite(amount) || amount <= 0) return "Gaji pokok harus lebih dari 0.";
+  const { error } = await supabase.from("pi_compensation").insert({
+    employee_id: employeeId, upah_pokok: Math.round(amount), tunjangan_tetap: [], tunjangan_tidak_tetap: [], effective_date: effectiveDate,
+  });
+  return error?.message ?? null;
+}
+
 export async function markExported(ids: string[]): Promise<string | null> {
   if (!supabase || !ids.length) return null;
   const now = new Date().toISOString();

@@ -28,7 +28,10 @@ const SECTIONS = ["Data diri", "Kontak & alamat", "Kontak darurat", "Pendidikan"
 const box = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 const input = "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 const btn = "rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50";
-const MAX_BYTES = 1_300_000;
+const MAX_BYTES = 1_300_000;   // batas PDF (dikirim apa adanya)
+/* Target foto ±600 KB: KTP/KK tetap terbaca di 1600 px, dan 300+ karyawan × 3 dokumen
+   tetap muat di kuota penyimpanan Supabase paket gratis (1 GB). */
+const PHOTO_TARGET = 600_000;
 
 const session = (): Storage | null => { try { return window.sessionStorage; } catch { return null; } };
 
@@ -36,7 +39,7 @@ function readAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
 }
 
-/** Foto dari kamera HP bisa 4–8 MB; dikecilkan ke JPEG ≤ ~1,3 MB. PDF dikirim apa adanya. */
+/** Foto dari kamera HP bisa 4–8 MB; dikecilkan ke JPEG ≤ ~600 KB (paling buruk ≤ 1,3 MB). PDF dikirim apa adanya. */
 async function prepareFile(file: File): Promise<FileVal> {
   if (file.type === "application/pdf") {
     if (file.size > MAX_BYTES) throw new Error("PDF terlalu besar (maks 1,3 MB). Kirim foto saja.");
@@ -45,14 +48,17 @@ async function prepareFile(file: File): Promise<FileVal> {
   if (!file.type.startsWith("image/")) throw new Error("Pilih foto atau PDF.");
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) throw new Error("Foto tidak bisa dibaca. Coba ambil ulang (format JPG/PNG).");
-  for (const [side, q] of [[1800, 0.82], [1400, 0.75], [1100, 0.7], [900, 0.6]] as const) {
+  let fallback: Blob | null = null;
+  for (const [side, q] of [[1600, 0.8], [1400, 0.75], [1200, 0.7], [1000, 0.65], [900, 0.6]] as const) {
     const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
     const c = document.createElement("canvas");
     c.width = Math.round(bitmap.width * scale); c.height = Math.round(bitmap.height * scale);
     c.getContext("2d")!.drawImage(bitmap, 0, 0, c.width, c.height);
     const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", q));
-    if (blob && blob.size <= MAX_BYTES) return { type: "image/jpeg", data: await readAsDataUrl(blob), name: file.name, size: blob.size };
+    if (blob && blob.size <= PHOTO_TARGET) return { type: "image/jpeg", data: await readAsDataUrl(blob), name: file.name, size: blob.size };
+    if (blob && blob.size <= MAX_BYTES) fallback = blob;
   }
+  if (fallback) return { type: "image/jpeg", data: await readAsDataUrl(fallback), name: file.name, size: fallback.size };
   throw new Error("Foto terlalu besar. Coba ambil ulang dengan resolusi lebih kecil.");
 }
 
@@ -136,10 +142,16 @@ export function IntakeForm({ token }: { token: string }) {
     if (Object.keys(m).length) { setErrors(m); return; }
     submitting.current = true; setSending(true); setSendError("");
     try {
-      const r = await fetch("/api/data-karyawan", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, answers, website, files: Object.fromEntries(Object.entries(files).map(([k, f]) => [k, { type: f!.type, data: f!.data }])) }),
-      });
+      const body = JSON.stringify({ token, answers, website, files: Object.fromEntries(Object.entries(files).map(([k, f]) => [k, { type: f!.type, data: f!.data }])) });
+      /* Ratusan karyawan bisa mengirim bersamaan (link massal lewat WA). Server sibuk
+         (429/502/503/504) atau sinyal putus dicoba ulang otomatis sebelum menampilkan galat. */
+      let r: Response | null = null;
+      for (const wait of [0, 2_000, 5_000, 10_000]) {
+        if (wait) await new Promise((res) => setTimeout(res, wait + Math.random() * 1_000));
+        r = await fetch("/api/data-karyawan", { method: "POST", headers: { "Content-Type": "application/json" }, body }).catch(() => null);
+        if (r && ![429, 502, 503, 504].includes(r.status)) break;
+      }
+      if (!r) throw new Error("network");
       const j = await r.json().catch(() => null);
       if (!r.ok) {
         if (j?.errors) {

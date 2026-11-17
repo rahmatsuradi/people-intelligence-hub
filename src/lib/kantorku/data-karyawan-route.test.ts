@@ -160,3 +160,27 @@ describe("POST /api/data-karyawan", () => {
     expect(h.tables.pi_employee_data_submissions ?? []).toHaveLength(0);
   });
 });
+
+describe("beban: link pribadi massal diisi bersamaan", () => {
+  it("320 karyawan membuka lalu mengirim pada saat yang sama dari satu IP (Wi-Fi/CGNAT) — semuanya tersimpan", async () => {
+    const N = 320;
+    const ipSama = { "x-forwarded-for": "203.0.113.7" };
+    for (let i = 0; i < N; i++) {
+      const id = `e1000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+      h.tables.pi_employees.push({ id, tenant_id: TENANT, full_name: `Karyawan Fiktif ${i}`, nik: null, npwp: null, join_date: "2026-01-02", position: "SPG", bank_account: null, status: "active" });
+      h.tables.pi_employee_profiles.push({ employee_id: id, outlet_id: "O1", phone: null, address: null, mother_name: null, birth_date: null, gender: "Perempuan", bank_name: null, ktp_url: null, kk_url: null, photo_url: null });
+      h.tables.pi_employee_data_links.push({ id: `LP${i}`, tenant_id: TENANT, token: "f" + i.toString(16).padStart(47, "0"), employee_id: id, status: "open", expires_at: null });
+    }
+    const tokens = Array.from({ length: N }, (_, i) => "f" + i.toString(16).padStart(47, "0"));
+    const opened = await Promise.all(tokens.map((t) => route.GET(new NextRequest(`http://x/api/data-karyawan?token=${t}`, { headers: ipSama }))));
+    expect(opened.map((r) => r.status).filter((s) => s !== 200)).toEqual([]);
+    const sent = await Promise.all(tokens.map((t, i) => route.POST(new NextRequest("http://x/api/data-karyawan", {
+      method: "POST", headers: { "content-type": "application/json", ...ipSama },
+      body: JSON.stringify({ token: t, answers: { ...answers(), full_name: `Karyawan Fiktif ${i}`, nik: `31710000${String(10000000 + i)}`.slice(0, 16) }, files: docs }),
+    }))));
+    expect(sent.map((r) => r.status).filter((s) => s !== 200)).toEqual([]);
+    expect(h.tables.pi_employee_data_submissions).toHaveLength(N);
+    expect(new Set(h.tables.pi_employee_data_submissions.map((s) => s.link_id)).size).toBe(N);
+    expect(h.uploads).toHaveLength(N * 3);
+  });
+});

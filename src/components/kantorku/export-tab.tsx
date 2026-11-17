@@ -9,7 +9,7 @@ import { STATUS_LABEL, WORK_GROUP_LABEL, type MasterEmployee } from "@/lib/rr/ma
 import { KK_LABEL, rowCells, toKantorkuRow, type KkRow, type KkUnits } from "@/lib/kantorku/map";
 import { KK_EMPLOYMENT_TYPES, KK_PAYEE_TIDAK_TETAP, KK_PTKP, KK_TAXABILITY, KK_TAX_STATUSES_SUPPORTED, type KkKey } from "@/lib/kantorku/spec";
 import { fillTemplate } from "@/lib/kantorku/xlsx";
-import { markExported, saveHris, type HrisRow } from "@/lib/kantorku/store";
+import { markExported, saveBasicSalary, saveHris, type HrisRow } from "@/lib/kantorku/store";
 import { Modal, fmtDateTime, toSource, type KkData } from "./shared";
 
 type Scope = "semua" | "belum_diekspor" | "tanpa_id";
@@ -138,7 +138,7 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
               </button>
             ))}
           </div>
-          <p className="mt-2 text-xs text-slate-500">Data pribadi (NIK, HP, rekening, nama pemilik rekening) paling cepat dilengkapi lewat link pribadi di tab Kirim link. Gaji pokok diisi di Pay → Employees.</p>
+          <p className="mt-2 text-xs text-slate-500">Data pribadi (NIK, HP, rekening, nama pemilik rekening) paling cepat dilengkapi lewat link pribadi di tab Kirim link. Gaji pokok diisi lewat tombol Atur.</p>
         </Card>
       )}
 
@@ -188,12 +188,15 @@ function HrisEditor({ e, data, units, taxability, onClose, onSaved }: {
   const h0 = data.hrisById.get(e.id);
   const [h, setH] = useState<Partial<HrisRow>>({ ...h0 });
   const [ptkp, setPtkp] = useState(data.extraById.get(e.id)?.ptkp_status ?? "");
+  const salary0 = data.salary.get(e.id) ?? null;
+  const [salary, setSalary] = useState(salary0 ? String(salary0) : "");
+  const salaryNum = Number(salary.replace(/[^\d]/g, "")) || 0;
   const [busy, setBusy] = useState(false);
   const set = (k: keyof HrisRow, v: string) => setH((x) => ({ ...x, [k]: v }));
   const preview: KkRow = useMemo(() => {
     const src = toSource(e, data);
-    return toKantorkuRow({ ...src, ptkp_status: ptkp || src.ptkp_status, hris: { ...src.hris, ...h } }, units, { taxability });
-  }, [e, data, h, ptkp, units, taxability]);
+    return toKantorkuRow({ ...src, basicSalary: salaryNum || src.basicSalary, ptkp_status: ptkp || src.ptkp_status, hris: { ...src.hris, ...h } }, units, { taxability });
+  }, [e, data, h, ptkp, salaryNum, units, taxability]);
 
   const save = async () => {
     setBusy(true);
@@ -204,6 +207,9 @@ function HrisEditor({ e, data, units, taxability, onClose, onSaved }: {
     if (!err && ptkp && ptkp !== curPtkp && supabase) {
       const r = await supabase.from("pi_employees").update({ ptkp_status: ptkp }).eq("id", e.id);
       err2 = r.error?.message ?? null;
+    }
+    if (!err && !err2 && salaryNum && salaryNum !== salary0) {
+      err2 = await saveBasicSalary(e.id, salaryNum, new Date().toISOString().slice(0, 10));
     }
     setBusy(false);
     if (err || err2) { toast(err ?? err2!, "error"); return; }
@@ -246,6 +252,12 @@ function HrisEditor({ e, data, units, taxability, onClose, onSaved }: {
             <option value="">Belum diisi</option>
             {KK_PTKP.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
+        </div>
+        <div>
+          <Label>Gaji pokok (Rp / bulan)</Label>
+          <input inputMode="numeric" className={inputClass} value={salary} placeholder="mis. 1100000"
+            onChange={(ev) => setSalary(ev.target.value.replace(/[^\d]/g, ""))} />
+          <p className="mt-1 text-xs text-slate-500">{salaryNum ? `Rp ${salaryNum.toLocaleString("id-ID")}` : "Belum tercatat"}{salary0 && salaryNum !== salary0 ? " — disimpan sebagai gaji baru mulai hari ini" : ""}</p>
         </div>
         {txt("account_holder", "Nama pemilik rekening", "persis seperti di buku tabungan")}
         {txt("bpjs_tk_number", "Nomor BPJS Ketenagakerjaan")}

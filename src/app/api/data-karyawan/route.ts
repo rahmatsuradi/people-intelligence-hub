@@ -22,8 +22,10 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/* Penahan spam per IP. Longgar karena satu outlet/kantor = satu IP publik (lihat /api/survei). */
-const LIMIT = { get: { max: 300, windowMs: 60_000 }, post: { max: 60, windowMs: 10 * 60_000 } } as const;
+/* Penahan spam per IP. Longgar karena satu outlet/kantor/Wi-Fi = satu IP publik, dan operator
+   seluler berbagi IP antar-pelanggan (CGNAT): 300+ karyawan bisa mengisi bersamaan dari
+   segelintir IP. Token link tetap jadi pengaman utama. */
+const LIMIT = { get: { max: 2000, windowMs: 60_000 }, post: { max: 500, windowMs: 10 * 60_000 } } as const;
 const hits = new Map<string, number[]>();
 function limited(req: NextRequest, key: keyof typeof LIMIT): boolean {
   const { max, windowMs } = LIMIT[key];
