@@ -36,6 +36,10 @@ export const FLAG_LABEL: Record<string, string> = {
   catatan_resign_di_rekap: "Ada catatan \"resign\" di kolom lokasi rekap gaji",
   penempatan_kosong: "SPG tanpa outlet / penempatan",
   terdaftar_di_lebih_dari_satu_entitas_bpjs: "Terdaftar di lebih dari satu badan usaha BPJS",
+  tidak_ada_di_rekap_gaji_oktober: "Tidak digaji Oktober 2026 — masih bekerja? (status dijadikan perlu verifikasi)",
+  resign_di_rekap_gaji_oktober: "Tercatat resign di keterangan Rekap Gaji Oktober 2026",
+  data_ganda: "Orang yang sama tercatat dua kali — baris ini duplikat, data dipakai di baris lainnya",
+  dari_rekap_gaji_oktober: "Karyawan baru Oktober 2026, dibuat dari rekap gaji — data pribadi lewat formulir",
 };
 
 export interface Outlet {
