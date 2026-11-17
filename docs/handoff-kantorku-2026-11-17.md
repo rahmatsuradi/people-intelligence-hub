@@ -24,14 +24,27 @@ Butir 1–3 sudah dibangun. Butir 4 belum bisa (lihat §6).
 | Hal | Status |
 |---|---|
 | Kode fitur (formulir publik, halaman HR 3 tab, ekspor xlsx) | ✅ Selesai, ada di PR #19 (draft) |
-| Tes otomatis | ✅ 659 lulus (43 berkas); `tsc` bersih; `next build` berhasil |
+| Tes otomatis | ✅ 660 lulus (43 berkas) setelah `c6a60e0`; `tsc` bersih |
 | Formulir dicoba di ukuran HP (database tiruan) | ✅ lengkap sampai terkirim |
 | Berkas ekspor dibuka ulang di LibreOffice | ✅ kolom Row Status template = "✓ OK" |
 | Preview Vercel (Rica Rico & Lencir) | ✅ Ready |
-| **SQL `supabase/data-karyawan-kantorku.sql` diterapkan ke database Rica Rico** | ❌ **BELUM** |
+| SQL `supabase/data-karyawan-kantorku.sql` diterapkan ke database Rica Rico | ✅ Diterapkan 18 Nov 2026 — **dilaporkan sesi lain di commit `c6a60e0`; belum diverifikasi oleh sesi yang menulis dokumen ini** |
 | **Impor ke KantorKu sungguhan dicoba** | ❌ **BELUM** |
 | PR #19 dan PR #20 digabung ke `main` | ❌ BELUM (keduanya draft) |
 | Browser samping tersedia di sesi cloud | ❌ Tidak (lihat §6) |
+
+### Pembaruan 18 Nov 2026 (sesi lain, commit `c6a60e0` di PR #19)
+
+Dokumen ini ditulis 17 Nov. Sesi lain kemudian mendorong satu commit ke branch yang sama. Menurut pesan commit dan `CLAUDE.md` §9g, yang berubah:
+
+- SQL **sudah diterapkan ke database Rica Rico** (project Supabase bernama "Hire Intelligence System"). Belum di Lencir.
+- Uji 1 orang (SPG) sampai berkas impor jadi.
+- Gaji pokok 261 karyawan diisi dari Rekap Gaji Oktober 2026 (hanya yang cocok ke tepat satu karyawan aktif dan belum punya gaji; berlaku 1 Okt 2026), dan 199 SPG ditetapkan `permanent` di `pi_employee_hris` atas keputusan HR — keduanya lewat SQL, skripnya tidak di repo.
+- Dialog **Atur** punya kolom gaji pokok (`saveBasicSalary`: baris `pi_compensation` baru, riwayat tidak ditimpa).
+- Untuk 300+ pengisi bersamaan: batas per IP dinaikkan, formulir mencoba ulang otomatis saat 429/502/503/504 (bisa menghasilkan isian ganda — HR yang menolak), foto dikecilkan ±600 KB.
+- Menu "Data Karyawan & KantorKu" **disembunyikan di Lencir** (`hiddenNav`). Butir F di §7 sudah selesai.
+
+Yang **belum** dikerjakan setelah itu: impor ke KantorKu sungguhan, dan penggabungan PR #19/#20. Semua klaim di atas berasal dari commit itu dan belum diperiksa ulang di database oleh sesi penulis dokumen ini; periksa langsung sebelum bergantung padanya (mis. jumlah baris `pi_compensation`, dan tiga tabel + bucket `pi-employee-docs` ada).
 
 Pull request (repo `rahmatsuradi/people-intelligence-hub`):
 
@@ -47,7 +60,7 @@ Pull request (repo `rahmatsuradi/people-intelligence-hub`):
 git fetch origin
 git rev-list --count HEAD..origin/main     # CLAUDE.md §1b: kalau bukan 0, satukan dulu
 npm ci                                      # node_modules tidak ikut ter-clone
-npx vitest run                              # harapan: 659 lulus
+npx vitest run                              # harapan: 660 lulus
 npx tsc --noEmit -p .
 ```
 
@@ -124,7 +137,7 @@ Catatan lingkungan:
 
 ## 7. Langkah berikutnya (urut prioritas)
 
-### A. Terapkan SQL ke database Rica Rico
+### A. Terapkan SQL ke database Rica Rico — ✅ dilaporkan selesai 18 Nov (lihat pembaruan di §2; verifikasi dulu)
 Dua cara:
 
 1. **Pengguna menempel sendiri**: Supabase → project Rica Rico → SQL Editor → New query → tempel seluruh `supabase/data-karyawan-kantorku.sql` → Run. Hasil akhir menampilkan 3 tabel dan bucket `pi-employee-docs`.
@@ -149,7 +162,7 @@ Banyak karyawan lama akan tampil "belum siap": gaji pokok (`pi_compensation`), P
 1. PR #20 (skill) bisa digabung kapan saja — sekali masuk `main`, skill `/preview-panel-samping` aktif di semua sesi.
 2. PR #19 setelah A–C lolos. Tandai *Ready for review*, lalu gabungkan. Pengguna yang menggabungkan; sesi tidak menyetujui atau menggabungkan sendiri.
 
-### F. Keputusan yang belum dijawab pengguna
+### F. Keputusan (menu Lencir: ✅ sudah disembunyikan 18 Nov; sisanya belum dijawab)
 - **Sembunyikan menu ini di Lencir?** Menunya ikut muncul di pemasangan Lencir padahal belum ada template KantorKu bawaan. Usulan: tambahkan `"data-kantorku"` ke `hiddenNav` Lencir di `src/lib/instance.ts` (jangan hapus kode; CLAUDE.md §2b). Tes `instance.test.ts` harus tetap lulus.
 - **Skill versi umum untuk proyek lain** (`~/.claude/skills/` di komputer pengguna) — saat ini skill berisi hal khusus repo ini.
 
@@ -189,7 +202,7 @@ Tidak ada database tiruan di repo (sengaja — CLAUDE.md §6). Pola yang dipakai
 Lanjutkan fitur "Formulir data karyawan + ekspor KantorKu" di repo people-intelligence-hub.
 Baca CLAUDE.md (§1b, §6, §9g) dan docs/handoff-kantorku-2026-11-17.md lebih dulu.
 Kode ada di PR #19 (branch claude/gracious-brown-jtymhd); PR #20 berisi skill preview-panel-samping.
-Mulai dengan: git fetch, cek tertinggal dari origin/main, npm ci, npx vitest run (harapan 659 lulus).
+Mulai dengan: git fetch, cek tertinggal dari origin/main, npm ci, npx vitest run (harapan 660 lulus).
 Status: kode selesai & teruji; BELUM ada: (1) SQL supabase/data-karyawan-kantorku.sql diterapkan ke
 database Rica Rico, (2) uji impor ke KantorKu sungguhan, (3) PR digabung.
 Jangan menjalankan perintah ke database asli tanpa izin eksplisit saya. Jangan menambah data demo.
