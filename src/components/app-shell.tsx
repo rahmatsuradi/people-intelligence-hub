@@ -106,7 +106,7 @@ const NAV_ICON_MAP: Record<string, keyof typeof ICON_PATHS> = {
   // 3. Talent Acquisition
   mpp: "chart", roles: "briefcase", "talent-pool": "users", candidates: "users", "cv-analyzer": "scan", interviews: "calendar", assessment: "clipboard", "hiring-report": "report", "hiring-analytics": "chart",
   // 4. Core HR
-  karyawan: "users", outlet: "map", employees: "users", ir: "scale", onboarding: "arrowRight", attendance: "clock",
+  karyawan: "users", "data-kantorku": "document", outlet: "map", employees: "users", ir: "scale", onboarding: "arrowRight", attendance: "clock",
   // 5. Performance & Talent
   performance: "star", succession: "arrowTrend", od: "map",
   // 6. Learning & Development
@@ -272,6 +272,7 @@ export function AppShell({
       label: "Core HR & IR",
       items: [
         { id: "karyawan", label: "Master Karyawan", href: "/karyawan" },
+        { id: "data-kantorku", label: "Data Karyawan & KantorKu", href: "/karyawan/kantorku" },
         { id: "outlet", label: "Outlet & Penempatan", href: "/outlet" },
         { id: "employees", label: "Employee Directory", href: "/employees" },
         { id: "ir", label: "Industrial Relations", href: "/core-hr/ir" },

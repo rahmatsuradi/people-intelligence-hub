@@ -66,7 +66,9 @@ export const INSTANCES: Record<InstanceKey, InstanceConfig> = {
     iconPath: null,
     // Menu Outlet dibangun untuk jaringan SPG/SPV Rica Rico (kelompok kerja, SPV area).
     // Lencir belum punya padanannya; menu ini muncul lagi bila nanti dibutuhkan.
-    hiddenNav: ["outlet"],
+    // Data Karyawan & KantorKu: template impor KantorKu Lencir belum ditanam dan tabelnya
+    // belum dibuat di database Lencir (supabase/data-karyawan-kantorku.sql).
+    hiddenNav: ["outlet", "data-kantorku"],
     employeesSubtitle: "Seluruh karyawan Lencir Indonesia",
     outletsSubtitle: "Outlet Lencir per area, dengan jumlah karyawan aktif",
     employeeOfMonthNote: "Di Lencir diberi Rp150.000 + poster.",
