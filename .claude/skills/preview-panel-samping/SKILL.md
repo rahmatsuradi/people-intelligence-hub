@@ -1,5 +1,5 @@
 ---
-name: preview
+name: preview-panel-samping
 description: Dipakai setiap kali menjalankan atau menampilkan aplikasi web (server dev, hasil build, HTML statis) supaya pengguna melihatnya di panel preview samping aplikasi Claude, bukan di browser luar. Gunakan saat pengguna bilang "tampilkan", "buka webnya", "preview", atau saat selesai mengubah tampilan.
 ---
 
