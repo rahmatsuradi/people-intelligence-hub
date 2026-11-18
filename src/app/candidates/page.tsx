@@ -15,6 +15,7 @@ import { toast } from "@/components/toast";
 import {
   type EmailTemplateKey, TEMPLATE_ORDER, getTemplates, composeEmail, buildMailto,
 } from "@/lib/email-templates";
+import { confirmDialog } from "@/lib/dialog";
 
 /* ─── Stage colors ─── */
 
@@ -611,14 +612,14 @@ function DetailPanel({
           <Icon className="h-4 w-4"><SvgPath name="scan" /></Icon> Analyze CV
         </Button>
         <div className="flex-1" />
-        <Button variant="danger" size="sm" onClick={() => {
-          if (confirm(`Delete ${candidate.name}?`)) onDelete(candidate.id);
+        <Button variant="danger" size="sm" onClick={async () => {
+          if (await confirmDialog(`Delete ${candidate.name}?`)) onDelete(candidate.id);
         }}>
           <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
         </Button>
         {candidate.stage !== "hired" && (
-          <Button variant="primary" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => {
-            if (confirm(`Save ${candidate.name} to Talent Pool?`)) {
+          <Button variant="primary" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={async () => {
+            if (await confirmDialog(`Save ${candidate.name} to Talent Pool?`, { yes: "Save", danger: false })) {
               convertCandidateToTalent(candidate.id);
               toast(`${candidate.name} saved to Talent Pool`, "success");
             }

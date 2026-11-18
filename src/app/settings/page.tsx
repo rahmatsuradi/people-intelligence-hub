@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell, Button, Card, Label, inputClass } from "@/components/app-shell";
 import { setCompanyName, setCompanyEmail } from "@/lib/email-templates";
 import { HR_KINDS } from "@/lib/hr-records";
+import { confirmDialog } from "@/lib/dialog";
 
 export default function SettingsPage() {
   const [userName, setUserName] = useState("");
@@ -30,8 +31,8 @@ export default function SettingsPage() {
   // ulang saat halaman dibuka lagi. Kunci `hi_*` lain (mis. kalender konten) hanya
   // hidup di browser, jadi tidak disentuh. Sengaja TIDAK ada tombol hapus-semua-di-cloud:
   // database dipakai bersama satu tim HR, jadi satu klik akan menghapus data semua orang.
-  const handleClearAll = useCallback(() => {
-    if (!window.confirm("Bersihkan salinan data di browser ini? Data di cloud tetap aman dan akan dimuat ulang.")) return;
+  const handleClearAll = useCallback(async () => {
+    if (!(await confirmDialog("Bersihkan salinan data di browser ini? Data di cloud tetap aman dan akan dimuat ulang."))) return;
     const hrPrefixes = Object.values(HR_KINDS).map((k) => k.prefix);
     Object.keys(localStorage)
       .filter((k) => /^hi_(candidates|jobreqs|activity)(_|$)/.test(k) || hrPrefixes.some((p) => k.startsWith(p)))

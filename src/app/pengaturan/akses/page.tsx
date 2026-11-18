@@ -5,6 +5,7 @@ import { AppShell, Button, Card, Label, inputClass } from "@/components/app-shel
 import { toast } from "@/components/toast";
 import { supabase } from "@/lib/supabase";
 import { useRole } from "@/lib/roles";
+import { confirmDialog } from "@/lib/dialog";
 
 interface UserRow { id: string; email: string; created_at: string; last_sign_in_at: string | null; role: "hr" | "owner" | null; display_name: string | null }
 
@@ -47,7 +48,7 @@ export default function AksesPage() {
   };
 
   const change = async (u: UserRow, next: "hr" | "owner" | null) => {
-    if (next === null && !window.confirm(`Cabut akses ${u.email}? Akun tetap ada, tapi tidak bisa melihat data apa pun.`)) return;
+    if (next === null && !(await confirmDialog(`Cabut akses ${u.email}? Akun tetap ada, tapi tidak bisa melihat data apa pun.`))) return;
     try { await api("PATCH", { user_id: u.id, role: next }); toast("Peran diperbarui"); reload(); } catch (e) { toast((e as Error).message, "error"); }
   };
 

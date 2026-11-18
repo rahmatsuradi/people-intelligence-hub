@@ -8,6 +8,7 @@ import {
   type Conclusion, type StoredInsight, type Survey, type SurveyResponse,
 } from "@/lib/rr/pulse";
 import { NON_OPINION_KEYS, PEMILIK_LABEL, buildProblemUnits, conclusionDraft, tagKey } from "@/lib/rr/pulse-themes";
+import { confirmDialog } from "@/lib/dialog";
 
 /** Isian identitas (outlet, SPV, jam kerja) bukan komentar — ditampilkan sebagai label saja. */
 const IDENTITY = ["store", "joined_since", "spv", "work_hours"];
@@ -139,7 +140,7 @@ function ConclusionPanel({ survey, period, conclusions, onSaved, insight, respon
   };
   const emptyWithSuggestion = categories.filter((cat) => !now.some((c) => c.category === cat) && suggestion(cat));
   const fillAll = async () => {
-    if (!window.confirm(`Simpan usulan dari komentar ke ${emptyWithSuggestion.length} kategori yang masih kosong? Kategori yang sudah diisi tidak diubah.`)) return;
+    if (!(await confirmDialog(`Simpan usulan dari komentar ke ${emptyWithSuggestion.length} kategori yang masih kosong? Kategori yang sudah diisi tidak diubah.`))) return;
     setBusy(true);
     let ok = 0;
     for (const cat of emptyWithSuggestion) if (await save(cat, suggestion(cat))) ok++;

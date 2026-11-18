@@ -22,6 +22,7 @@ import {
   type IRDocType,
   type IRDocStatus,
 } from "@/lib/ir-store";
+import { confirmDialog } from "@/lib/dialog";
 
 interface EmployeeLite {
   id: string;
@@ -473,7 +474,7 @@ export default function IndustrialRelationsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => { if (!window.confirm("Hapus kasus ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan.")) return; deleteIRCase(tenantId, c.id); toast("Kasus dihapus"); refresh(); }} aria-label="Hapus" title="Hapus"
+                              onClick={async () => { if (!(await confirmDialog("Hapus kasus ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan."))) return; deleteIRCase(tenantId, c.id); toast("Kasus dihapus"); refresh(); }} aria-label="Hapus" title="Hapus"
                               className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
                             >
                               <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
@@ -534,7 +535,7 @@ export default function IndustrialRelationsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => { if (!window.confirm("Hapus dokumen ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan.")) return; deleteIRDocument(tenantId, d.id); toast("Dokumen dihapus"); refresh(); }} aria-label="Hapus" title="Hapus"
+                              onClick={async () => { if (!(await confirmDialog("Hapus dokumen ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan."))) return; deleteIRDocument(tenantId, d.id); toast("Dokumen dihapus"); refresh(); }} aria-label="Hapus" title="Hapus"
                               className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
                             >
                               <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>

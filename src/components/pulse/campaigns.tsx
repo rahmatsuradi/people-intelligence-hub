@@ -7,6 +7,7 @@ import { createCampaign, defaultClose, nextPeriod, periodLabel, surveyPrivacyNot
 import { INSTANCE } from "@/lib/instance";
 import { surveyLinkPath } from "@/lib/rr/survey-link";
 import { Reminders } from "./reminders";
+import { confirmDialog, promptDialog } from "@/lib/dialog";
 
 const toWibDate = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
 const endOfDay = (date: string) => new Date(`${date}T23:59:00+07:00`).toISOString();
@@ -68,7 +69,7 @@ export function Campaigns({ survey, summary, campaigns, reload }: { survey: Surv
 
   const toggle = async (c: Campaign) => {
     const next = c.status === "open" ? "closed" : "open";
-    if (next === "closed" && !window.confirm(`Tutup formulir ${periodLabel(c.period)}? Orang yang membuka link akan melihat pesan "sudah ditutup".`)) return;
+    if (next === "closed" && !(await confirmDialog(`Tutup formulir ${periodLabel(c.period)}? Orang yang membuka link akan melihat pesan "sudah ditutup".`))) return;
     const err = await updateCampaign(c.id, { status: next });
     if (err) { toast(err, "error"); return; }
     if (next === "open" && c.closes_at && new Date(c.closes_at) < new Date()) {
@@ -88,7 +89,7 @@ export function Campaigns({ survey, summary, campaigns, reload }: { survey: Surv
   };
 
   const setTarget = async (c: Campaign) => {
-    const v = window.prompt(`Berapa orang yang diharapkan mengisi ${periodLabel(c.period)}?`, String(c.target_count ?? ""));
+    const v = await promptDialog(`Berapa orang yang diharapkan mengisi ${periodLabel(c.period)}?`, String(c.target_count ?? ""));
     if (v === null) return;
     const n = v.trim() ? Math.max(1, Math.round(Number(v))) : null;
     if (v.trim() && !Number.isFinite(n)) { toast("Isi dengan angka", "error"); return; }

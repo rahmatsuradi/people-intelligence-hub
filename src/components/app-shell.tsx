@@ -12,6 +12,7 @@ import { clearRoleCache, useRole } from "@/lib/roles";
 import { useAuthGate, signOut } from "@/lib/use-auth";
 import { Toaster } from "@/components/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { promptDialog } from "@/lib/dialog";
 
 type Theme = "light" | "dark" | "system";
 
@@ -205,8 +206,8 @@ export function AppShell({
   });
   const userInitials = userName.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "Y";
 
-  const handleEditName = useCallback(() => {
-    const next = window.prompt("Your name:", userName);
+  const handleEditName = useCallback(async () => {
+    const next = await promptDialog("Your name:", userName);
     if (next && next.trim()) {
       localStorage.setItem("hi_user_name", next.trim());
       setUserNameState(next.trim());

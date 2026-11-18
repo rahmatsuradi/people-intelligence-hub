@@ -19,6 +19,7 @@ import {
 import { getCandidates, moveCandidateStage } from "@/lib/store";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { confirmDialog } from "@/lib/dialog";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Types & mock data
@@ -587,9 +588,9 @@ function ActionBar({ report }: { report: HiringReport }) {
     notify(`${report.name} moved to Offered ✓`);
   }, [isSample, report.candidateId, report.name, notify]);
 
-  const handleDecline = useCallback(() => {
+  const handleDecline = useCallback(async () => {
     if (isSample) { notify("Sample report — switch to a real candidate to record decisions."); return; }
-    if (!window.confirm(`Decline ${report.name}? This will mark them as Rejected.`)) return;
+    if (!(await confirmDialog(`Decline ${report.name}? This will mark them as Rejected.`))) return;
     moveCandidateStage(report.candidateId, "rejected");
     notify(`${report.name} marked as Rejected`);
   }, [isSample, report.candidateId, report.name, notify]);
