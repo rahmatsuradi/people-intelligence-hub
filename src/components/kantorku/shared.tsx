@@ -1,6 +1,6 @@
 "use client";
 
-import type { MasterEmployee, Outlet } from "@/lib/rr/master";
+import { WORK_GROUP_LABEL, type MasterEmployee, type Outlet, type WorkGroup } from "@/lib/rr/master";
 import type { KkSource } from "@/lib/kantorku/map";
 import type { ExtraCore, HrisRow } from "@/lib/kantorku/store";
 import { mapBank } from "@/lib/kantorku/map";
@@ -61,3 +61,37 @@ export const fmtDateTime = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }) : "—";
 
 export const linkUrl = (token: string) => (typeof window === "undefined" ? "" : `${window.location.origin}/data-karyawan/${token}`);
+
+/** Urutan divisi di semua daftar KantorKu. */
+export const GROUP_ORDER: WorkGroup[] = ["office", "spv", "produksi", "santan", "sopir", "spg", "host_live", "lainnya"];
+export const groupOf = (e: MasterEmployee): WorkGroup => e.profile?.work_group ?? "lainnya";
+export const groupRank = (e: MasterEmployee) => GROUP_ORDER.indexOf(groupOf(e));
+/** Urut per divisi lalu nama, supaya daftar rapi dan bisa dibaca per kelompok. */
+export function byGroupThenName<T>(list: T[], emp: (x: T) => MasterEmployee): T[] {
+  return [...list].sort((a, b) => groupRank(emp(a)) - groupRank(emp(b)) || emp(a).full_name.localeCompare(emp(b).full_name, "id"));
+}
+
+/** Tombol pilih divisi: Semua / Office / Produksi / ... dengan jumlahnya. */
+export function GroupChips({ counts, value, onChange }: { counts: Map<WorkGroup, number>; value: WorkGroup | ""; onChange: (g: WorkGroup | "") => void }) {
+  const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  const chip = (active: boolean) => `rounded-full border px-3 py-1 text-xs ${active ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className={chip(value === "")} onClick={() => onChange("")}>Semua divisi <span className="font-semibold tabular-nums">· {total}</span></button>
+      {GROUP_ORDER.filter((g) => counts.get(g)).map((g) => (
+        <button key={g} type="button" className={chip(value === g)} onClick={() => onChange(value === g ? "" : g)}>
+          {WORK_GROUP_LABEL[g]} <span className="font-semibold tabular-nums">· {counts.get(g)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Baris judul kelompok di dalam tabel. */
+export function GroupHeaderRow({ group, count, cols }: { group: WorkGroup; count: number; cols: number }) {
+  return (
+    <tr className="bg-slate-50 dark:bg-slate-800/60">
+      <td colSpan={cols} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{WORK_GROUP_LABEL[group]} <span className="font-normal normal-case text-slate-500">· {count} orang</span></td>
+    </tr>
+  );
+}
