@@ -184,3 +184,14 @@ describe("beban: link pribadi massal diisi bersamaan", () => {
     expect(h.uploads).toHaveLength(N * 3);
   });
 });
+
+describe("link umum beralamat rapi", () => {
+  it("token terbaca dikenali; token pribadi tetap hex; token ngawur ditolak", async () => {
+    h.tables.pi_employee_data_links.push({ id: "L9", tenant_id: TENANT, token: "data-karyawan-rica-rico", employee_id: null, status: "open", expires_at: null });
+    expect((await get("data-karyawan-rica-rico")).status).toBe(200);
+    expect((await get("Data_Karyawan!")).status).toBe(404);
+    expect((await get("tidak-ada-link-ini")).status).toBe(404);
+    const r = await post({ token: "data-karyawan-rica-rico", answers: answers(), files: docs });
+    expect(r.status).toBe(200);
+  });
+});

@@ -49,7 +49,9 @@ interface LinkRow { id: string; tenant_id: string; employee_id: string | null; s
 
 async function findLink(token: string): Promise<{ link?: LinkRow; error?: NextResponse }> {
   if (!supabaseAdmin) return { error: NextResponse.json({ error: "Formulir belum bisa dipakai. Hubungi HR." }, { status: 503 }) };
-  if (!/^[a-f0-9]{32,64}$/.test(token)) return { error: NextResponse.json({ error: "Link tidak dikenal." }, { status: 404 }) };
+  /* Link pribadi = hex acak (tidak bisa ditebak). Link umum boleh bernama terbaca ("data-karyawan-rica-rico"):
+     isiannya memang terbuka untuk siapa pun yang diberi link, dan tetap diperiksa HR sebelum diterapkan. */
+  if (token.length > 80 || !/^([a-f0-9]{32,64}|[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(token)) return { error: NextResponse.json({ error: "Link tidak dikenal." }, { status: 404 }) };
   const { data, error } = await supabaseAdmin.from("pi_employee_data_links").select("id, tenant_id, employee_id, status, expires_at").eq("token", token).maybeSingle();
   if (error) return { error: NextResponse.json({ error: "Formulir belum bisa dipakai. Hubungi HR." }, { status: 503 }) };
   const link = data as LinkRow | null;
