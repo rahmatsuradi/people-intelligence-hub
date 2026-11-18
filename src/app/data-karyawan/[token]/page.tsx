@@ -3,17 +3,30 @@
    noindex: link ini tidak boleh terindeks mesin pencari. */
 
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { BrandMark } from "@/components/brand-logo";
 import { INSTANCE } from "@/lib/instance";
 import { IntakeForm } from "@/components/data-karyawan/intake-form";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: `Data Karyawan — ${INSTANCE.brandName}`,
-  description: `Formulir data karyawan ${INSTANCE.brandName}.`,
-  robots: { index: false, follow: false },
-};
+/* WhatsApp membaca judul + gambar dari sini. Alamat gambar harus lengkap, jadi alamat situs diambil
+   dari permintaan (pola sama dengan link survei). Gambar = logo resmi lewat /brand-og. */
+export async function generateMetadata(): Promise<Metadata> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const title = `Data Karyawan — ${INSTANCE.brandName}`;
+  const description = `Formulir data karyawan ${INSTANCE.brandName}. Isi sekitar 10 menit dari HP.`;
+  const image = { url: "/brand-og", width: 1200, height: 630, alt: INSTANCE.brandName };
+  return {
+    metadataBase: new URL(`${proto}://${host}`),
+    title, description,
+    robots: { index: false, follow: false },
+    openGraph: { title, description, siteName: INSTANCE.brandName, type: "website", images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [image.url] },
+  };
+}
 
 export default async function DataKaryawanRoute({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
