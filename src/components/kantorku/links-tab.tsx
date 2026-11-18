@@ -8,7 +8,7 @@ import { waLink } from "@/lib/rr/pulse-remind";
 import { toPhone62 } from "@/lib/kantorku/map";
 import { createLinks, setLinkStatus, type DataLink } from "@/lib/kantorku/store";
 import { STATUS_LABEL, WORK_GROUP_LABEL, type MasterEmployee, type WorkGroup } from "@/lib/rr/master";
-import { GroupChips, GroupHeaderRow, byGroupThenName, fmtDateTime, groupOf, linkUrl } from "./shared";
+import { GroupChips, GroupHeaderRow, byGroupThenName, copyText, fmtDateTime, groupOf, linkUrl } from "./shared";
 
 const message = (name: string | null, url: string) =>
   `Halo${name ? ` ${name.split(" ")[0]}` : ""}, mohon ${name ? "periksa dan lengkapi" : "isi"} data karyawan ${INSTANCE.shortName} lewat link ini:\n${url}\n\n` +
@@ -24,6 +24,7 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
   const [days, setDays] = useState(0);
   const [group, setGroup] = useState<WorkGroup | "">("");
   const [closing, setClosing] = useState<string | null>(null);
+  const [manualCopy, setManualCopy] = useState<string | null>(null);
   const byId = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const openLinkFor = useMemo(() => {
     const m = new Map<string, DataLink>();
@@ -59,7 +60,7 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
   };
 
   const copy = async (text: string) => {
-    try { await navigator.clipboard.writeText(text); toast("Disalin."); } catch { window.prompt("Salin link ini:", text); }
+    if (await copyText(text)) { setManualCopy(null); toast("Link disalin."); } else setManualCopy(text);
   };
 
   const close = async (l: DataLink) => {
@@ -70,6 +71,13 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
 
   return (
     <div className="space-y-4">
+      {manualCopy && (
+        <Card>
+          <p className="text-sm font-medium text-slate-900 dark:text-white">Browser tidak mengizinkan salin otomatis. Tekan dan tahan (atau Ctrl+C) pada link di bawah:</p>
+          <input readOnly autoFocus className={cn(inputClass, "mt-2 font-mono text-xs")} value={manualCopy} onFocus={(e) => e.currentTarget.select()} onClick={(e) => e.currentTarget.select()} />
+          <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => setManualCopy(null)}>Tutup</Button></div>
+        </Card>
+      )}
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-xl">
