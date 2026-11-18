@@ -8,7 +8,7 @@
    - Validasi yang menentukan ada di server; yang di sini hanya supaya pengisi cepat tahu. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IntakeField } from "@/lib/kantorku/intake";
+import { GENERAL_LOCATIONS, PDF_LIMIT_LABEL, type IntakeField } from "@/lib/kantorku/intake";
 
 type DocKind = "ktp" | "kk" | "photo";
 interface Payload {
@@ -197,6 +197,7 @@ export function IntakeForm({ token }: { token: string }) {
       <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-300">
         <li>Sekitar 10 menit, {sections.length} bagian.</li>
         <li>Siapkan KTP, Kartu Keluarga, buku tabungan, dan pas foto.</li>
+        <li><b>Ukuran file:</b> foto dari HP boleh sebesar apa pun, otomatis dikecilkan. Kalau berupa PDF, maksimal {PDF_LIMIT_LABEL}. PDF lebih besar? Kirim fotonya saja.</li>
         <li>Data hanya dibuka oleh tim HR.</li>
       </ul>
       <button className={`${btn} mt-5 w-full bg-blue-600 text-white`} onClick={() => setStep(0)}>Mulai</button>
@@ -222,6 +223,7 @@ export function IntakeForm({ token }: { token: string }) {
           {section === "Dokumen" ? data.docKinds.map((d) => (
             <div key={d.key}>
               <label className="block text-sm font-medium text-slate-800 dark:text-slate-100">{d.label}{!data.docs[d.key] && <span className="text-red-600"> *</span>}</label>
+              <p className="mt-0.5 text-xs text-slate-500">Foto (otomatis dikecilkan) atau PDF maksimal {PDF_LIMIT_LABEL}.</p>
               {data.docs[d.key] && !files[d.key] && <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">Sudah tercatat. Unggah lagi hanya kalau ada yang baru.</p>}
               <input type="file" accept="image/*,application/pdf" className="mt-2 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700 dark:text-slate-300"
                 onChange={(e) => pickFile(d.key, e.target.files?.[0])} />
@@ -234,7 +236,7 @@ export function IntakeForm({ token }: { token: string }) {
               options={f.dynamicOptions === "departments" ? data.departments.map((x) => ({ value: x, label: x }))
                 : f.dynamicOptions === "banks" ? data.banks.map((b) => ({ value: b.code, label: b.name }))
                 : (f.options ?? []).map((x) => ({ value: x, label: x }))}
-              outlets={f.suggest === "outlets" ? data.outlets : undefined}
+              outlets={f.suggest === "outlets" ? [...GENERAL_LOCATIONS, ...data.outlets] : undefined}
               onChange={(v) => set(f.key, v)} />
           ))}
         </div>
