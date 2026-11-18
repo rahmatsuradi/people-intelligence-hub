@@ -93,10 +93,10 @@ export type DocKind = (typeof DOC_KINDS)[number]["key"];
 /** Pilihan lokasi selain outlet, supaya karyawan Office, Produksi, SPV, dan Sopir tidak bingung mengisi. */
 export const GENERAL_LOCATIONS = ["Kantor Pusat (Office)", "Dapur Produksi", "Mobile / Keliling (SPV)", "Gudang / Pengiriman (Sopir)"] as const;
 /** Batas yang ditampilkan ke karyawan: foto boleh sebesar apa pun (dikecilkan otomatis di HP), PDF dibatasi. */
-export const PDF_LIMIT_LABEL = "1,3 MB (1.300 KB)";
+export const PDF_LIMIT_LABEL = "1 MB (1.000 KB)";
 export const DOC_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
 /** Batas per berkas setelah dikecilkan di HP. Total 3 berkas harus muat di batas body Vercel (4,5 MB). */
-export const DOC_MAX_BYTES = 1_400_000;
+export const DOC_MAX_BYTES = 1_050_000;
 
 export const FIELD_BY_KEY = new Map(INTAKE_FIELDS.map((f) => [f.key, f]));
 

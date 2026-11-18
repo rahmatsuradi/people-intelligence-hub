@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     const type = String(f.type ?? "");
     if (!(DOC_MIME as readonly string[]).includes(type)) { errors[d.key] = "Hanya foto (JPG/PNG) atau PDF"; continue; }
     const bytes = Buffer.from(String(f.data).replace(/^data:[^,]*,/, ""), "base64");
-    if (!bytes.length || bytes.length > DOC_MAX_BYTES) { errors[d.key] = "Ukuran berkas terlalu besar (maks 1,4 MB)"; continue; }
+    if (!bytes.length || bytes.length > DOC_MAX_BYTES) { errors[d.key] = "Ukuran berkas terlalu besar (maks 1 MB)"; continue; }
     files[d.key] = { bytes, type };
   }
   if (Object.keys(errors).length) return NextResponse.json({ error: "Masih ada isian yang perlu diperbaiki.", errors }, { status: 400 });

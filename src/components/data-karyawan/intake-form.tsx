@@ -28,7 +28,7 @@ const SECTIONS = ["Data diri", "Kontak & alamat", "Kontak darurat", "Pendidikan"
 const box = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 const input = "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-base text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 const btn = "rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50";
-const MAX_BYTES = 1_300_000;   // batas PDF (dikirim apa adanya)
+const MAX_BYTES = 1_000_000;   // batas PDF (dikirim apa adanya)
 /* Target foto ±600 KB: KTP/KK tetap terbaca di 1600 px, dan 300+ karyawan × 3 dokumen
    tetap muat di kuota penyimpanan Supabase paket gratis (1 GB). */
 const PHOTO_TARGET = 600_000;
@@ -39,10 +39,10 @@ function readAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
 }
 
-/** Foto dari kamera HP bisa 4–8 MB; dikecilkan ke JPEG ≤ ~600 KB (paling buruk ≤ 1,3 MB). PDF dikirim apa adanya. */
+/** Foto dari kamera HP bisa 4–8 MB; dikecilkan ke JPEG ≤ ~600 KB (paling buruk ≤ 1 MB). PDF dikirim apa adanya. */
 async function prepareFile(file: File): Promise<FileVal> {
   if (file.type === "application/pdf") {
-    if (file.size > MAX_BYTES) throw new Error("PDF terlalu besar (maks 1,3 MB). Kirim foto saja.");
+    if (file.size > MAX_BYTES) throw new Error("PDF terlalu besar (maks 1 MB). Kirim foto saja.");
     return { type: file.type, data: await readAsDataUrl(file), name: file.name, size: file.size };
   }
   if (!file.type.startsWith("image/")) throw new Error("Pilih foto atau PDF.");
