@@ -83,6 +83,7 @@ function ReviewModal({ s, data, onClose, onDone }: { s: Submission; data: KkData
   const [reveal, setReveal] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState<"" | "tolak" | "baru">("");
   const readOnly = s.status !== "baru";
 
   const diff = useMemo(() => diffWithMaster(s.answers, formValues(emp, data)), [s.answers, emp, data]);
@@ -104,7 +105,8 @@ function ReviewModal({ s, data, onClose, onDone }: { s: Submission; data: KkData
   const apply = async () => {
     if (!emp && !group) { toast("Pilih kelompok kerja untuk karyawan baru.", "error"); return; }
     if (emp && !emp.profile && !group) { toast("Karyawan ini belum punya profil — pilih kelompok kerjanya.", "error"); return; }
-    if (!emp && !window.confirm(`Buat karyawan baru "${s.answers.full_name}"? Pastikan orangnya belum ada di master (cek dengan pencarian di atas).`)) return;
+    if (!emp && ask !== "baru") { setAsk("baru"); return; }
+    setAsk("");
     setBusy(true);
     const res = await applySubmission(s, { employeeId: emp?.id ?? null, ptkp: ptkp && ptkp !== currentPtkp ? ptkp : null, outletId: outletId || null, workGroup: group || null, skip }, emp, data.outlets);
     setBusy(false);
@@ -114,7 +116,8 @@ function ReviewModal({ s, data, onClose, onDone }: { s: Submission; data: KkData
   };
 
   const reject = async () => {
-    if (!window.confirm("Tolak isian ini? Master tidak berubah; isiannya tetap tersimpan sebagai riwayat.")) return;
+    if (ask !== "tolak") { setAsk("tolak"); return; }
+    setAsk("");
     setBusy(true);
     const err = await rejectSubmission(s.id, note);
     setBusy(false);
@@ -217,8 +220,11 @@ function ReviewModal({ s, data, onClose, onDone }: { s: Submission; data: KkData
             <Label>Catatan (kalau ditolak)</Label>
             <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} placeholder="mis. isian ganda, salah orang" />
           </div>
-          <Button variant="secondary" disabled={busy} onClick={reject}>Tolak</Button>
-          <Button variant="primary" disabled={busy} onClick={apply}>{emp ? "Terapkan ke master" : "Buat karyawan baru"}</Button>
+          <Button variant="secondary" disabled={busy} onClick={reject}>{ask === "tolak" ? "Ya, tolak" : "Tolak"}</Button>
+          <Button variant="primary" disabled={busy} onClick={apply}>{ask === "baru" ? "Ya, buat karyawan baru" : emp ? "Terapkan ke master" : "Buat karyawan baru"}</Button>
+          {ask && <Button variant="ghost" onClick={() => setAsk("")}>Batal</Button>}
+          {ask === "tolak" && <p className="basis-full text-xs text-slate-600 dark:text-slate-300">Yakin menolak? Master tidak berubah; isiannya tetap tersimpan sebagai riwayat. Tekan &quot;Ya, tolak&quot; untuk melanjutkan.</p>}
+          {ask === "baru" && <p className="basis-full text-xs text-slate-600 dark:text-slate-300">Akan membuat karyawan baru &quot;{s.answers.full_name}&quot;. Pastikan orangnya belum ada di master (cek dengan pencarian di atas), lalu tekan &quot;Ya, buat karyawan baru&quot;.</p>}
         </div>
       )}
     </Modal>
