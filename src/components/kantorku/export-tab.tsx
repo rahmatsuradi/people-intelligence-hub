@@ -68,7 +68,7 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
     if (!template) return;
     const pick = withUnready ? inScope : ready;
     if (!pick.length) { toast("Tidak ada karyawan yang siap diekspor.", "error"); return; }
-    if (withUnready && pick.length > ready.length && !window.confirm(`${pick.length - ready.length} baris belum lengkap dan kemungkinan ditolak KantorKu. Tetap sertakan?`)) return;
+    /* Kotak centang "Sertakan yang belum lengkap" sudah jadi persetujuannya; peringatan tampil di bawah tombol. */
     try {
       const out = fillTemplate(template, pick.map((r) => rowCells(r.row)));
       const blob = new Blob([out.buffer as ArrayBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -137,6 +137,7 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
             Unduh untuk KantorKu ({withUnready ? inScope.length : ready.length})
           </Button>
           <label className="flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" checked={withUnready} onChange={(e) => setWithUnready(e.target.checked)} /> Sertakan yang belum lengkap</label>
+          {withUnready && inScope.length > ready.length && <p className="text-xs text-amber-700 dark:text-amber-400">{inScope.length - ready.length} baris belum lengkap dan kemungkinan ditolak KantorKu.</p>}
         </Card>
       </div>
 
