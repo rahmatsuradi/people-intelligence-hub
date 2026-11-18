@@ -10,8 +10,11 @@ const sheet = (xlsx: Uint8Array, n: number) => strFromU8(unzipSync(xlsx)[`xl/wor
 describe("template KantorKu", () => {
   it("unit perusahaan terbaca dari sheet Existing Data", () => {
     const u = readUnits(template());
-    expect(u.branches).toContain("Jakarta 1 - Irfan");
+    // Template asli akun KantorKu Rica Rico (diunduh 18 Nov 2026): Branch = outlet/lokasi.
+    expect(u.branches).toContain("Stasiun Juanda");
     expect(u.branches).toContain("Rica Rico Pusat");
+    expect(u.branches).not.toContain("Jakarta 1 - Irfan");
+    expect(u.branches.length).toBeGreaterThan(100);
     expect(u.departments).toEqual(expect.arrayContaining(["SPG", "Store Supervisor", "Santen"]));
     expect(u.positions).toEqual(["Manager", "Staff", "Freelance", "Supervisor", "Koordinator SPV", "Kepala Produksi"]);
   });
