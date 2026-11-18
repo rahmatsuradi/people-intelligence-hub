@@ -6,6 +6,7 @@ import { toast } from "@/components/toast";
 import { periodLabel, requestInsight, shareInsight, type Signal, type StoredInsight, type Survey } from "@/lib/rr/pulse";
 import type { InsightContent } from "@/lib/rr/pulse-insight";
 import { PEMILIK_LABEL, masalahAsText, type MasalahDasar, type MasalahTheme } from "@/lib/rr/pulse-themes";
+import { confirmDialog } from "@/lib/dialog";
 
 /** Sinyal otomatis berbasis aturan tetap (bukan AI) — "perlu diperhatikan". */
 export function SignalsCard({ signals }: { signals: Signal[] }) {
@@ -32,7 +33,7 @@ export function InsightCard({ survey, period, n, insight, setInsight, isHr, onAd
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const generate = async () => {
-    if (insight && !window.confirm("Buat ulang insight? Insight lama untuk bulan ini akan diganti dan status berbagi ke owner direset.")) return;
+    if (insight && !(await confirmDialog("Buat ulang insight? Insight lama untuk bulan ini akan diganti dan status berbagi ke owner direset."))) return;
     setBusy(true);
     setProgress("Menyiapkan…");
     const r = await requestInsight(survey.id, period, setProgress);

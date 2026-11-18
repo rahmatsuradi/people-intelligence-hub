@@ -14,6 +14,7 @@ import { Button, Card, cn, inputClass } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { RESPONSE_FLAG_LABEL, isVisible, periodLabel, setResponseExcluded, type AnswerValue, type Survey, type SurveyQuestion, type SurveyResponse } from "@/lib/rr/pulse";
 import { personKey, personScore } from "@/lib/rr/pulse-bi";
+import { confirmDialog } from "@/lib/dialog";
 
 /** Jawaban yang menunjuk orang/tempat pengisi — ikut disembunyikan bersama nama. */
 const IDENTIFYING = ["store", "rater"];
@@ -166,7 +167,7 @@ function ResponseCard({ survey, r, showNames, scaleKeys, onChanged }: { survey: 
   const toggleCounted = async () => {
     const excluded = !r.excluded;
     const ask = excluded ? "Keluarkan isian ini dari hitungan? Datanya tetap tersimpan dan bisa dikembalikan." : "Hitung lagi isian ini?";
-    if (!window.confirm(ask)) return;
+    if (!(await confirmDialog(ask))) return;
     const err = await setResponseExcluded(r, excluded);
     if (err) { toast(err, "error"); return; }
     toast(excluded ? "Isian tidak dihitung lagi" : "Isian dihitung lagi");

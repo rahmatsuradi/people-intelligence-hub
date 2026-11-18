@@ -35,6 +35,7 @@ import { People } from "@/components/pulse/people";
 import { ResponseBrowser } from "@/components/pulse/responses";
 import { Report360 } from "@/components/pulse/report-360";
 import { SpvReport } from "@/components/pulse/spv-report";
+import { confirmDialog } from "@/lib/dialog";
 
 type Tab = "dash" | "rapor" | "tindak" | "orang" | "komentar" | "jawaban" | "detail" | "kirim";
 const SEGMENT_LABEL: Record<string, string> = { tenure: "Lama kerja", spv: "SPV area", jabatan: "Kelompok jabatan", divisi: "Divisi" };
@@ -146,7 +147,7 @@ export default function PulsePage() {
   };
 
   const removeAction = async (a: SurveyAction) => {
-    if (!window.confirm(`Hapus tindak lanjut "${a.title}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    if (!(await confirmDialog(`Hapus tindak lanjut "${a.title}"? Tindakan ini tidak bisa dibatalkan.`))) return;
     const err = await deleteAction(a.id);
     if (err) { toast(`Gagal menghapus: ${err}`, "error"); return; }
     toast("Tindak lanjut dihapus");

@@ -11,6 +11,7 @@ import {
   getCandidatesForReq, getCandidates,
 } from "@/lib/store";
 import { toast } from "@/components/toast";
+import { confirmDialog } from "@/lib/dialog";
 
 /* ─── Status colors ─── */
 
@@ -351,7 +352,7 @@ function ReqDetailPanel({
           </Button>
         </Link>
         <div className="flex-1" />
-        <Button variant="danger" size="sm" onClick={() => { if (confirm(`Delete "${req.title}"?`)) onDelete(); }}>
+        <Button variant="danger" size="sm" onClick={async () => { if (await confirmDialog(`Delete "${req.title}"?`)) onDelete(); }}>
           <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
         </Button>
       </div>

@@ -19,6 +19,7 @@ import {
   type FeedbackCategory,
   type FeedbackSentiment,
 } from "@/lib/engagement-store";
+import { confirmDialog } from "@/lib/dialog";
 
 const CATEGORY_LABEL: Record<FeedbackCategory, string> = {
   budaya: "Budaya Kerja",
@@ -373,7 +374,7 @@ export default function EngagementPage() {
                           <button type="button" onClick={() => setRoundModal({ data: r })} className="rounded p-1 text-slate-400 opacity-0 hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 dark:hover:bg-slate-800">
                             <Icon className="h-3.5 w-3.5"><SvgPath name="pencil" /></Icon>
                           </button>
-                          <button type="button" onClick={() => { if (!window.confirm("Hapus survei ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan.")) return; deleteEnpsRound(tenantId, r.id); toast("Survei dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1 text-slate-400 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-500/10">
+                          <button type="button" onClick={async () => { if (!(await confirmDialog("Hapus survei ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan."))) return; deleteEnpsRound(tenantId, r.id); toast("Survei dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1 text-slate-400 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-500/10">
                             <Icon className="h-3.5 w-3.5"><SvgPath name="trash" /></Icon>
                           </button>
                         </div>
@@ -428,7 +429,7 @@ export default function EngagementPage() {
                       </div>
                       <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{f.note}</p>
                     </div>
-                    <button type="button" onClick={() => { if (!window.confirm("Hapus masukan ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan.")) return; deleteFeedbackEntry(tenantId, f.id); toast("Masukan dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
+                    <button type="button" onClick={async () => { if (!(await confirmDialog("Hapus masukan ini? Data dihapus untuk seluruh tim HR dan tidak bisa dikembalikan."))) return; deleteFeedbackEntry(tenantId, f.id); toast("Masukan dihapus"); refresh(); }} aria-label="Hapus" title="Hapus" className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10">
                       <Icon className="h-4 w-4"><SvgPath name="trash" /></Icon>
                     </button>
                   </div>
