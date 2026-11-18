@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Button, Card, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { INSTANCE } from "@/lib/instance";
 import { waLink } from "@/lib/rr/pulse-remind";
 import { toPhone62 } from "@/lib/kantorku/map";
 import { createLinks, setLinkStatus, type DataLink } from "@/lib/kantorku/store";
-import { STATUS_LABEL, WORK_GROUP_LABEL, type MasterEmployee } from "@/lib/rr/master";
-import { fmtDateTime, linkUrl } from "./shared";
+import { STATUS_LABEL, WORK_GROUP_LABEL, type MasterEmployee, type WorkGroup } from "@/lib/rr/master";
+import { GroupChips, GroupHeaderRow, byGroupThenName, fmtDateTime, groupOf, linkUrl } from "./shared";
 
 const message = (name: string | null, url: string) =>
   `Halo${name ? ` ${name.split(" ")[0]}` : ""}, mohon ${name ? "periksa dan lengkapi" : "isi"} data karyawan ${INSTANCE.shortName} lewat link ini:\n${url}\n\n` +
@@ -21,7 +21,9 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
   const [search, setSearch] = useState("");
   const [only, setOnly] = useState<"belum_lengkap" | "tanpa_link" | "semua">("belum_lengkap");
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [days, setDays] = useState(14);
+  const [days, setDays] = useState(0);
+  const [group, setGroup] = useState<WorkGroup | "">("");
+  const [closing, setClosing] = useState<string | null>(null);
   const byId = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const openLinkFor = useMemo(() => {
     const m = new Map<string, DataLink>();
@@ -31,12 +33,18 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
   const general = links.filter((l) => !l.employee_id);
   const personal = links.filter((l) => l.employee_id);
 
-  const candidates = useMemo(() => {
+  const beforeGroup = useMemo(() => {
     const q = search.trim().toLowerCase();
     return employees.filter((e) => e.status !== "resigned")
       .filter((e) => only === "semua" || (only === "tanpa_link" ? !openLinkFor.has(e.id) : !readyById.get(e.id)))
       .filter((e) => !q || [e.full_name, e.profile?.nickname, e.position, e.profile?.supervisor_name].filter(Boolean).join(" ").toLowerCase().includes(q));
   }, [employees, only, openLinkFor, readyById, search]);
+  const groupCounts = useMemo(() => {
+    const m = new Map<WorkGroup, number>();
+    for (const e of beforeGroup) m.set(groupOf(e), (m.get(groupOf(e)) ?? 0) + 1);
+    return m;
+  }, [beforeGroup]);
+  const candidates = useMemo(() => byGroupThenName(beforeGroup.filter((e) => !group || groupOf(e) === group), (e) => e), [beforeGroup, group]);
 
   const expires = () => (days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null);
 
@@ -55,7 +63,7 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
   };
 
   const close = async (l: DataLink) => {
-    if (!window.confirm("Tutup link ini? Orang yang memegangnya tidak bisa mengisi lagi.")) return;
+    setClosing(null);
     const err = await setLinkStatus(l.id, "closed");
     if (err) toast(err, "error"); else onChanged();
   };
@@ -81,12 +89,16 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
             {general.map((l) => (
               <div key={l.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                 <span className={cn("rounded-full px-2 py-0.5 text-xs", l.status === "open" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : "bg-slate-100 text-slate-500 dark:bg-slate-800")}>{l.status === "open" ? "Terbuka" : "Ditutup"}</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-600 dark:text-slate-300">{linkUrl(l.token)}</span>
-                <span className="text-xs text-slate-500">dibuat {fmtDateTime(l.created_at)}{l.expires_at ? ` · s.d. ${fmtDateTime(l.expires_at)}` : ""} · isian terakhir {fmtDateTime(l.last_submitted_at)}</span>
+                <span className="min-w-0 basis-full break-all font-mono text-xs text-slate-600 dark:text-slate-300 sm:basis-0 sm:flex-1">{linkUrl(l.token)}</span>
+                <span className="basis-full text-xs text-slate-500 sm:basis-auto">dibuat {fmtDateTime(l.created_at)}{l.expires_at ? ` · s.d. ${fmtDateTime(l.expires_at)}` : ""} · isian terakhir {fmtDateTime(l.last_submitted_at)}</span>
                 {l.status === "open" && <>
                   <Button size="sm" onClick={() => copy(linkUrl(l.token))}>Salin</Button>
                   <Button size="sm" onClick={() => window.open(waLink(null, message(null, linkUrl(l.token))), "_blank")}>Kirim WA</Button>
-                  <Button size="sm" variant="ghost" onClick={() => close(l)}>Tutup</Button>
+                  {closing === l.id
+                    ? <span className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">Yakin? Pemegang link ini tidak bisa mengisi lagi.
+                        <Button size="sm" variant="primary" onClick={() => close(l)}>Ya, tutup</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setClosing(null)}>Batal</Button></span>
+                    : <Button size="sm" variant="ghost" onClick={() => setClosing(l.id)}>Tutup</Button>}
                 </>}
               </div>
             ))}
@@ -106,23 +118,27 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
             <option value="tanpa_link">Belum punya link terbuka</option>
             <option value="semua">Semua (selain resign)</option>
           </select>
-          <Button size="md" onClick={() => setPicked(new Set(candidates.filter((e) => !openLinkFor.has(e.id)).map((e) => e.id)))}>Pilih semua yang belum punya link ({candidates.filter((e) => !openLinkFor.has(e.id)).length})</Button>
+          <Button size="md" onClick={() => setPicked(new Set(candidates.filter((e) => !openLinkFor.has(e.id)).map((e) => e.id)))}>Pilih semua{group ? ` ${WORK_GROUP_LABEL[group]}` : ""} yang belum punya link ({candidates.filter((e) => !openLinkFor.has(e.id)).length})</Button>
           <Button size="md" variant="primary" disabled={busy || !picked.size}
             onClick={() => make([...picked].map((id) => ({ employee_id: id, label: byId.get(id)?.full_name ?? null })))}>
             Buat link untuk {picked.size} orang
           </Button>
         </div>
+        <div className="mt-3"><GroupChips counts={groupCounts} value={group} onChange={setGroup} /></div>
         <div className="mt-3 max-h-[28rem] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-800">
               <tr><th className="w-8 px-3 py-2"></th><th className="px-3 py-2">Nama</th><th className="px-3 py-2">Kelompok</th><th className="px-3 py-2">Link</th><th className="px-3 py-2 text-right">Aksi</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {candidates.slice(0, 400).map((e) => {
+              {candidates.slice(0, 400).map((e, i, arr) => {
                 const l = openLinkFor.get(e.id);
                 const phone = toPhone62(e.profile?.phone);
+                const first = i === 0 || groupOf(arr[i - 1]) !== groupOf(e);
                 return (
-                  <tr key={e.id}>
+                  <Fragment key={e.id}>
+                  {first && <GroupHeaderRow group={groupOf(e)} count={candidates.filter((x) => groupOf(x) === groupOf(e)).length} cols={5} />}
+                  <tr>
                     <td className="px-3 py-1.5">
                       {!l && <input type="checkbox" checked={picked.has(e.id)} onChange={(ev) => setPicked((s) => { const n = new Set(s); if (ev.target.checked) n.add(e.id); else n.delete(e.id); return n; })} />}
                     </td>
@@ -141,6 +157,7 @@ export function LinksTab({ employees, links, readyById, onChanged }: {
                       </div>}
                     </td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

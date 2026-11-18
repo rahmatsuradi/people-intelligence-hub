@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Button, Card, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { INSTANCE } from "@/lib/instance";
 import { supabase } from "@/lib/supabase";
-import { STATUS_LABEL, WORK_GROUP_LABEL, type MasterEmployee } from "@/lib/rr/master";
+import { STATUS_LABEL, WORK_GROUP_LABEL, type MasterEmployee, type WorkGroup } from "@/lib/rr/master";
 import { KK_LABEL, rowCells, toKantorkuRow, type KkRow, type KkUnits } from "@/lib/kantorku/map";
 import { KK_EMPLOYMENT_TYPES, KK_PAYEE_TIDAK_TETAP, KK_PTKP, KK_TAXABILITY, KK_TAX_STATUSES_SUPPORTED, type KkKey } from "@/lib/kantorku/spec";
 import { fillTemplate } from "@/lib/kantorku/xlsx";
 import { markExported, saveBasicSalary, saveHris, type HrisRow } from "@/lib/kantorku/store";
-import { Modal, fmtDateTime, toSource, type KkData } from "./shared";
+import { GroupChips, GroupHeaderRow, Modal, byGroupThenName, fmtDateTime, groupOf, toSource, type KkData } from "./shared";
 
 type Scope = "semua" | "belum_diekspor" | "tanpa_id";
 
@@ -24,6 +24,7 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<MasterEmployee | null>(null);
   const [withUnready, setWithUnready] = useState(false);
+  const [group, setGroup] = useState<WorkGroup | "">("");
 
   const rows = useMemo(() => {
     if (!units) return [];
@@ -32,10 +33,16 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
       .map((e) => ({ e, row: toKantorkuRow(toSource(e, data), units, { taxability }) }));
   }, [data, units, includeVerify, taxability]);
 
-  const inScope = rows.filter(({ e }) => {
+  const beforeGroup = rows.filter(({ e }) => {
     const h = data.hrisById.get(e.id);
     return scope === "semua" || (scope === "belum_diekspor" ? !h?.exported_at : !h?.kantorku_employee_id);
   });
+  const groupCounts = useMemo(() => {
+    const m = new Map<WorkGroup, number>();
+    for (const { e } of beforeGroup) m.set(groupOf(e), (m.get(groupOf(e)) ?? 0) + 1);
+    return m;
+  }, [beforeGroup]);
+  const inScope = byGroupThenName(beforeGroup.filter(({ e }) => !group || groupOf(e) === group), (r) => r.e);
   const ready = inScope.filter((r) => !r.row.problems.length);
   const problemCounts = useMemo(() => {
     const m = new Map<KkKey, number>();
@@ -67,7 +74,7 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
       const blob = new Blob([out.buffer as ArrayBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `KantorKu Import Karyawan - ${INSTANCE.shortName} - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `KantorKu Import Karyawan - ${INSTANCE.shortName}${group ? ` - ${WORK_GROUP_LABEL[group]}` : ""} - ${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
       const err = await markExported(pick.map((r) => r.e.id));
@@ -115,6 +122,12 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
         </div>
       </Card>
 
+      <Card>
+        <Label>Per divisi</Label>
+        <GroupChips counts={groupCounts} value={group} onChange={setGroup} />
+        <p className="mt-2 text-xs text-slate-500">Pilih satu divisi untuk melihat dan mengunduh berkas KantorKu khusus divisi itu.</p>
+      </Card>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card><p className="text-xs font-medium text-slate-500">Dalam cakupan</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">{inScope.length}</p></Card>
         <Card><p className="text-xs font-medium text-slate-500">Siap diimpor</p><p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{ready.length}</p></Card>
@@ -153,8 +166,10 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
               <tr><th className="px-3 py-2">Nama</th><th className="px-3 py-2">Branch · Department · Position</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right"></th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {shown.slice(0, 500).map(({ e, row }) => (
-                <tr key={e.id}>
+              {shown.slice(0, 500).map(({ e, row }, i, arr) => (
+                <Fragment key={e.id}>
+                {(i === 0 || groupOf(arr[i - 1].e) !== groupOf(e)) && <GroupHeaderRow group={groupOf(e)} count={shown.filter((x) => groupOf(x.e) === groupOf(e)).length} cols={4} />}
+                <tr>
                   <td className="px-3 py-2">
                     <p className="font-medium text-slate-800 dark:text-slate-100">{e.full_name}</p>
                     <p className="text-xs text-slate-500">{e.profile ? WORK_GROUP_LABEL[e.profile.work_group] : "—"} · {e.position ?? "—"}{e.status !== "active" ? ` · ${STATUS_LABEL[e.status]}` : ""}{row.values.employeeId ? ` · ID ${row.values.employeeId}` : ""}</p>
@@ -167,6 +182,7 @@ export function ExportTab({ data, template, templateLabel, units, onTemplate, ta
                   </td>
                   <td className="px-3 py-2 text-right"><Button size="sm" onClick={() => setEditing(e)}>Atur</Button></td>
                 </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>
