@@ -4,6 +4,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { supabase } from "../supabase";
+import { INSTANCE } from "../instance";
 import { getActiveCompanyId } from "../payroll/company-profile";
 import { fetchAll, type MasterEmployee, type WorkGroup } from "../rr/master";
 import { buildApplyPatch, matchOutlet, type DocKind } from "./intake";
@@ -29,6 +30,14 @@ export const SUBMISSION_FLAG_LABEL: Record<string, string> = {
   ada_isian_lain_belum_diterapkan: "Ada isian lain untuk orang yang sama yang belum diterapkan",
   dokumen_gagal_tersimpan: "Sebagian dokumen gagal terunggah",
 };
+
+/** Alamat link umum yang rapi dan bisa dibaca, mis. "data-karyawan-rica-rico" (tambah -2, -3 bila sudah dipakai). */
+export function readableToken(base: string, taken: Iterable<string>): string {
+  const set = new Set(taken);
+  const slug = base.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "data-karyawan";
+  if (!set.has(slug)) return slug;
+  for (let i = 2; ; i++) if (!set.has(`${slug}-${i}`)) return `${slug}-${i}`;
+}
 
 export function newToken(): string {
   const b = new Uint8Array(24);
@@ -92,8 +101,11 @@ export async function markExported(ids: string[]): Promise<string | null> {
 export async function createLinks(rows: { employee_id: string | null; label: string | null }[], expiresAt: string | null): Promise<{ links: DataLink[]; error: string | null }> {
   if (!supabase) return { links: [], error: "Database belum terhubung." };
   const tenant = getActiveCompanyId();
+  const existingTokens = rows.some((r) => !r.employee_id)
+    ? ((await supabase.from("pi_employee_data_links").select("token").eq("tenant_id", tenant)).data ?? []).map((t: { token: string }) => t.token)
+    : [];
   const { data, error } = await supabase.from("pi_employee_data_links")
-    .insert(rows.map((r) => ({ ...r, tenant_id: tenant, token: newToken(), expires_at: expiresAt })))
+    .insert(rows.map((r) => ({ ...r, tenant_id: tenant, token: r.employee_id ? newToken() : readableToken(`data karyawan ${INSTANCE.shortName}`, existingTokens), expires_at: expiresAt })))
     .select("id, token, employee_id, label, status, expires_at, created_at, last_opened_at, last_submitted_at");
   return { links: (data ?? []) as DataLink[], error: error?.message ?? null };
 }
