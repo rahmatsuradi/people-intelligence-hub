@@ -7,7 +7,10 @@
                       ditampilkan kembali. Data sensitif (NIK, rekening, HP, alamat, …)
                       TIDAK dikirim balik — hanya tanda "sudah tercatat" dan 4 digit
                       terakhir, karena link bisa saja diteruskan ke orang lain.
-     POST { token, answers, files, website } → simpan SATU isian + dokumen.
+     POST { token, answers, files, website, confirmKtp } → simpan SATU isian + dokumen.
+          Sebelum disimpan, isian dicocokkan dengan NIK-nya sendiri dan dengan foto KTP yang
+          diunggah (ktp-check.ts). Bila ada yang janggal dan pengisi belum menekan "Kirim tetap"
+          (confirmKtp), dibalas 409 + daftar masalah — tidak ada yang disimpan.
    Isian tidak pernah langsung menimpa master; HR yang menerapkannya di /karyawan/kantorku.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -18,9 +21,13 @@ import { mapBank } from "@/lib/kantorku/map";
 import {
   DOC_KINDS, DOC_MAX_BYTES, DOC_MIME, INTAKE_FIELDS, bankOptions, maskTail, validateIntake, type DocKind,
 } from "@/lib/kantorku/intake";
+import { checkAgainstKtp, mergeKtpFlags, needsConfirmation, type KtpCheckRecord, type KtpReading } from "@/lib/kantorku/ktp-check";
+import { KTP_IMAGE_MIME, readKtpImage } from "@/lib/kantorku/ktp-ocr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Pembacaan foto KTP (±3–10 detik) ikut dalam kiriman.
+export const maxDuration = 60;
 
 /* Penahan spam per IP. Longgar karena satu outlet/kantor/Wi-Fi = satu IP publik, dan operator
    seluler berbagi IP antar-pelanggan (CGNAT): 300+ karyawan bisa mengisi bersamaan dari
@@ -126,7 +133,7 @@ const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "
 
 export async function POST(request: NextRequest) {
   if (limited(request, "post")) return NextResponse.json({ error: "Terlalu banyak kiriman dari perangkat ini. Coba lagi nanti." }, { status: 429 });
-  const body = (await request.json().catch(() => null)) as { token?: string; answers?: Record<string, unknown>; files?: Partial<Record<DocKind, FileIn>>; website?: string } | null;
+  const body = (await request.json().catch(() => null)) as { token?: string; answers?: Record<string, unknown>; files?: Partial<Record<DocKind, FileIn>>; website?: string; confirmKtp?: boolean } | null;
   if (!body) return NextResponse.json({ error: "Kiriman tidak terbaca. Coba lagi." }, { status: 400 });
   if (body.website) return NextResponse.json({ ok: true }); // isian jebakan bot
   const { link, error } = await findLink(body.token ?? "");
@@ -151,8 +158,29 @@ export async function POST(request: NextRequest) {
   }
   if (Object.keys(errors).length) return NextResponse.json({ error: "Masih ada isian yang perlu diperbaiki.", errors }, { status: 400 });
 
+  /* Cocokkan dengan KTP. Pengisi hanya diberi tahu soal isian yang ia ketik sendiri (`clean`):
+     di link pribadi, NIK yang tidak diketik ulang berasal dari master dan tidak boleh
+     dikirim balik ke browser (link bisa diteruskan). HR mendapat perbandingan lengkap. */
+  let reading: KtpReading | null = null;
+  let skipped: KtpCheckRecord["skipped"];
+  if (!files.ktp) skipped = "tanpa_ktp";
+  else if (!KTP_IMAGE_MIME.has(files.ktp.type)) skipped = "pdf";
+  else {
+    const r = await readKtpImage(files.ktp.bytes, files.ktp.type);
+    if (r.ok) reading = r.reading; else skipped = r.reason;
+  }
+  const userIssues = checkAgainstKtp(clean, reading);
+  if (!body.confirmKtp && needsConfirmation(userIssues))
+    return NextResponse.json({
+      error: "Data Anda belum cocok dengan KTP. Periksa dulu, atau tekan \"Kirim tetap\" kalau sudah benar.",
+      ktp: { issues: userIssues.map(({ field, message }) => ({ field, message })) },
+    }, { status: 409 });
+  const hrIssues = checkAgainstKtp({ ...(cur?.values ?? {}), ...clean }, reading);
+  const ktpCheck: KtpCheckRecord = { reading, ...(skipped ? { skipped } : {}), issues: hrIssues };
+
   // Tanda untuk HR — tidak pernah menggabungkan otomatis.
-  const flags: string[] = [];
+  const flags: string[] = mergeKtpFlags([], hrIssues, skipped === "ai_sibuk" || skipped === "ai_galat");
+  if (body.confirmKtp && needsConfirmation(userIssues)) flags.push("dikirim_tetap_walau_beda_ktp");
   let employeeId = link!.employee_id;
   if (clean.nik) {
     const { data: same } = await db.from("pi_employees").select("id").eq("tenant_id", link!.tenant_id).eq("nik", clean.nik).limit(3);
@@ -181,7 +209,7 @@ export async function POST(request: NextRequest) {
     if (up.error) failed.push(kind); else stored[kind] = path;
   }
   await db.from("pi_employee_data_submissions")
-    .update({ files: stored, flags: failed.length ? [...flags, "dokumen_gagal_tersimpan"] : flags }).eq("id", sid);
+    .update({ files: { ...stored, ktp_check: ktpCheck }, flags: failed.length ? [...flags, "dokumen_gagal_tersimpan"] : flags }).eq("id", sid);
   await db.from("pi_employee_data_links").update({ last_submitted_at: new Date().toISOString() }).eq("id", link!.id);
 
   if (failed.length) {

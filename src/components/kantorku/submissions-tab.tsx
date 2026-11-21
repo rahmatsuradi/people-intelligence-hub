@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button, Card, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { WORK_GROUP_LABEL, type MasterEmployee, type WorkGroup } from "@/lib/rr/master";
 import { DOC_KINDS, FIELD_BY_KEY, bankName, diffWithMaster, matchOutlet, maskTail, suggestPtkp } from "@/lib/kantorku/intake";
 import { KK_PTKP } from "@/lib/kantorku/spec";
-import { SUBMISSION_FLAG_LABEL, applySubmission, openDoc, rejectSubmission, type DataLink, type Submission } from "@/lib/kantorku/store";
+import { SUBMISSION_FLAG_LABEL, applySubmission, checkKtp, openDoc, rejectSubmission, type DataLink, type Submission } from "@/lib/kantorku/store";
+import { KTP_FLAGS, normName, type KtpCheckRecord } from "@/lib/kantorku/ktp-check";
 import { Modal, fmtDateTime, formValues, type KkData } from "./shared";
 
 /** Saran kelompok kerja dari divisi yang dipilih karyawan (Department KantorKu). HR tetap bisa mengganti. */
@@ -17,6 +18,13 @@ const groupFromDept = (d: string | undefined): WorkGroup | "" => (d ? GROUP_BY_D
 
 const STATUS_TEXT = { baru: "Belum diperiksa", diterapkan: "Diterapkan", ditolak: "Ditolak" } as const;
 
+/** Tanda hasil cocok KTP yang berarti ada yang beda (bukan sekadar "belum dicek"). */
+const KTP_PROBLEM = new Set<string>(KTP_FLAGS.filter((f) => f !== "ktp_belum_dicek"));
+const hasKtpProblem = (s: Submission) => s.flags.some((f) => KTP_PROBLEM.has(f));
+/** Belum pernah dicocokkan dengan KTP, atau dulu dilewati karena layanan pembaca sibuk. */
+const needsKtpCheck = (s: Submission) => s.status !== "ditolak" && (!s.files.ktp_check || s.flags.includes("ktp_belum_dicek"));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export function SubmissionsTab({ submissions, links, data, onChanged }: {
   submissions: Submission[]; links: DataLink[]; data: KkData; onChanged: () => void;
 }) {
@@ -24,7 +32,35 @@ export function SubmissionsTab({ submissions, links, data, onChanged }: {
   const [open, setOpen] = useState<Submission | null>(null);
   const byId = useMemo(() => new Map(data.employees.map((e) => [e.id, e])), [data.employees]);
   const linkById = useMemo(() => new Map(links.map((l) => [l.id, l])), [links]);
-  const list = submissions.filter((s) => !status || s.status === status);
+  const [onlyKtp, setOnlyKtp] = useState(false);
+  const list = submissions.filter((s) => (!status || s.status === status) && (!onlyKtp || hasKtpProblem(s)));
+  const ktpProblems = submissions.filter((s) => s.status !== "ditolak" && hasKtpProblem(s)).length;
+  const pending = submissions.filter(needsKtpCheck);
+
+  /* Cek KTP massal: satu per satu, ±3 per menit (batas layanan pembaca, paket gratis).
+     Halaman harus tetap terbuka; bisa dihentikan kapan saja, hasil yang sudah ada tersimpan. */
+  const [batch, setBatch] = useState<{ done: number; total: number; problems: number; note: string } | null>(null);
+  const stop = useRef(false);
+  const runBatch = async () => {
+    const todo = submissions.filter(needsKtpCheck);
+    if (!todo.length) return;
+    stop.current = false;
+    let problems = 0;
+    setBatch({ done: 0, total: todo.length, problems, note: "" });
+    for (let i = 0; i < todo.length && !stop.current; i++) {
+      let res = await checkKtp(todo[i].id);
+      for (let t = 0; res.retryAfter && t < 6 && !stop.current; t++) {
+        setBatch({ done: i, total: todo.length, problems, note: `Layanan pembaca penuh, menunggu ${Math.ceil(res.retryAfter)} detik…` });
+        await sleep(res.retryAfter * 1000 + 500);
+        res = await checkKtp(todo[i].id);
+      }
+      if (res.flags?.some((f) => KTP_PROBLEM.has(f))) problems++;
+      setBatch({ done: i + 1, total: todo.length, problems, note: res.error && !res.retryAfter ? `${todo[i].answers.full_name ?? "?"}: ${res.error}` : "" });
+      if (i < todo.length - 1 && !stop.current) await sleep(20_000);
+    }
+    setBatch((b) => b && { ...b, note: stop.current ? "Dihentikan." : "Selesai." });
+    onChanged();
+  };
 
   return (
     <div className="space-y-4">
@@ -34,13 +70,24 @@ export function SubmissionsTab({ submissions, links, data, onChanged }: {
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Isian masuk</h2>
             <p className="mt-0.5 text-xs text-slate-500">Isian belum mengubah master sampai diterapkan. Periksa perubahannya, lalu terapkan atau tolak.</p>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+          {ktpProblems > 0 && <Button size="sm" variant={onlyKtp ? "primary" : "secondary"} onClick={() => setOnlyKtp((x) => !x)}>Beda dengan KTP ({ktpProblems})</Button>}
+          {batch && batch.done < batch.total && !/Selesai|Dihentikan/.test(batch.note)
+            ? <Button size="sm" variant="ghost" onClick={() => { stop.current = true; }}>Hentikan cek KTP</Button>
+            : pending.length > 0 && <Button size="sm" onClick={runBatch} title="Membaca foto KTP isian yang belum pernah dicocokkan (±3 per menit; halaman harus tetap terbuka)">Cek KTP semua ({pending.length})</Button>}
           <select className={cn(inputClass, "w-auto")} value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
             <option value="baru">Belum diperiksa ({submissions.filter((s) => s.status === "baru").length})</option>
             <option value="diterapkan">Diterapkan</option>
             <option value="ditolak">Ditolak</option>
             <option value="">Semua</option>
           </select>
+          </div>
         </div>
+        {batch && (
+          <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+            Cek KTP {batch.done}/{batch.total} · {batch.problems} beda dengan KTP{batch.note ? ` · ${batch.note}` : batch.done < batch.total ? " · ±3 per menit, biarkan halaman terbuka" : ""}
+          </p>
+        )}
         <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
           {list.map((s) => {
             const target = s.employee_id ? byId.get(s.employee_id) : null;
@@ -85,6 +132,19 @@ function ReviewModal({ s, data, onClose, onDone }: { s: Submission; data: KkData
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState<"" | "tolak" | "baru">("");
   const readOnly = s.status !== "baru";
+  const [ktp, setKtp] = useState<KtpCheckRecord | undefined>(s.files.ktp_check);
+  const [ktpFlags, setKtpFlags] = useState<string[]>(s.flags);
+  const [ktpBusy, setKtpBusy] = useState(false);
+  const ktpNameDiffers = !!ktp?.reading?.name && ktp.issues.some((i) => i.flag === "ktp_nama_beda" || i.flag === "rekening_nama_beda_ktp");
+  const [useKtpName, setUseKtpName] = useState(false);
+  const recheck = async () => {
+    setKtpBusy(true);
+    const r = await checkKtp(s.id);
+    setKtpBusy(false);
+    if (r.error) { toast(r.retryAfter ? `${r.error} Coba lagi ±${Math.ceil(r.retryAfter)} detik.` : r.error, "error"); return; }
+    if (r.check) setKtp(r.check);
+    if (r.flags) setKtpFlags(r.flags);
+  };
 
   const diff = useMemo(() => diffWithMaster(s.answers, formValues(emp, data)), [s.answers, emp, data]);
   const unchanged = Object.keys(s.answers).filter((k) => !diff.some((d) => d.key === k));
@@ -108,7 +168,7 @@ function ReviewModal({ s, data, onClose, onDone }: { s: Submission; data: KkData
     if (!emp && ask !== "baru") { setAsk("baru"); return; }
     setAsk("");
     setBusy(true);
-    const res = await applySubmission(s, { employeeId: emp?.id ?? null, ptkp: ptkp && ptkp !== currentPtkp ? ptkp : null, outletId: outletId || null, workGroup: group || null, skip }, emp, data.outlets);
+    const res = await applySubmission(s, { employeeId: emp?.id ?? null, ptkp: ptkp && ptkp !== currentPtkp ? ptkp : null, outletId: outletId || null, workGroup: group || null, skip, ktpName: useKtpName && ktp?.reading?.name ? ktp.reading.name : null }, emp, data.outlets);
     setBusy(false);
     if (res.error) { toast(res.error, "error"); if (!res.employeeId) return; }
     else toast(emp ? "Isian diterapkan ke master." : "Karyawan baru dibuat dari isian.");
@@ -127,11 +187,58 @@ function ReviewModal({ s, data, onClose, onDone }: { s: Submission; data: KkData
   return (
     <Modal title={s.answers.full_name ?? "Isian"} subtitle={`Dikirim ${fmtDateTime(s.submitted_at)} · ${STATUS_TEXT[s.status]}`} onClose={onClose}
       actions={<Button size="sm" onClick={() => setReveal((r) => !r)}>{reveal ? "Samarkan" : "Tampilkan data sensitif"}</Button>}>
-      {s.flags.filter((f) => f !== "link_umum").length > 0 && (
+      {ktpFlags.filter((f) => f !== "link_umum").length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-          <ul className="list-inside list-disc text-xs">{s.flags.filter((f) => f !== "link_umum").map((f) => <li key={f}>{SUBMISSION_FLAG_LABEL[f] ?? f}</li>)}</ul>
+          <ul className="list-inside list-disc text-xs">{ktpFlags.filter((f) => f !== "link_umum").map((f) => <li key={f}>{SUBMISSION_FLAG_LABEL[f] ?? f}</li>)}</ul>
         </div>
       )}
+
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Cocok dengan KTP</h3>
+          <Button size="sm" disabled={ktpBusy} onClick={recheck}>{ktpBusy ? "Membaca KTP…" : ktp ? "Cek KTP lagi" : "Cek KTP"}</Button>
+        </div>
+        {!ktp ? (
+          <p className="mt-1 text-xs text-slate-500">Belum dicocokkan. Tekan &quot;Cek KTP&quot; untuk membaca NIK, nama, dan tanggal lahir dari foto KTP.</p>
+        ) : ktp.reading ? (
+          <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs text-slate-500 dark:bg-slate-800"><tr><th className="px-3 py-2">Data</th><th className="px-3 py-2">Di foto KTP</th><th className="px-3 py-2">Isian</th></tr></thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {([
+                  ["NIK", ktp.reading.nik, s.answers.nik ?? null, true],
+                  ["Nama", ktp.reading.name, s.answers.full_name ?? null, false],
+                  ["Pemilik rekening", ktp.reading.name, s.answers.account_holder ?? null, false],
+                  ["Tanggal lahir", ktp.reading.birthDate, s.answers.birth_date ?? null, false],
+                ] as const).map(([label, a, b, sens]) => {
+                  const differs = !!a && !!b && (label === "NIK" ? a !== b : label === "Tanggal lahir" ? a !== b : normName(a) !== normName(b));
+                  return (
+                    <tr key={label}>
+                      <td className="px-3 py-1.5 text-xs text-slate-500">{label}</td>
+                      <td className="px-3 py-1.5">{a ? (sens && !reveal ? <span className="font-mono">{maskTail(a)}</span> : a) : <span className="text-slate-400">tidak terbaca</span>}</td>
+                      <td className={cn("px-3 py-1.5", differs && "font-semibold text-amber-700 dark:text-amber-400")}>{b ? (sens && !reveal ? <span className="font-mono">{maskTail(b)}</span> : b) : <span className="text-slate-400">tidak diisi</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-slate-500">
+            {ktp.skipped === "pdf" ? "KTP berupa PDF — tidak dibaca otomatis, buka berkasnya."
+              : ktp.skipped === "tanpa_ktp" ? "Tidak ada foto KTP di isian ini maupun di master."
+              : "Foto KTP belum terbaca (layanan pembaca sibuk). Tekan \"Cek KTP\"."}
+          </p>
+        )}
+        {ktp && ktp.issues.length > 0 && <ul className="mt-2 list-inside list-disc text-xs text-amber-800 dark:text-amber-300">{ktp.issues.map((i, n) => <li key={n}>{reveal ? i.message : i.message.replace(/\b\d{16}\b/g, (x) => maskTail(x) ?? x)}</li>)}</ul>}
+        {ktp && !ktp.issues.length && ktp.reading && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">NIK, nama, dan pemilik rekening cocok dengan KTP.</p>}
+        {!readOnly && ktpNameDiffers && (
+          <label className="mt-2 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input type="checkbox" className="mt-1" checked={useKtpName} onChange={(e) => setUseKtpName(e.target.checked)} />
+            <span>Pakai nama di KTP (<b>{ktp?.reading?.name}</b>) untuk nama lengkap dan nama pemilik rekening. Pastikan dulu fotonya KTP orang ini.</span>
+          </label>
+        )}
+      </section>
 
       <section>
         <Label>Untuk karyawan</Label>

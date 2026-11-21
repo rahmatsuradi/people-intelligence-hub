@@ -8,6 +8,7 @@ import { INSTANCE } from "../instance";
 import { getActiveCompanyId } from "../payroll/company-profile";
 import { fetchAll, type MasterEmployee, type WorkGroup } from "../rr/master";
 import { buildApplyPatch, matchOutlet, type DocKind } from "./intake";
+import { KTP_FLAG_LABEL, type KtpCheckRecord } from "./ktp-check";
 import type { HrisFields } from "./map";
 
 export interface HrisRow extends HrisFields { employee_id: string; exported_at?: string | null; updated_at?: string }
@@ -17,7 +18,8 @@ export interface DataLink {
 }
 export interface Submission {
   id: string; link_id: string | null; employee_id: string | null; answers: Record<string, string>;
-  files: Partial<Record<DocKind, string>>; status: "baru" | "diterapkan" | "ditolak"; flags: string[];
+  /** Path dokumen di bucket + `ktp_check` = hasil cocok KTP (ktp-check.ts; disimpan di sini supaya tanpa kolom baru). */
+  files: Partial<Record<DocKind, string>> & { ktp_check?: KtpCheckRecord }; status: "baru" | "diterapkan" | "ditolak"; flags: string[];
   submitted_at: string; reviewed_at: string | null; review_note: string | null;
 }
 export interface ExtraCore { id: string; npwp: string | null; ptkp_status: string | null }
@@ -29,7 +31,28 @@ export const SUBMISSION_FLAG_LABEL: Record<string, string> = {
   nik_milik_karyawan_lain: "NIK yang diisi milik karyawan lain di master — link mungkin diteruskan",
   ada_isian_lain_belum_diterapkan: "Ada isian lain untuk orang yang sama yang belum diterapkan",
   dokumen_gagal_tersimpan: "Sebagian dokumen gagal terunggah",
+  dikirim_tetap_walau_beda_ktp: "Pengisi sudah diberi tahu isiannya beda dengan KTP, tapi menekan \"Kirim tetap\"",
+  ...KTP_FLAG_LABEL,
 };
+
+/**
+ * Baca ulang foto KTP satu isian di server (/api/kantorku/ktp-check). `retryAfter` (detik) =
+ * layanan pembaca sedang penuh; tunggu lalu coba lagi.
+ */
+export async function checkKtp(id: string): Promise<{ check?: KtpCheckRecord; flags?: string[]; error?: string; retryAfter?: number }> {
+  if (!supabase) return { error: "Database belum terhubung." };
+  const { data } = await supabase.auth.getSession();
+  const r = await fetch("/api/kantorku/ktp-check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+    body: JSON.stringify({ id }),
+  }).catch(() => null);
+  if (!r) return { error: "Koneksi terputus." };
+  const j = (await r.json().catch(() => null)) as { check?: KtpCheckRecord; flags?: string[]; error?: string; retryAfter?: number } | null;
+  if (r.status === 429) return { error: j?.error ?? "Layanan pembaca KTP sedang penuh.", retryAfter: j?.retryAfter ?? 20 };
+  if (!r.ok || !j) return { error: j?.error ?? `Gagal (${r.status}).` };
+  return { check: j.check, flags: j.flags };
+}
 
 /** Alamat link umum yang rapi dan bisa dibaca, mis. "data-karyawan-rica-rico" (tambah -2, -3 bila sudah dipakai). */
 export function readableToken(base: string, taken: Iterable<string>): string {
@@ -150,6 +173,8 @@ export interface ApplyChoice {
   workGroup: WorkGroup | null;      // wajib untuk karyawan baru / karyawan tanpa profil
   /** Field isian yang TIDAK diterapkan (HR mempertahankan nilai master). */
   skip: Set<string>;
+  /** Dipilih HR: nama di KTP dipakai untuk nama lengkap & nama pemilik rekening (KTP = sumber nama yang benar). */
+  ktpName?: string | null;
 }
 
 /** Terapkan satu isian ke master. Mengembalikan id karyawan, atau pesan galat. */
@@ -158,8 +183,12 @@ export async function applySubmission(
 ): Promise<{ employeeId?: string; error?: string }> {
   if (!supabase) return { error: "Database belum terhubung." };
   const db = supabase;
-  const answers = Object.fromEntries(Object.entries(s.answers).filter(([k]) => !choice.skip.has(k)));
-  const files = Object.fromEntries(Object.entries(s.files).filter(([k]) => !choice.skip.has(k)));
+  const answers: Record<string, string> = Object.fromEntries(Object.entries(s.answers).filter(([k]) => !choice.skip.has(k)));
+  if (choice.ktpName) {
+    answers.full_name = choice.ktpName;
+    answers.account_holder = choice.ktpName;
+  }
+  const files = Object.fromEntries(Object.entries(s.files).filter(([k]) => k !== "ktp_check" && !choice.skip.has(k)));
   const patch = buildApplyPatch(answers, files);
   const now = new Date().toISOString();
   let id = choice.employeeId;
@@ -209,7 +238,7 @@ export async function applySubmission(
   const { data: u } = await db.auth.getUser();
   const done = await db.from("pi_employee_data_submissions")
     .update({ status: "diterapkan", employee_id: id, reviewed_at: now, reviewed_by: u.user?.id ?? null,
-      review_note: choice.skip.size ? `Tidak diterapkan: ${[...choice.skip].join(", ")}` : null })
+      review_note: [choice.skip.size ? `Tidak diterapkan: ${[...choice.skip].join(", ")}` : "", choice.ktpName ? `Nama & pemilik rekening memakai nama di KTP: ${choice.ktpName}` : ""].filter(Boolean).join(" · ") || null })
     .eq("id", s.id);
   if (done.error) return { employeeId: id, error: `Master diperbarui, tapi status isian gagal disimpan: ${done.error.message}` };
   return { employeeId: id };
