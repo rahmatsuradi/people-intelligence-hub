@@ -32,6 +32,9 @@ describe("nama", () => {
   it("beda satu huruf = mirip (salah ketik), nama lain = tidak mirip", () => {
     expect(nearName("Sari Riyanti", "SARI RIANTI")).toBe(true);
     expect(nearName("Dewi Lestari", "Rina Kartika")).toBe(false);
+    expect(nearName("JAMAITUL HASANAH", "Jamiatul Hasanan")).toBe(true); // huruf tertukar + salah ketik
+    expect(nearName("ANDI SAPUTRA", "ANDI")).toBe(false);
+    expect(nearName("RINA KARTIKA", "RIKA KARTINI")).toBe(false);          // terlalu banyak beda = orang lain
   });
   it("pemilik rekening: terpotong & inisial diterima, salah ketik ditolak", () => {
     expect(holderMatchesKtpName("DEWI LESTARI ANGGRAENI", "DEWI LESTARI ANGGRAENI")).toBe(true);
@@ -60,34 +63,57 @@ describe("checkAgainstKtp", () => {
     expect(needsConfirmation(issues)).toBe(true);
   });
 
-  it("KTP orang lain (kasus 21 Nov 2026): NIK & nama beda → minta konfirmasi", () => {
+  it("tanpa foto KTP: pemilik rekening salah ketik dibanding nama lengkap tetap tertangkap", () => {
+    const issues = checkAgainstKtp({ ...ANSWERS, full_name: "Sari Riyanti", account_holder: "Sari Rianti", nik: undefined }, null);
+    expect(issues.map((i) => [i.flag, i.field])).toEqual([["rekening_nama_beda_ktp", "account_holder"]]);
+    expect(needsConfirmation(issues)).toBe(true);
+  });
+
+  it("KTP orang lain (kasus 21 Nov 2026): NIK & nama jauh berbeda → minta konfirmasi", () => {
     const other = reading({ nik: "3201014412030004", name: "RINA KARTIKA", birthDate: "2003-12-04" });
     const issues = checkAgainstKtp(ANSWERS, other);
     const flags = issues.map((i) => i.flag);
     expect(flags).toContain("ktp_nik_beda");
     expect(flags).toContain("ktp_nama_beda");
-    expect(flags).toContain("ktp_tanggal_lahir_beda");
-    expect(flags).toContain("rekening_nama_beda_ktp");
+    expect(flags).not.toContain("ktp_tanggal_lahir_beda"); // tanggal isian cocok dengan NIK isian
     expect(issues.find((i) => i.flag === "ktp_nama_beda")!.message).toMatch(/KTP Anda sendiri/);
     expect(needsConfirmation(issues)).toBe(true);
   });
 
-  it("NIK beda satu angka → salah ketik, diarahkan ke kolom NIK", () => {
-    const r = reading({ nik: "3201015312060008", name: "DEWI LESTARI ANGGRAENI" });
-    const issues = checkAgainstKtp(ANSWERS, r);
-    expect(issues).toHaveLength(1);
-    expect(issues[0]).toMatchObject({ flag: "ktp_nik_beda_satu_digit", field: "nik" });
+  /* Salah baca foto yang ditemukan pada 22 isian asli pertama — ditiru dengan nama fiktif. */
+  it("nama terbaca dengan huruf tertukar / spasi hilang = salah baca, tidak ditandai", () => {
+    for (const misread of ["DWEI LESTARI ANGGRAENI", "DEWI LESTARIANGGRAENI", "DEWI LESTARI ANGGRAEINI"])
+      expect(checkAgainstKtp(ANSWERS, reading({ nik: ANSWERS.nik, name: misread }))).toEqual([]);
+  });
+  it("tanggal lahir di foto terbaca beda satu angka, padahal isian cocok dengan NIK → tidak ditandai", () => {
+    expect(checkAgainstKtp(ANSWERS, reading({ nik: ANSWERS.nik, name: "DEWI LESTARI ANGGRAENI", birthDate: "2006-12-18" }))).toEqual([]);
+  });
+  it("tanggal lahir isian salah (tidak cocok dengan NIK maupun foto) → ditandai dua-duanya", () => {
+    const issues = checkAgainstKtp({ ...ANSWERS, birth_date: "2006-10-13" }, reading({ nik: ANSWERS.nik, name: "DEWI LESTARI ANGGRAENI", birthDate: "2006-12-13" }));
+    expect(issues.map((i) => i.flag)).toEqual(["nik_tanggal_lahir_beda", "ktp_tanggal_lahir_beda"]);
+  });
+  it("NIK lama yang memang tidak menyandi tanggal lahir — foto memperlihatkan NIK & tanggal yang sama → tidak ditandai", () => {
+    const a = { ...ANSWERS, nik: "3201010101900007", birth_date: "1990-04-16", gender: "Laki-laki", full_name: "Budi Santoso", account_holder: "BUDI SANTOSO" };
+    expect(checkAgainstKtp(a, null).map((i) => i.flag)).toEqual(["nik_tanggal_lahir_beda"]);
+    expect(checkAgainstKtp(a, reading({ nik: a.nik, name: "BUDI SANTOSO", birthDate: "1990-04-16" }))).toEqual([]);
+  });
+
+  it("NIK di foto beda satu angka: ditandai untuk HR; menahan kiriman hanya bila NIK isian juga tidak cocok dengan tanggal lahir", () => {
+    const ocr = reading({ nik: "3201015312060008", name: "DEWI LESTARI ANGGRAENI" });
+    const ok = checkAgainstKtp(ANSWERS, ocr);
+    expect(ok).toHaveLength(1);
+    expect(ok[0]).toMatchObject({ flag: "ktp_nik_beda_satu_digit", field: "nik", confirm: false });
+    expect(needsConfirmation(ok)).toBe(false);
+    const typo = checkAgainstKtp({ ...ANSWERS, nik: "3201015312070007" }, reading({ nik: ANSWERS.nik, name: "DEWI LESTARI ANGGRAENI" }));
+    expect(needsConfirmation(typo)).toBe(true);
   });
 
   it("pemilik rekening salah ketik → diarahkan ke kolom pemilik rekening", () => {
     const issues = checkAgainstKtp({ ...ANSWERS, account_holder: "Dewi Lestari Anggraini" }, reading({ nik: ANSWERS.nik, name: "DEWI LESTARI ANGGRAENI" }));
     expect(issues.map((i) => [i.flag, i.field])).toEqual([["rekening_nama_beda_ktp", "account_holder"]]);
   });
-
-  it("nama sedikit beda dari KTP → pesan 'sedikit berbeda', bukan 'KTP orang lain'", () => {
-    const issues = checkAgainstKtp({ ...ANSWERS, full_name: "Dewi Lestari Anggraini", account_holder: undefined }, reading({ nik: ANSWERS.nik, name: "DEWI LESTARI ANGGRAENI" }));
-    expect(issues[0].flag).toBe("ktp_nama_beda");
-    expect(issues[0].message).toMatch(/sedikit berbeda/);
+  it("pemilik rekening sama dengan nama lengkap, nama di foto salah baca → tidak ditandai", () => {
+    expect(checkAgainstKtp(ANSWERS, reading({ nik: ANSWERS.nik, name: "DEWI LESTRAI ANGGRAENI" }))).toEqual([]);
   });
 
   it("foto bukan KTP / tidak terbaca → satu masalah saja", () => {
