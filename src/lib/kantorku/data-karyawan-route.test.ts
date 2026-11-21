@@ -146,14 +146,14 @@ describe("POST /api/data-karyawan", () => {
     const r = await post({ token: GENERAL, answers: answers(), files: docs });
     expect(r.status).toBe(409);
     const j = await r.json();
-    expect(j.ktp.issues.map((i: { field: string }) => i.field)).toEqual(expect.arrayContaining(["ktp", "full_name", "account_holder"]));
+    expect(j.ktp.issues.map((i: { field: string }) => i.field)).toEqual(expect.arrayContaining(["ktp"]));
     expect(h.tables.pi_employee_data_submissions ?? []).toHaveLength(0);
     expect(h.uploads).toHaveLength(0);
 
     const r2 = await post({ token: GENERAL, answers: answers(), files: docs, confirmKtp: true });
     expect(r2.status).toBe(200);
     const [s] = h.tables.pi_employee_data_submissions;
-    expect(s.flags).toEqual(expect.arrayContaining(["ktp_nik_beda", "ktp_nama_beda", "rekening_nama_beda_ktp", "dikirim_tetap_walau_beda_ktp", "link_umum"]));
+    expect(s.flags).toEqual(expect.arrayContaining(["ktp_nik_beda", "ktp_nama_beda", "dikirim_tetap_walau_beda_ktp", "link_umum"]));
     expect(((s.files as Row).ktp_check as Row).reading).toMatchObject({ name: "LALA LAIN" });
   });
   it("tanggal lahir di NIK beda dari isian → 409 walau KTP tidak terbaca otomatis", async () => {
@@ -170,7 +170,7 @@ describe("POST /api/data-karyawan", () => {
     const a: Record<string, string> = answers();
     delete a.nik;
     const r = await post({ token: PERSONAL, answers: a, files: docs });
-    expect(r.status).toBe(409); // nama & pemilik rekening beda dari KTP
+    expect(r.status).toBe(409); // nama jauh beda dari KTP
     expect(JSON.stringify(await r.json())).not.toContain("3171000000000001");
     await post({ token: PERSONAL, answers: a, files: docs, confirmKtp: true });
     const [s] = h.tables.pi_employee_data_submissions;
@@ -231,7 +231,7 @@ describe("beban: link pribadi massal diisi bersamaan", () => {
     expect(opened.map((r) => r.status).filter((s) => s !== 200)).toEqual([]);
     const sent = await Promise.all(tokens.map((t, i) => route.POST(new NextRequest("http://x/api/data-karyawan", {
       method: "POST", headers: { "content-type": "application/json", ...ipSama },
-      body: JSON.stringify({ token: t, answers: { ...answers(), full_name: `Karyawan Fiktif ${i}`, nik: `31710000${String(10000000 + i)}`.slice(0, 16) }, files: docs }),
+      body: JSON.stringify({ token: t, answers: { ...answers(), full_name: `Karyawan Fiktif ${i}`, account_holder: `KARYAWAN FIKTIF ${i}`, nik: `31710000${String(10000000 + i)}`.slice(0, 16) }, files: docs }),
     }))));
     expect(sent.map((r) => r.status).filter((s) => s !== 200)).toEqual([]);
     expect(h.tables.pi_employee_data_submissions).toHaveLength(N);

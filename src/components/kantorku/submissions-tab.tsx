@@ -42,13 +42,17 @@ export function SubmissionsTab({ submissions, links, data, onChanged }: {
   const [batch, setBatch] = useState<{ done: number; total: number; problems: number; note: string } | null>(null);
   const stop = useRef(false);
   const runBatch = async () => {
-    const todo = submissions.filter(needsKtpCheck);
+    /* Yang fotonya sudah pernah terbaca dicocokkan ulang tanpa AI (cepat) supaya ikut aturan terbaru;
+       yang belum pernah terbaca dibaca AI satu per satu. */
+    const reread = submissions.filter((s) => s.status !== "ditolak" && !!s.files.ktp_check?.reading);
+    const todo = [...reread, ...submissions.filter(needsKtpCheck).filter((s) => !reread.includes(s))];
     if (!todo.length) return;
     stop.current = false;
     let problems = 0;
     setBatch({ done: 0, total: todo.length, problems, note: "" });
     for (let i = 0; i < todo.length && !stop.current; i++) {
-      let res = await checkKtp(todo[i].id);
+      const reuse = i < reread.length;
+      let res = await checkKtp(todo[i].id, reuse);
       for (let t = 0; res.retryAfter && t < 6 && !stop.current; t++) {
         setBatch({ done: i, total: todo.length, problems, note: `Layanan pembaca penuh, menunggu ${Math.ceil(res.retryAfter)} detik…` });
         await sleep(res.retryAfter * 1000 + 500);
@@ -56,7 +60,7 @@ export function SubmissionsTab({ submissions, links, data, onChanged }: {
       }
       if (res.flags?.some((f) => KTP_PROBLEM.has(f))) problems++;
       setBatch({ done: i + 1, total: todo.length, problems, note: res.error && !res.retryAfter ? `${todo[i].answers.full_name ?? "?"}: ${res.error}` : "" });
-      if (i < todo.length - 1 && !stop.current) await sleep(20_000);
+      if (!reuse && i < todo.length - 1 && !stop.current) await sleep(20_000);
     }
     setBatch((b) => b && { ...b, note: stop.current ? "Dihentikan." : "Selesai." });
     onChanged();
@@ -74,7 +78,7 @@ export function SubmissionsTab({ submissions, links, data, onChanged }: {
           {ktpProblems > 0 && <Button size="sm" variant={onlyKtp ? "primary" : "secondary"} onClick={() => setOnlyKtp((x) => !x)}>Beda dengan KTP ({ktpProblems})</Button>}
           {batch && batch.done < batch.total && !/Selesai|Dihentikan/.test(batch.note)
             ? <Button size="sm" variant="ghost" onClick={() => { stop.current = true; }}>Hentikan cek KTP</Button>
-            : pending.length > 0 && <Button size="sm" onClick={runBatch} title="Membaca foto KTP isian yang belum pernah dicocokkan (±3 per menit; halaman harus tetap terbuka)">Cek KTP semua ({pending.length})</Button>}
+            : <Button size="sm" onClick={runBatch} title="Isian yang fotonya sudah terbaca dicocokkan ulang (cepat); yang belum dibaca AI ±3 per menit — halaman harus tetap terbuka">Cek KTP semua{pending.length ? ` (${pending.length} belum dibaca)` : ""}</Button>}
           <select className={cn(inputClass, "w-auto")} value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
             <option value="baru">Belum diperiksa ({submissions.filter((s) => s.status === "baru").length})</option>
             <option value="diterapkan">Diterapkan</option>

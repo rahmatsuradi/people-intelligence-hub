@@ -6,6 +6,7 @@
 
    Isian tanpa foto KTP (link pribadi; KTP sudah ada di master) memakai foto KTP di profil.
    Hasil disimpan di files.ktp_check + tanda di flags; isian & master TIDAK diubah.
+   { reuse: true } = cocokkan ulang hasil baca yang sudah tersimpan dengan aturan terbaru, tanpa AI.
    429 = layanan AI sedang penuh (±3 KTP per menit di paket gratis Groq) → coba lagi
    setelah `retryAfter` detik. */
 
@@ -25,7 +26,9 @@ export async function POST(request: NextRequest) {
   const who = await requireHr(request);
   if (who instanceof NextResponse) return who;
   const db = supabaseAdmin!;
-  const body = (await request.json().catch(() => null)) as { id?: string } | null;
+  // reuse = pakai hasil baca foto yang sudah tersimpan (tanpa memanggil AI lagi) — untuk menerapkan
+  // aturan pencocokan terbaru ke isian yang sudah pernah dibaca.
+  const body = (await request.json().catch(() => null)) as { id?: string; reuse?: boolean } | null;
   if (!body?.id || !/^[0-9a-f-]{36}$/i.test(body.id)) return NextResponse.json({ error: "Isian tidak dikenal." }, { status: 400 });
 
   const { data: sub, error } = await db.from("pi_employee_data_submissions")
@@ -54,7 +57,9 @@ export async function POST(request: NextRequest) {
   const answers = { ...master, ...s.answers };
   let record: KtpCheckRecord;
   let unchecked = false;
-  if (!path) record = { reading: null, skipped: "tanpa_ktp", issues: checkAgainstKtp(answers, null) };
+  const stored = s.files?.ktp_check as KtpCheckRecord | undefined;
+  if (body.reuse && stored?.reading) record = { reading: stored.reading, issues: checkAgainstKtp(answers, stored.reading) };
+  else if (!path) record = { reading: null, skipped: "tanpa_ktp", issues: checkAgainstKtp(answers, null) };
   else {
     const mime = MIME_BY_EXT[path.split(".").pop()?.toLowerCase() ?? ""] ?? "";
     if (!KTP_IMAGE_MIME.has(mime)) record = { reading: null, skipped: "pdf", issues: checkAgainstKtp(answers, null) };

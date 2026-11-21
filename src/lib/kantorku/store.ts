@@ -36,16 +36,17 @@ export const SUBMISSION_FLAG_LABEL: Record<string, string> = {
 };
 
 /**
- * Baca ulang foto KTP satu isian di server (/api/kantorku/ktp-check). `retryAfter` (detik) =
+ * Baca ulang foto KTP satu isian di server (/api/kantorku/ktp-check). `reuse` = pakai hasil baca
+ * yang sudah tersimpan (tanpa AI, cepat) dan cocokkan ulang dengan aturan terbaru. `retryAfter` (detik) =
  * layanan pembaca sedang penuh; tunggu lalu coba lagi.
  */
-export async function checkKtp(id: string): Promise<{ check?: KtpCheckRecord; flags?: string[]; error?: string; retryAfter?: number }> {
+export async function checkKtp(id: string, reuse = false): Promise<{ check?: KtpCheckRecord; flags?: string[]; error?: string; retryAfter?: number }> {
   if (!supabase) return { error: "Database belum terhubung." };
   const { data } = await supabase.auth.getSession();
   const r = await fetch("/api/kantorku/ktp-check", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
-    body: JSON.stringify({ id }),
+    body: JSON.stringify({ id, reuse }),
   }).catch(() => null);
   if (!r) return { error: "Koneksi terputus." };
   const j = (await r.json().catch(() => null)) as { check?: KtpCheckRecord; flags?: string[]; error?: string; retryAfter?: number } | null;
