@@ -55,6 +55,18 @@ const h = vi.hoisted(() => {
 });
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: h.fake }));
 
+/* Pembaca foto KTP (Groq) diganti tiruan: bawaan = KTP terbaca dengan nama yang sama dengan
+   isian contoh dan NIK tidak terbaca, jadi tidak ada yang janggal. Tiap tes bisa menggantinya. */
+const ocr = vi.hoisted(() => ({
+  next: null as null | (() => unknown),
+  calls: 0,
+  base: () => ({ ok: true, reading: { readable: true, nik: null, name: "RARA FIKTIF", birthDate: null, checkedAt: "2026-11-21T00:00:00Z" } }),
+}));
+vi.mock("@/lib/kantorku/ktp-ocr", () => ({
+  KTP_IMAGE_MIME: new Set(["image/jpeg", "image/png", "image/webp"]),
+  readKtpImage: async () => { ocr.calls++; return (ocr.next ?? ocr.base)(); },
+}));
+
 import * as route from "../../app/api/data-karyawan/route";
 
 const TENANT = "00000000-0000-4000-8000-000000000001";
@@ -78,6 +90,7 @@ const answers = () => ({
 });
 
 beforeEach(() => {
+  ocr.next = null; ocr.calls = 0;
   for (const k of Object.keys(h.tables)) delete h.tables[k];
   h.uploads.length = 0;
   h.tables.pi_employee_data_links = [
@@ -122,10 +135,51 @@ describe("POST /api/data-karyawan", () => {
     expect((s.answers as Row).nik).toBe("3171000000000009");
     expect((s.answers as Row).phone).toBe("6281299990000");
     expect(s.flags).toEqual(["link_umum"]);
-    expect(Object.keys(s.files as Row).sort()).toEqual(["kk", "ktp", "photo"]);
+    expect(Object.keys(s.files as Row).sort()).toEqual(["kk", "ktp", "ktp_check", "photo"]);
+    expect((s.files as Row).ktp_check).toMatchObject({ issues: [], reading: { name: "RARA FIKTIF" } });
     expect(h.uploads.map((u) => u.path)).toEqual(expect.arrayContaining([`${TENANT}/${s.id}/ktp.jpg`, `${TENANT}/${s.id}/photo.png`]));
     expect(h.tables.pi_employees).toHaveLength(1);
     expect(h.tables.pi_employees[0].full_name).toBe("Sari Fiktif");
+  });
+  it("foto KTP orang lain → 409, tidak ada yang tersimpan; 'Kirim tetap' menyimpan dengan tanda", async () => {
+    ocr.next = () => ({ ok: true, reading: { readable: true, nik: "3171004412030004", name: "LALA LAIN", birthDate: "2003-12-04", checkedAt: "t" } });
+    const r = await post({ token: GENERAL, answers: answers(), files: docs });
+    expect(r.status).toBe(409);
+    const j = await r.json();
+    expect(j.ktp.issues.map((i: { field: string }) => i.field)).toEqual(expect.arrayContaining(["ktp", "full_name", "account_holder"]));
+    expect(h.tables.pi_employee_data_submissions ?? []).toHaveLength(0);
+    expect(h.uploads).toHaveLength(0);
+
+    const r2 = await post({ token: GENERAL, answers: answers(), files: docs, confirmKtp: true });
+    expect(r2.status).toBe(200);
+    const [s] = h.tables.pi_employee_data_submissions;
+    expect(s.flags).toEqual(expect.arrayContaining(["ktp_nik_beda", "ktp_nama_beda", "rekening_nama_beda_ktp", "dikirim_tetap_walau_beda_ktp", "link_umum"]));
+    expect(((s.files as Row).ktp_check as Row).reading).toMatchObject({ name: "LALA LAIN" });
+  });
+  it("tanggal lahir di NIK beda dari isian → 409 walau KTP tidak terbaca otomatis", async () => {
+    ocr.next = () => ({ ok: false, reason: "ai_sibuk" });
+    const r = await post({ token: GENERAL, answers: { ...answers(), nik: "3171014605990002" }, files: docs }); // NIK: 06-05-99 perempuan → cocok
+    expect(r.status).toBe(200);
+    expect(h.tables.pi_employee_data_submissions[0].flags).toEqual(expect.arrayContaining(["ktp_belum_dicek"]));
+    const bad = await post({ token: GENERAL, answers: { ...answers(), nik: "3171014705990002" }, files: docs }); // 07-05-99
+    expect(bad.status).toBe(409);
+    expect((await bad.json()).ktp.issues[0].field).toBe("nik");
+  });
+  it("link pribadi: NIK master tidak pernah dikirim balik di peringatan KTP", async () => {
+    ocr.next = () => ({ ok: true, reading: { readable: true, nik: "3171009999999999", name: "LALA LAIN", birthDate: null, checkedAt: "t" } });
+    const a: Record<string, string> = answers();
+    delete a.nik;
+    const r = await post({ token: PERSONAL, answers: a, files: docs });
+    expect(r.status).toBe(409); // nama & pemilik rekening beda dari KTP
+    expect(JSON.stringify(await r.json())).not.toContain("3171000000000001");
+    await post({ token: PERSONAL, answers: a, files: docs, confirmKtp: true });
+    const [s] = h.tables.pi_employee_data_submissions;
+    expect(s.flags).toEqual(expect.arrayContaining(["ktp_nik_beda"])); // HR tetap melihat NIK master ≠ KTP
+  });
+  it("KTP berupa PDF tidak dikirim ke pembaca gambar", async () => {
+    await post({ token: GENERAL, answers: answers(), files: { ...docs, ktp: { type: "application/pdf", data: jpeg(1000) } } });
+    expect(ocr.calls).toBe(0);
+    expect((h.tables.pi_employee_data_submissions[0].files as Row).ktp_check).toMatchObject({ skipped: "pdf" });
   });
   it("link umum dengan NIK yang sudah ada → dicocokkan, ditandai", async () => {
     await post({ token: GENERAL, answers: { ...answers(), nik: "3171000000000001" }, files: docs });
@@ -164,6 +218,7 @@ describe("POST /api/data-karyawan", () => {
 describe("beban: link pribadi massal diisi bersamaan", () => {
   it("320 karyawan membuka lalu mengirim pada saat yang sama dari satu IP (Wi-Fi/CGNAT) — semuanya tersimpan", async () => {
     const N = 320;
+    ocr.next = () => ({ ok: false, reason: "ai_sibuk" }); // 320 KTP bersamaan pasti melewati batas layanan pembaca → ditandai, tidak ditahan
     const ipSama = { "x-forwarded-for": "203.0.113.7" };
     for (let i = 0; i < N; i++) {
       const id = `e1000000-0000-4000-8000-${String(i).padStart(12, "0")}`;

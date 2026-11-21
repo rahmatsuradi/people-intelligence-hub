@@ -74,6 +74,8 @@ export function IntakeForm({ token }: { token: string }) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [done, setDone] = useState<{ warning?: string } | null>(null);
+  /* Isian belum cocok dengan KTP (dibalas server 409). Pengisi memperbaiki atau "Kirim tetap". */
+  const [ktpWarn, setKtpWarn] = useState<{ field: string; message: string }[] | null>(null);
   const [website, setWebsite] = useState("");
   const submitting = useRef(false);
   const draftKey = `data-karyawan:${token}`;
@@ -100,7 +102,7 @@ export function IntakeForm({ token }: { token: string }) {
   const fieldsOf = useCallback((section: string) => (data?.fields ?? []).filter((f) => f.section === section), [data]);
   const sections = useMemo(() => SECTIONS.filter((s) => s === "Dokumen" || fieldsOf(s).length), [fieldsOf]);
 
-  const set = (k: string, v: string) => { setAnswers((a) => ({ ...a, [k]: v })); setErrors((e) => { const n = { ...e }; delete n[k]; return n; }); };
+  const set = (k: string, v: string) => { setAnswers((a) => ({ ...a, [k]: v })); setErrors((e) => { const n = { ...e }; delete n[k]; return n; }); setKtpWarn(null); };
 
   const missingIn = (section: string): Record<string, string> => {
     const out: Record<string, string> = {};
@@ -130,19 +132,28 @@ export function IntakeForm({ token }: { token: string }) {
     try {
       const v = await prepareFile(file);
       setFiles((f) => ({ ...f, [kind]: v }));
+      setKtpWarn(null);
       setErrors((e) => { const n = { ...e }; delete n[kind]; return n; });
     } catch (err) {
       setErrors((e) => ({ ...e, [kind]: (err as Error).message }));
     } finally { setFileBusy(null); }
   };
 
-  const submit = async () => {
+  /** Buka bagian tempat isian yang tidak cocok dengan KTP. */
+  const fixKtp = () => {
+    const f = ktpWarn?.[0]?.field;
+    const i = !f || f === "ktp" ? sections.indexOf("Dokumen") : sections.findIndex((sec) => fieldsOf(sec).some((x) => x.key === f));
+    if (i >= 0) setStep(i);
+    window.scrollTo({ top: 0 });
+  };
+
+  const submit = async (confirmKtp = false) => {
     if (submitting.current) return;
     const m = missingIn("Dokumen");
     if (Object.keys(m).length) { setErrors(m); return; }
     submitting.current = true; setSending(true); setSendError("");
     try {
-      const body = JSON.stringify({ token, answers, website, files: Object.fromEntries(Object.entries(files).map(([k, f]) => [k, { type: f!.type, data: f!.data }])) });
+      const body = JSON.stringify({ token, answers, website, confirmKtp, files: Object.fromEntries(Object.entries(files).map(([k, f]) => [k, { type: f!.type, data: f!.data }])) });
       /* Ratusan karyawan bisa mengirim bersamaan (link massal lewat WA). Server sibuk
          (429/502/503/504) atau sinyal putus dicoba ulang otomatis sebelum menampilkan galat. */
       let r: Response | null = null;
@@ -153,6 +164,7 @@ export function IntakeForm({ token }: { token: string }) {
       }
       if (!r) throw new Error("network");
       const j = await r.json().catch(() => null);
+      if (r.status === 409 && j?.ktp?.issues?.length) { setKtpWarn(j.ktp.issues); setSendError(""); return; }
       if (!r.ok) {
         if (j?.errors) {
           setErrors(j.errors);
@@ -245,10 +257,21 @@ export function IntakeForm({ token }: { token: string }) {
       </div>
 
       {sendError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{sendError}</p>}
+      {ktpWarn && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+          <p className="font-semibold">Periksa dulu — data belum cocok dengan KTP</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">{ktpWarn.map((w, i) => <li key={i}>{w.message}</li>)}</ul>
+          <p className="mt-2 text-xs">Data belum terkirim. Perbaiki isiannya atau unggah ulang foto KTP Anda sendiri. Kalau semuanya sudah benar, tekan &quot;Kirim tetap&quot; — HR akan memeriksanya.</p>
+          <div className="mt-3 flex gap-2">
+            <button className={`${btn} flex-1 bg-amber-600 text-white`} onClick={fixKtp}>Perbaiki</button>
+            <button className={`${btn} flex-1 border border-amber-400 bg-white text-amber-800 dark:bg-slate-900 dark:text-amber-200`} disabled={sending} onClick={() => submit(true)}>{sending ? "Mengirim…" : "Kirim tetap"}</button>
+          </div>
+        </div>
+      )}
       <div className="flex gap-3">
         <button className={`${btn} flex-1 border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200`} onClick={() => { setErrors({}); setStep((s) => s - 1); window.scrollTo({ top: 0 }); }}>Kembali</button>
         {last
-          ? <button className={`${btn} flex-[2] bg-blue-600 text-white`} disabled={sending || !!fileBusy} onClick={submit}>{sending ? "Mengirim…" : "Kirim data"}</button>
+          ? <button className={`${btn} flex-[2] bg-blue-600 text-white`} disabled={sending || !!fileBusy} onClick={() => submit(false)}>{sending ? "Mengirim…" : "Kirim data"}</button>
           : <button className={`${btn} flex-[2] bg-blue-600 text-white`} onClick={next}>Lanjut</button>}
       </div>
     </div>
