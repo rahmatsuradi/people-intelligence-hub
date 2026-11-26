@@ -45,6 +45,11 @@ describe("canonicalSupervisor — ketikan SPG dirapikan ke nama baku", () => {
     expect(canonicalSupervisor("Pak Dedi", KNOWN)).toEqual({ value: "Pak Dedi", matched: false });
   });
 
+  it("nama mirip tapi orang lain TIDAK ditarik (Deni ≠ Doni, Dedi ≠ Tedi, Dani, Dewi)", () => {
+    for (const t of ["Deni", "Pak Deni", "Deni Ramdani", "Pak Manager Deni", "Deni / Billy", "dani", "dedi", "dewi", "Wina Lain", "Irwan"])
+      expect(canonicalSupervisor(t, KNOWN).matched).toBe(false);
+  });
+
   it("ketikan yang cocok ke dua atasan berbeda dibiarkan (ambigu)", () => {
     const dua: KnownSupervisor[] = [{ fullName: "Andi Satu", nickname: "Andi" }, { fullName: "Andika Dua", nickname: "Andika" }];
     expect(canonicalSupervisor("Andi", dua).matched).toBe(false);

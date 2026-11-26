@@ -33,31 +33,18 @@ const tokens = (s: string): string[] =>
 
 const nameTokens = (s: string): string[] => tokens(s).filter((t) => !NOISE.has(t));
 
-/** Jarak edit (Levenshtein) untuk kata pendek. */
-function distance(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  if (!m) return n;
-  if (!n) return m;
-  let prev = Array.from({ length: n + 1 }, (_, j) => j);
-  for (let i = 1; i <= m; i++) {
-    const cur = [i];
-    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    prev = cur;
-  }
-  return prev[n];
-}
-
-/** Dua kata dianggap sama: persis, beda satu huruf (Tedi/Tedy/Teddy — y=i, huruf ganda dilipat), atau yang pendek adalah awalan yang panjang (Paul/Paulus) — hanya untuk kata ≥ 4 huruf. */
+/**
+ * Dua kata dianggap sama: persis, beda ejaan yang lazim (y=i, huruf ganda dilipat: Tedi/Tedy/Teddy),
+ * atau yang pendek adalah awalan yang panjang (Paul/Paulus) — awalan hanya untuk kata ≥ 4 huruf.
+ * SENGAJA tanpa "beda satu huruf bebas": Deni/Doni/Dani/Dedi adalah orang berbeda, dan pratinjau
+ * pada data asli menunjukkan toleransi itu menyeret 99 baris "Deni" (manajer) menjadi "Doni".
+ */
 const sameWord = (a0: string, b0: string): boolean => {
   if (a0 === b0) return true;
-  // Ejaan Indonesia: y/i dan huruf ganda tidak membedakan orang (Tedy/Teddy/Tedi).
   const fold = (w: string) => w.replace(/y/g, "i").replace(/(.)\1+/g, "$1");
   const a = fold(a0), b = fold(b0);
   if (a === b) return true;
-  if (Math.min(a.length, b.length) < 4) return false;
-  // Huruf pertama harus sama: salah ketik jarang di huruf pertama, sedangkan Dedi/Tedi adalah dua orang.
-  if (a[0] !== b[0]) return false;
-  return distance(a, b) <= 1 || a.startsWith(b) || b.startsWith(a);
+  return Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a));
 };
 
 const titleCase = (s: string): string =>
