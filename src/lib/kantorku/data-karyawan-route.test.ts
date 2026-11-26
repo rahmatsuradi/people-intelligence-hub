@@ -125,6 +125,34 @@ describe("GET /api/data-karyawan", () => {
   });
 });
 
+describe("kiriman yang ditolak dicatat untuk HR", () => {
+  const rejects = () => h.tables.pi_employee_submission_rejects ?? [];
+  it("isian salah (400): tercatat nama field + siapa yang mengetik, tanpa nilai rahasia", async () => {
+    const r = await post({ token: GENERAL, answers: { ...answers(), nik: "123", bank_account: "9876543210" }, files: docs });
+    expect(r.status).toBe(400);
+    expect(h.tables.pi_employee_data_submissions ?? []).toHaveLength(0);
+    expect(rejects()).toHaveLength(1);
+    expect(rejects()[0]).toMatchObject({ tenant_id: TENANT, link_id: "L2", status_code: 400, reason: "isian_tidak_valid", name: "Rara Fiktif", outlet: "Outlet Fiktif", contact: "081299990000" });
+    expect(rejects()[0].fields).toContain("nik");
+    const dump = JSON.stringify(rejects());
+    for (const secret of ["9876543210", "1999-05-06", "Jl. Fiktif 3"]) expect(dump).not.toContain(secret);
+  });
+  it("beda KTP (409): tercatat; setelah 'Kirim tetap' isian tersimpan dan catatan lama tetap ada", async () => {
+    ocr.next = () => ({ ok: true, reading: { readable: true, nik: "3171004412030004", name: "LALA LAIN", birthDate: "2003-12-04", checkedAt: "t" } });
+    expect((await post({ token: GENERAL, answers: answers(), files: docs })).status).toBe(409);
+    expect(rejects()).toHaveLength(1);
+    expect(rejects()[0]).toMatchObject({ status_code: 409, reason: "beda_ktp" });
+    expect(rejects()[0].fields).toContain("ktp");
+    expect((await post({ token: GENERAL, answers: answers(), files: docs, confirmKtp: true })).status).toBe(200);
+    expect(rejects()).toHaveLength(1);
+    expect(h.tables.pi_employee_data_submissions).toHaveLength(1);
+  });
+  it("kiriman sukses tidak dicatat sebagai ditolak", async () => {
+    expect((await post({ token: GENERAL, answers: answers(), files: docs })).status).toBe(200);
+    expect(rejects()).toHaveLength(0);
+  });
+});
+
 describe("POST /api/data-karyawan", () => {
   it("link umum: isian + dokumen tersimpan sebagai 'baru', master tidak berubah", async () => {
     const r = await post({ token: GENERAL, answers: answers(), files: docs });

@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Label, inputClass, cn } from "@/components/app-shell";
 import { toast } from "@/components/toast";
 import { WORK_GROUP_LABEL, type MasterEmployee, type WorkGroup } from "@/lib/rr/master";
 import { DOC_KINDS, FIELD_BY_KEY, bankName, diffWithMaster, matchOutlet, maskTail, suggestPtkp } from "@/lib/kantorku/intake";
 import { KK_PTKP } from "@/lib/kantorku/spec";
-import { SUBMISSION_FLAG_LABEL, applySubmission, checkKtp, openDoc, rejectSubmission, type DataLink, type Submission } from "@/lib/kantorku/store";
+import { REJECT_REASON_LABEL, SUBMISSION_FLAG_LABEL, applySubmission, checkKtp, loadRejects, openDoc, rejectSubmission, summarizeRejects, type DataLink, type RejectRow, type Submission } from "@/lib/kantorku/store";
 import { KTP_FLAGS, normName, type KtpCheckRecord } from "@/lib/kantorku/ktp-check";
 import { Modal, fmtDateTime, formValues, type KkData } from "./shared";
 
@@ -66,8 +66,48 @@ export function SubmissionsTab({ submissions, links, data, onChanged }: {
     onChanged();
   };
 
+  /* Kiriman yang ditolak formulir tidak tersimpan di mana pun selain log ini — di sinilah "sudah isi tapi tidak ada" terlacak. */
+  const [rejects, setRejects] = useState<{ rows: RejectRow[]; missing: boolean } | null>(null);
+  useEffect(() => { let live = true; loadRejects().then((r) => live && setRejects(r)); return () => { live = false; }; }, [submissions]);
+  const rejectGroups = useMemo(() => summarizeRejects(rejects?.rows ?? [], submissions, normName), [rejects, submissions]);
+  const unresolved = rejectGroups.filter((g) => !g.resolved);
+  const [showRejects, setShowRejects] = useState(false);
+
   return (
     <div className="space-y-4">
+      {rejects?.missing && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+          Pencatatan kiriman yang ditolak belum diaktifkan di penyimpanan data. Sampai diaktifkan, orang yang gagal mengirim formulir tidak meninggalkan jejak.
+        </p>
+      )}
+      {rejects && !rejects.missing && rejectGroups.length > 0 && (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Gagal mengirim formulir ({unresolved.length} orang belum berhasil)</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Orang ini sudah mencoba mengisi tapi formulir menolak, jadi isiannya tidak tersimpan. Hubungi mereka — itu yang membuat mereka merasa sudah isi padahal tidak ada di sini. 60 hari terakhir.</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setShowRejects((x) => !x)}>{showRejects ? "Sembunyikan" : "Lihat daftar"}</Button>
+          </div>
+          {showRejects && (
+            <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+              {rejectGroups.map((g) => (
+                <div key={`${g.name}|${g.outlet}`} className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-slate-800 dark:text-slate-100">{g.name}{g.outlet ? <span className="font-normal text-slate-500"> · {g.outlet}</span> : null}{g.contact ? <span className="font-normal text-slate-500"> · {g.contact}</span> : null}</p>
+                    <p className="text-xs text-slate-500">
+                      {REJECT_REASON_LABEL[g.last.reason]} · {g.tries}× coba
+                      {g.fields.length ? ` · bermasalah: ${g.fields.map((f) => FIELD_BY_KEY.get(f)?.label ?? DOC_KINDS.find((d) => d.key === f)?.label ?? f).join(", ")}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-500">{fmtDateTime(g.last.created_at)}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs", g.resolved ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400")}>{g.resolved ? "Sudah berhasil kirim" : "Belum berhasil"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
