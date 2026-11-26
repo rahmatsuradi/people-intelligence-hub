@@ -127,6 +127,21 @@ export async function GET(request: NextRequest) {
   });
 }
 
+/* Catat kiriman yang ditolak (tidak ada yang tersimpan di master/isian) supaya HR bisa menghubungi
+   orangnya. Hanya nama field, bukan nilainya; NIK/rekening/tanggal lahir tidak dicatat. Gagal menulis
+   (mis. tabel belum dibuat) tidak boleh menggagalkan respons ke pengisi. */
+type RejectReason = "isian_tidak_valid" | "beda_ktp" | "gagal_simpan";
+async function logReject(link: LinkRow, statusCode: number, reason: RejectReason, fields: string[], typed: Record<string, unknown> | undefined) {
+  try {
+    const txt = (k: string, n: number) => { const v = typed?.[k]; return typeof v === "string" && v.trim() ? v.replace(/\s+/g, " ").trim().slice(0, n) : null; };
+    await supabaseAdmin!.from("pi_employee_submission_rejects").insert({
+      tenant_id: link.tenant_id, link_id: link.id, status_code: statusCode, reason,
+      fields: [...new Set(fields)].slice(0, 30),
+      name: txt("full_name", 80), outlet: txt("outlet", 80), contact: txt("phone", 20),
+    });
+  } catch { /* log bantu — abaikan */ }
+}
+
 interface FileIn { type?: string; data?: string }
 
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf" };
@@ -156,7 +171,10 @@ export async function POST(request: NextRequest) {
     if (!bytes.length || bytes.length > DOC_MAX_BYTES) { errors[d.key] = "Ukuran berkas terlalu besar (maks 1 MB)"; continue; }
     files[d.key] = { bytes, type };
   }
-  if (Object.keys(errors).length) return NextResponse.json({ error: "Masih ada isian yang perlu diperbaiki.", errors }, { status: 400 });
+  if (Object.keys(errors).length) {
+    await logReject(link!, 400, "isian_tidak_valid", Object.keys(errors), body.answers);
+    return NextResponse.json({ error: "Masih ada isian yang perlu diperbaiki.", errors }, { status: 400 });
+  }
 
   /* Cocokkan dengan KTP. Pengisi hanya diberi tahu soal isian yang ia ketik sendiri (`clean`):
      di link pribadi, NIK yang tidak diketik ulang berasal dari master dan tidak boleh
@@ -170,11 +188,13 @@ export async function POST(request: NextRequest) {
     if (r.ok) reading = r.reading; else skipped = r.reason;
   }
   const userIssues = checkAgainstKtp(clean, reading);
-  if (!body.confirmKtp && needsConfirmation(userIssues))
+  if (!body.confirmKtp && needsConfirmation(userIssues)) {
+    await logReject(link!, 409, "beda_ktp", userIssues.map((i) => i.field), body.answers);
     return NextResponse.json({
       error: "Data Anda belum cocok dengan KTP. Periksa dulu, atau tekan \"Kirim tetap\" kalau sudah benar.",
       ktp: { issues: userIssues.map(({ field, message }) => ({ field, message })) },
     }, { status: 409 });
+  }
   const hrIssues = checkAgainstKtp({ ...(cur?.values ?? {}), ...clean }, reading);
   const ktpCheck: KtpCheckRecord = { reading, ...(skipped ? { skipped } : {}), issues: hrIssues };
 
@@ -198,7 +218,10 @@ export async function POST(request: NextRequest) {
   const ins = await db.from("pi_employee_data_submissions")
     .insert({ tenant_id: link!.tenant_id, link_id: link!.id, employee_id: employeeId, answers: clean, flags })
     .select("id").single();
-  if (ins.error || !ins.data) return NextResponse.json({ error: "Gagal menyimpan. Coba lagi sebentar." }, { status: 500 });
+  if (ins.error || !ins.data) {
+    await logReject(link!, 500, "gagal_simpan", [], body.answers);
+    return NextResponse.json({ error: "Gagal menyimpan. Coba lagi sebentar." }, { status: 500 });
+  }
   const sid = (ins.data as { id: string }).id;
 
   const stored: Partial<Record<DocKind, string>> = {};

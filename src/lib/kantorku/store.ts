@@ -92,6 +92,47 @@ export async function loadKantorku(): Promise<{
   return { hris, links, submissions, extra, salary, missingTables: false };
 }
 
+/** Kiriman formulir yang ditolak (isian salah / beda KTP / gagal simpan) — dicatat server, lihat supabase/submission-rejects.sql. */
+export interface RejectRow {
+  id: string; link_id: string | null; status_code: number; reason: "isian_tidak_valid" | "beda_ktp" | "gagal_simpan";
+  fields: string[]; name: string | null; outlet: string | null; contact: string | null; created_at: string;
+}
+export const REJECT_REASON_LABEL: Record<RejectRow["reason"], string> = {
+  isian_tidak_valid: "Ada isian yang salah",
+  beda_ktp: "Isian beda dengan KTP",
+  gagal_simpan: "Gagal menyimpan (galat server)",
+};
+
+/** 60 hari terakhir. Tabel belum dibuat → `missing` (HR diberi tahu), bukan galat. */
+export async function loadRejects(): Promise<{ rows: RejectRow[]; missing: boolean }> {
+  if (!supabase) return { rows: [], missing: false };
+  const since = new Date(Date.now() - 60 * 86_400_000).toISOString();
+  const r = await supabase.from("pi_employee_submission_rejects")
+    .select("id, link_id, status_code, reason, fields, name, outlet, contact, created_at")
+    .eq("tenant_id", getActiveCompanyId()).gte("created_at", since).order("created_at", { ascending: false }).limit(1000);
+  if (r.error) return { rows: [], missing: /does not exist|schema cache|not find/i.test(r.error.message) };
+  return { rows: (r.data ?? []) as RejectRow[], missing: false };
+}
+
+/**
+ * Satu baris per orang (nama + outlet): percobaan terakhir, jumlah percobaan, dan apakah sesudahnya
+ * ada isian yang berhasil masuk atas nama yang sama. Yang sudah berhasil tidak perlu ditindaklanjuti.
+ * `norm` = penyamaan nama (normName). Murni.
+ */
+export function summarizeRejects(rows: RejectRow[], submissions: { answers: Record<string, string>; submitted_at: string }[], norm: (s: string | null | undefined) => string) {
+  const sentAfter = (name: string, at: string) => submissions.some((s) => norm(s.answers.full_name) === name && s.submitted_at > at);
+  const by = new Map<string, { name: string; outlet: string | null; contact: string | null; last: RejectRow; tries: number; fields: Set<string> }>();
+  for (const r of rows) {
+    const key = `${norm(r.name)}|${norm(r.outlet)}`;
+    const cur = by.get(key);
+    if (!cur) by.set(key, { name: r.name ?? "(tanpa nama)", outlet: r.outlet, contact: r.contact, last: r, tries: 1, fields: new Set(r.fields) });
+    else { cur.tries++; r.fields.forEach((f) => cur.fields.add(f)); if (!cur.contact && r.contact) cur.contact = r.contact; }
+  }
+  return [...by.values()]
+    .map((g) => ({ ...g, fields: [...g.fields], resolved: !!g.name && sentAfter(norm(g.name), g.last.created_at) }))
+    .sort((a, b) => Number(a.resolved) - Number(b.resolved) || b.last.created_at.localeCompare(a.last.created_at));
+}
+
 export async function saveHris(employeeId: string, patch: Partial<HrisFields>): Promise<string | null> {
   if (!supabase) return "Database belum terhubung.";
   const row: Record<string, unknown> = { employee_id: employeeId, updated_at: new Date().toISOString() };
