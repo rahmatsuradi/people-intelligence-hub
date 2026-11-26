@@ -155,7 +155,10 @@ export function SubmissionsTab({ submissions, links, data, onChanged }: {
           {!list.length && <p className="px-3 py-6 text-center text-sm text-slate-500">Belum ada isian.</p>}
         </div>
       </Card>
-      {open && <ReviewModal s={open} data={data} onClose={() => setOpen(null)} onDone={() => { setOpen(null); onChanged(); }} />}
+      {/* key = id isian: tanpa ini React memakai ulang panel yang sama saat HR berpindah dari satu isian ke isian lain
+          tanpa menekan "Tutup", sehingga karyawan tujuan (target), PTKP, outlet, centang field, dan catatan dari isian
+          SEBELUMNYA terbawa — isian orang B bisa tertimpa ke master orang A. Dengan key, panel dibuat baru tiap isian. */}
+      {open && <ReviewModal key={open.id} s={open} data={data} onClose={() => setOpen(null)} onDone={() => { setOpen(null); onChanged(); }} />}
     </div>
   );
 }
